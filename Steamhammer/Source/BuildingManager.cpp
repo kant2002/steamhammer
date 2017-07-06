@@ -24,20 +24,6 @@ void BuildingManager::update()
     checkForCompletedBuildings();           // check to see if any buildings have completed and update data structures
 }
 
-// In the building queue with any status.
-bool BuildingManager::isBeingBuilt(BWAPI::UnitType type)
-{
-    for (auto & b : _buildings)
-    {
-        if (b.type == type)
-        {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 // STEP 1: DO BOOK KEEPING ON BUILDINGS WHICH MAY HAVE DIED
 void BuildingManager::validateWorkersAndBuildings()
 {
@@ -158,7 +144,6 @@ void BuildingManager::constructAssignedBuildings()
 				// If the builderUnit is zerg, it changes to !exists() when it builds.
 				bool success = b.builderUnit->build(b.type, b.finalPosition);
 
-				// TODO testing
 				if (success)
 				{
 					b.buildCommandGiven = true;
@@ -359,7 +344,21 @@ int BuildingManager::getReservedGas() const
     return _reservedGas;
 }
 
-void BuildingManager::drawBuildingInformation(int x,int y)
+// In the building queue with any status.
+bool BuildingManager::isBeingBuilt(BWAPI::UnitType type)
+{
+	for (auto & b : _buildings)
+	{
+		if (b.type == type)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+void BuildingManager::drawBuildingInformation(int x, int y)
 {
     if (!Config::Debug::DrawBuildingInfo)
     {
@@ -452,6 +451,8 @@ std::vector<BWAPI::UnitType> BuildingManager::buildingsQueued()
 
 // Cancel a given building when possible.
 // Used as part of the extractor trick or in an emergency.
+// NOTE CombatCommander::cancelDyingBuildings() can also cancel buildings, including
+//      morphing zerg structures which the BuildingManager does not handle.
 void BuildingManager::cancelBuilding(Building & b)
 {
 	if (b.status == BuildingStatus::Unassigned)

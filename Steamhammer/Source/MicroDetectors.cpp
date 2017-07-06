@@ -1,10 +1,13 @@
-#include "DetectorManager.h"
+#include "MicroDetectors.h"
 
 using namespace UAlbertaBot;
 
-DetectorManager::DetectorManager() : unitClosestToEnemy(nullptr) { }
+MicroDetectors::MicroDetectors()
+	: unitClosestToEnemy(nullptr)
+{
+}
 
-void DetectorManager::executeMicro(const BWAPI::Unitset & targets) 
+void MicroDetectors::executeMicro(const BWAPI::Unitset & targets) 
 {
 	const BWAPI::Unitset & detectorUnits = getUnits();
 
@@ -13,19 +16,20 @@ void DetectorManager::executeMicro(const BWAPI::Unitset & targets)
 		return;
 	}
 
+	// NOTE targets is a list of nearby enemies.
+	// Currently unused. Could use it to avoid enemy fire, among other possibilities.
 	for (size_t i(0); i<targets.size(); ++i)
 	{
-		// do something here if there's targets
+		// do something here if there are targets
 	}
 
 	cloakedUnitMap.clear();
 	BWAPI::Unitset cloakedUnits;
 
-	// figure out targets
-	for (auto & unit : BWAPI::Broodwar->enemy()->getUnits())
+	// Find enemy cloaked units.
+	// NOTE This code is unused, but it is potentially useful.
+	for (const auto unit : BWAPI::Broodwar->enemy()->getUnits())
 	{
-		// conditions for targeting
-		// TODO is this good enough for arbiters?
 		if (unit->getType().hasPermanentCloak() ||     // dark templar, observer
 			unit->getType().isCloakable() ||           // wraith, ghost
 			unit->getType() == BWAPI::UnitTypes::Terran_Vulture_Spider_Mine ||
@@ -38,18 +42,15 @@ void DetectorManager::executeMicro(const BWAPI::Unitset & targets)
 		}
 	}
 
-	bool detectorUnitInBattle = false;
-
-	for (auto & detectorUnit : detectorUnits)
+	for (const auto detectorUnit : detectorUnits)
 	{
-		// if we need to regroup, move the detectorUnit to that location
-		if (!detectorUnitInBattle && unitClosestToEnemy && unitClosestToEnemy->getPosition().isValid())
+		// Move the detector toward the squadmate closest to the enemy.
+		if (unitClosestToEnemy && unitClosestToEnemy->getPosition().isValid())
 		{
 			Micro::SmartMove(detectorUnit, unitClosestToEnemy->getPosition());
-			detectorUnitInBattle = true;
 		}
-		// otherwise there is no battle or no closest to enemy so we don't want our detectorUnit to die
-		// send him to scout around the map
+		// otherwise there is no unit closest to enemy so we don't want our detectorUnit to die
+		// send it to scout around the map
 		/* no, don't - not so smart for overlords
 		else
 		{
@@ -60,19 +61,20 @@ void DetectorManager::executeMicro(const BWAPI::Unitset & targets)
 	}
 }
 
-BWAPI::Unit DetectorManager::closestCloakedUnit(const BWAPI::Unitset & cloakedUnits, BWAPI::Unit detectorUnit)
+// NOTE Unused but potentially useful.
+BWAPI::Unit MicroDetectors::closestCloakedUnit(const BWAPI::Unitset & cloakedUnits, BWAPI::Unit detectorUnit)
 {
 	BWAPI::Unit closestCloaked = nullptr;
 	double closestDist = 100000;
 
-	for (auto & unit : cloakedUnits)
+	for (const auto unit : cloakedUnits)
 	{
 		// if we haven't already assigned an detectorUnit to this cloaked unit
 		if (!cloakedUnitMap[unit])
 		{
-			double dist = unit->getDistance(detectorUnit);
+			int dist = unit->getDistance(detectorUnit);
 
-			if (!closestCloaked || (dist < closestDist))
+			if (dist < closestDist)
 			{
 				closestCloaked = unit;
 				closestDist = dist;

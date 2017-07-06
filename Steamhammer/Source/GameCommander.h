@@ -37,12 +37,16 @@ class GameCommander
 	BWAPI::Unitset          _combatUnits;
 	BWAPI::Unitset          _scoutUnits;
 
+	int						_surrenderTime;    // for giving up early
+
     bool                    _initialScoutSet;
 	bool					_scoutAlways;
 	bool					_scoutIfNeeded;
 
     void                    assignUnit(BWAPI::Unit unit, BWAPI::Unitset & set);
 	bool                    isAssigned(BWAPI::Unit unit) const;
+
+	bool					surrenderMonkey();
 
 public:
 

@@ -21,7 +21,7 @@ void SquadData::clearSquadData()
 
         const BWAPI::Unitset & units = squad.getUnits();
 
-        for (auto & unit : units)
+        for (auto unit : units)
         {
             if (unit->getType().isWorker())
             {
@@ -64,9 +64,9 @@ bool SquadData::squadExists(const std::string & squadName)
     return _squads.find(squadName) != _squads.end();
 }
 
-void SquadData::addSquad(const std::string & squadName, const Squad & squad)
+void SquadData::addSquad(const Squad & squad)
 {
-	_squads[squadName] = squad;
+	_squads[squad.getName()] = squad;
 }
 
 void SquadData::updateAllSquads()
@@ -91,7 +91,7 @@ void SquadData::drawSquadInformation(int x, int y)
 
 	int yspace = 0;
 
-	for (auto & kv : _squads) 
+	for (const auto & kv : _squads) 
 	{
         const Squad & squad = kv.second;
 
@@ -120,7 +120,7 @@ void SquadData::verifySquadUniqueMembership()
 
     for (const auto & kv : _squads)
     {
-        for (auto & unit : kv.second.getUnits())
+        for (const auto unit : kv.second.getUnits())
         {
             if (assigned.contains(unit))
             {

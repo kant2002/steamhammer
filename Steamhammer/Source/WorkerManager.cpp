@@ -927,7 +927,8 @@ int WorkerManager::getNumIdleWorkers() const
 }
 
 // The largest number of workers that it is efficient to have right now.
-// NOTE Does not take into account possible preparations for future expansions.
+// Does not take into account possible preparations for future expansions.
+// May not exceed Config::Macro::AbsoluteMaxWorkers.
 int WorkerManager::getMaxWorkers() const
 {
 	int patches = InformationManager::Instance().getMyNumMineralPatches();
@@ -935,5 +936,8 @@ int WorkerManager::getMaxWorkers() const
 
 	// Never let the max number of workers fall to 0!
 	// Set aside 1 for future opportunities.
-	return 1 + int(Config::Macro::WorkersPerPatch * patches + Config::Macro::WorkersPerRefinery * refineries + 0.5);
+	return std::min(
+			Config::Macro::AbsoluteMaxWorkers,
+			1 + int(Config::Macro::WorkersPerPatch * patches + Config::Macro::WorkersPerRefinery * refineries + 0.5)
+		);
 }

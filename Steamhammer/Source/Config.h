@@ -30,6 +30,7 @@ namespace Config
         extern std::string ReadDir;
         extern std::string WriteDir;
         extern bool ScoutHarassEnemy;
+		extern bool SurrenderWhenHopeIsLost;
         extern bool UseEnemySpecificStrategy;
         extern bool FoundEnemySpecificStrategy;
     }
@@ -50,7 +51,6 @@ namespace Config
     namespace Debug
     {
         extern bool DrawGameInfo;
-		extern bool DrawStrategySketch;
         extern bool DrawUnitHealthBars;
 		extern bool DrawProductionInfo;
 		extern bool DrawBuildOrderSearchInfo;
@@ -63,6 +63,7 @@ namespace Config
 		extern bool DrawUnitOrders;
 		extern bool DrawBWTAInfo;
 		extern bool DrawMapGrid;
+		extern bool DrawMapDistances;
 		extern bool DrawBaseInfo;
 		extern bool DrawStrategyBossInfo;
 		extern bool DrawSquadInfo;
@@ -98,8 +99,10 @@ namespace Config
         extern int BOSSFrameLimit;
         extern int WorkersPerRefinery;
 		extern double WorkersPerPatch;
+		extern int AbsoluteMaxWorkers;
         extern int BuildingSpacing;
         extern int PylonSpacing;
+		extern int ProductionJamFrameLimit;
     }
 
     namespace Tools

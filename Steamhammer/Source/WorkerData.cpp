@@ -396,34 +396,25 @@ BWAPI::Unit WorkerData::getMineralToMine(BWAPI::Unit worker)
 	// get the depot associated with this unit
 	BWAPI::Unit depot = getWorkerDepot(worker);
 	BWAPI::Unit bestMineral = nullptr;
-	double bestDist = 100000;
-    double bestNumAssigned = 10000;
+	int bestDist = 100000;
+    int bestNumAssigned = 10000;
 
 	if (depot)
 	{
         BWAPI::Unitset mineralPatches = getMineralPatchesNearDepot(depot);
 
-		for (auto & mineral : mineralPatches)
+		for (const auto mineral : mineralPatches)
 		{
-				double dist = mineral->getDistance(depot);
-                double numAssigned = workersOnMineralPatch[mineral];
+				int dist = mineral->getDistance(depot);
+                int numAssigned = workersOnMineralPatch[mineral];
 
-                if (numAssigned < bestNumAssigned)
+                if (numAssigned < bestNumAssigned ||
+					numAssigned == bestNumAssigned && dist < bestDist)
                 {
                     bestMineral = mineral;
                     bestDist = dist;
                     bestNumAssigned = numAssigned;
                 }
-				else if (numAssigned == bestNumAssigned)
-				{
-					if (dist < bestDist)
-                    {
-                        bestMineral = mineral;
-                        bestDist = dist;
-                        bestNumAssigned = numAssigned;
-                    }
-				}
-		
 		}
 	}
 

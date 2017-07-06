@@ -6,13 +6,15 @@
 #include "CombatSimulation.h"
 #include "SquadOrder.h"
 
-#include "MeleeManager.h"
-#include "RangedManager.h"
-#include "DetectorManager.h"
-#include "LurkerManager.h"
-#include "TankManager.h"
-#include "TransportManager.h"
-#include "MedicManager.h"
+#include "MicroMelee.h"
+#include "MicroRanged.h"
+
+#include "MicroDetectors.h"
+#include "MicroHighTemplar.h"
+#include "MicroLurkers.h"
+#include "MicroMedics.h"
+#include "MicroTanks.h"
+#include "MicroTransports.h"
 
 namespace UAlbertaBot
 {
@@ -21,6 +23,10 @@ class Squad
 {
     std::string         _name;
 	BWAPI::Unitset      _units;
+	bool				_hasAir;
+	bool				_hasGround;
+	bool				_hasAntiAir;
+	bool				_hasAntiGround;
 	std::string         _regroupStatus;
 	bool				_attackAtMax;
     int                 _lastRetreatSwitch;
@@ -28,17 +34,17 @@ class Squad
     size_t              _priority;
 	
 	SquadOrder          _order;
-	MeleeManager        _meleeManager;
-	RangedManager       _rangedManager;
-	DetectorManager     _detectorManager;
-	LurkerManager       _lurkerManager;
-	TankManager         _tankManager;
-	TransportManager    _transportManager;
-    MedicManager        _medicManager;
+	MicroMelee			_microMelee;
+	MicroRanged			_microRanged;
+	MicroDetectors		_microDetectors;
+	MicroHighTemplar	_microHighTemplar;
+	MicroLurkers		_microLurkers;
+	MicroMedics			_microMedics;
+	MicroTanks			_microTanks;
+	MicroTransports		_microTransports;
 
 	std::map<BWAPI::Unit, bool>	_nearEnemy;
 
-    
 	BWAPI::Unit		getRegroupUnit();
 	BWAPI::Unit		unitClosestToEnemy();
     
@@ -49,7 +55,9 @@ class Squad
 	
 	bool			unitNearEnemy(BWAPI::Unit unit);
 	bool			needsToRegroup();
-	int				squadUnitsNear(BWAPI::Position p);
+
+	void			loadTransport();
+	void			stimIfNeeded();
 
 public:
 
@@ -73,5 +81,11 @@ public:
 
 	const BWAPI::Unitset &  getUnits() const;
 	const SquadOrder &  getSquadOrder()	const;
+
+	const bool			hasAir()        const { return _hasAir; };
+	const bool			hasGround()     const { return _hasGround; };
+	const bool			hasAntiAir()    const { return _hasAntiAir; };
+	const bool			hasAntiGround() const { return _hasAntiGround; };
+
 };
 }

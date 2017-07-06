@@ -1,21 +1,26 @@
-#include "MedicManager.h"
+#include "MicroMedics.h"
 #include "UnitUtil.h"
 
 using namespace UAlbertaBot;
 
-MedicManager::MedicManager() 
+MicroMedics::MicroMedics() 
 { 
 }
 
-void MedicManager::executeMicro(const BWAPI::Unitset & targets) 
+// Unused but required.
+void MicroMedics::executeMicro(const BWAPI::Unitset & targets)
+{
+}
+
+void MicroMedics::update(const BWAPI::Position & center)
 {
 	const BWAPI::Unitset & medics = getUnits();
     
 	// create a set of all medic targets
 	BWAPI::Unitset medicTargets;
-    for (auto & unit : BWAPI::Broodwar->self()->getUnits())
+    for (const auto unit : BWAPI::Broodwar->self()->getUnits())
     {
-        if (unit->getHitPoints() < unit->getInitialHitPoints() && !unit->getType().isMechanical() && !unit->getType().isBuilding())
+        if (unit->getHitPoints() < unit->getInitialHitPoints() && unit->getType().isOrganic())
         {
             medicTargets.insert(unit);
         }
@@ -24,7 +29,7 @@ void MedicManager::executeMicro(const BWAPI::Unitset & targets)
     BWAPI::Unitset availableMedics(medics);
 
     // for each target, send the closest medic to heal it
-    for (auto & target : medicTargets)
+    for (const auto target : medicTargets)
     {
         // only one medic can heal a target at a time
         if (target->isBeingHealed())
@@ -32,14 +37,14 @@ void MedicManager::executeMicro(const BWAPI::Unitset & targets)
             continue;
         }
 
-        double closestMedicDist = std::numeric_limits<double>::infinity();
+        int closestMedicDist = 99999;
         BWAPI::Unit closestMedic = nullptr;
 
-        for (auto & medic : availableMedics)
+        for (const auto medic : availableMedics)
         {
-            double dist = medic->getDistance(target);
+            int dist = medic->getDistance(target);
 
-            if (!closestMedic || (dist < closestMedicDist))
+            if (dist < closestMedicDist)
             {
                 closestMedic = medic;
                 closestMedicDist = dist;
@@ -60,9 +65,21 @@ void MedicManager::executeMicro(const BWAPI::Unitset & targets)
         }
     }
 
-    // the remaining medics should head to the squad order position
-    for (auto & medic : availableMedics)
+    // the remaining medics should head toward the middle of the squad
+    for (const auto medic : availableMedics)
     {
-        Micro::SmartAttackMove(medic, order.getPosition());
+        Micro::SmartAttackMove(medic, center);
     }
+}
+
+// Add up the energy of all medics.
+// This info is used in deciding whether to stim, and could have other uses.
+int MicroMedics::getTotalEnergy()
+{
+	int energy = 0;
+	for (const auto unit : getUnits())
+	{
+		energy += unit->getEnergy();
+	}
+	return energy;
 }

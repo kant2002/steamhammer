@@ -94,8 +94,10 @@ MacroAct::MacroAct(const std::string & name)
 	std::regex macroLocationRegex("([a-z_ ]+[a-z])\\s*\\@\\s*([a-z][a-z ]+)");
 	std::smatch m;
 	if (std::regex_match(inputName, m, macroLocationRegex)) {
-		inputName = m[1].str();
 		specifiedMacroLocation = getMacroLocationFromString(m[2].str());
+		// Don't change inputName before using the results from the regex.
+		// Fix via gnuborg, who credited it to jaj22.
+		inputName = m[1].str();
 	}
 
     for (const BWAPI::UnitType & unitType : BWAPI::UnitTypes::allUnitTypes())

@@ -84,22 +84,10 @@
     <ClCompile Include="..\source\WorkerManager.cpp">
       <Filter>game\macro</Filter>
     </ClCompile>
-    <ClCompile Include="..\source\DetectorManager.cpp">
-      <Filter>game\combat\micro</Filter>
-    </ClCompile>
-    <ClCompile Include="..\source\MeleeManager.cpp">
-      <Filter>game\combat\micro</Filter>
-    </ClCompile>
     <ClCompile Include="..\source\MicroManager.cpp">
       <Filter>game\combat\micro</Filter>
     </ClCompile>
-    <ClCompile Include="..\source\RangedManager.cpp">
-      <Filter>game\combat\micro</Filter>
-    </ClCompile>
     <ClCompile Include="..\source\ScoutManager.cpp">
-      <Filter>game\combat\micro</Filter>
-    </ClCompile>
-    <ClCompile Include="..\source\TransportManager.cpp">
       <Filter>game\combat\micro</Filter>
     </ClCompile>
     <ClCompile Include="..\source\BuildOrderQueue.cpp">
@@ -138,19 +126,20 @@
     <ClCompile Include="..\Source\UnitUtil.cpp">
       <Filter>util</Filter>
     </ClCompile>
-    <ClCompile Include="..\Source\TankManager.cpp">
-      <Filter>game\combat\micro</Filter>
-    </ClCompile>
-    <ClCompile Include="..\Source\MedicManager.cpp">
-      <Filter>game\combat\micro</Filter>
-    </ClCompile>
     <ClCompile Include="..\Source\Logger.cpp">
       <Filter>util</Filter>
     </ClCompile>
-    <ClCompile Include="..\Source\LurkerManager.cpp" />
     <ClCompile Include="..\Source\MacroAct.cpp" />
     <ClCompile Include="..\Source\BuildingData.cpp" />
     <ClCompile Include="..\Source\StrategyBossZerg.cpp" />
+    <ClCompile Include="..\Source\MicroTanks.cpp" />
+    <ClCompile Include="..\Source\MicroDetectors.cpp" />
+    <ClCompile Include="..\Source\MicroLurkers.cpp" />
+    <ClCompile Include="..\Source\MicroMedics.cpp" />
+    <ClCompile Include="..\Source\MicroMelee.cpp" />
+    <ClCompile Include="..\Source\MicroRanged.cpp" />
+    <ClCompile Include="..\Source\MicroTransports.cpp" />
+    <ClCompile Include="..\Source\MicroHighTemplar.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Source\CombatCommander.h">
@@ -204,19 +193,7 @@
     <ClInclude Include="..\source\WorkerManager.h">
       <Filter>game\macro</Filter>
     </ClInclude>
-    <ClInclude Include="..\source\DetectorManager.h">
-      <Filter>game\combat\micro</Filter>
-    </ClInclude>
-    <ClInclude Include="..\source\TransportManager.h">
-      <Filter>game\combat\micro</Filter>
-    </ClInclude>
-    <ClInclude Include="..\source\MeleeManager.h">
-      <Filter>game\combat\micro</Filter>
-    </ClInclude>
     <ClInclude Include="..\source\MicroManager.h">
-      <Filter>game\combat\micro</Filter>
-    </ClInclude>
-    <ClInclude Include="..\source\RangedManager.h">
       <Filter>game\combat\micro</Filter>
     </ClInclude>
     <ClInclude Include="..\source\ScoutManager.h">
@@ -258,19 +235,20 @@
     <ClInclude Include="..\Source\UnitUtil.h">
       <Filter>util</Filter>
     </ClInclude>
-    <ClInclude Include="..\Source\TankManager.h">
-      <Filter>game\combat\micro</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Source\MedicManager.h">
-      <Filter>game\combat\micro</Filter>
-    </ClInclude>
     <ClInclude Include="..\Source\Logger.h">
       <Filter>util</Filter>
     </ClInclude>
-    <ClInclude Include="..\Source\LurkerManager.h" />
     <ClInclude Include="..\Source\MacroAct.h" />
     <ClInclude Include="..\Source\MacroCommand.h" />
     <ClInclude Include="..\Source\BuildingData.h" />
     <ClInclude Include="..\Source\StrategyBossZerg.h" />
+    <ClInclude Include="..\Source\MicroTanks.h" />
+    <ClInclude Include="..\Source\MicroDetectors.h" />
+    <ClInclude Include="..\Source\MicroLurkers.h" />
+    <ClInclude Include="..\Source\MicroMedics.h" />
+    <ClInclude Include="..\Source\MicroMelee.h" />
+    <ClInclude Include="..\Source\MicroRanged.h" />
+    <ClInclude Include="..\Source\MicroTransports.h" />
+    <ClInclude Include="..\Source\MicroHighTemplar.h" />
   </ItemGroup>
 </Project>

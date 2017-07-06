@@ -18,9 +18,7 @@ class StrategyBossZerg
 {
 	StrategyBossZerg::StrategyBossZerg();
 
-	// Values that cannot or should not be exceeded.
-	const int absoluteMaxSupply = 400;
-	const int absoluteMaxDrones = 75;
+	const int absoluteMaxSupply = 400;     // 200 game supply max = 400 BWAPI supply
 
 	BWAPI::Player _self;
 	BWAPI::Player _enemy;
@@ -38,6 +36,7 @@ class StrategyBossZerg
 	// These get reset when _economyRatio changes.
 	int _economyDrones;
 	int _economyTotal;
+	int _extraDronesWanted;
 
 	// The most recent build order created by freshProductionPlan().
 	// Empty while we're in the opening book.
@@ -93,7 +92,7 @@ class StrategyBossZerg
 	int nBases;           // our bases
 	int nFreeBases;       // untaken non-island bases
 	int nMineralPatches;  // mineral patches at all our bases
-	int maxDrones;        // maximum reasonable number given nMineralPatches
+	int maxDrones;        // maximum reasonable number given nMineralPatches and nGas
 
 	// Update the resources, unit counts, and related stuff above.
 	void updateSupply();
@@ -112,18 +111,20 @@ class StrategyBossZerg
 
 	bool takeUrgentAction(BuildOrderQueue & queue);
 	void makeUrgentReaction(BuildOrderQueue & queue);
-	void checkGroundDefenses(BuildOrderQueue & queue);
 
-	bool vProtossDenOverSpire();
-	bool vTerranDenOverSpire();
-	bool chooseDenOverSpire();
-	void chooseUnitMix(bool denOverSpire);
-	void chooseTechTarget(bool denOverSpire);
+	void checkGroundDefenses(BuildOrderQueue & queue);
+	void analyzeExtraDrones();
+
+	bool vProtossGroundOverAir();
+	bool vTerranGroundOverAir();
+	bool vZergGroundOverAir();
+	bool chooseGroundOverAir();
+	void chooseTechTarget(bool groundOverAir);
+	void chooseUnitMix(bool groundOverAir);
 	void chooseEconomyRatio();
 	void chooseStrategy();
 	
 	std::string techTargetToString(TechTarget target);
-	void drawStrategySketch();
 	void drawStrategyBossInformation();
 
 public:

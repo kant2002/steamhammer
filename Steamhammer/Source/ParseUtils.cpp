@@ -20,10 +20,15 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
 
 	const std::string ourRaceStr(BWAPI::Broodwar->self()->getRace().getName());
 	const std::string theirRaceStr(BWAPI::Broodwar->enemy()->getRace().getName());
-	const std::string matchupStr(ourRaceStr.substr(0, 1) + "v" + theirRaceStr.substr(0, 1));
+	const std::string matchupStr(ourRaceStr.substr(0, 1) + 'v' + theirRaceStr.substr(0, 1));
 
 	const char * ourRace = ourRaceStr.c_str();
 	const char * matchup = matchupStr.c_str();
+
+	// Number of starting locations on the map.
+	const int mapSize = BWTA::getStartLocations().size();
+	UAB_ASSERT(mapSize >= 2 && mapSize <= 8, "bad map size");
+	const std::string mapWeightString = std::string("Weight") + std::string("012345678").at(mapSize);
 
     std::string config = FileUtils::ReadFile(filename);
 
@@ -83,7 +88,14 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
                 {
 					// TODO what a crude way of doing this...
                     MacroAct type(kite[i].GetString());
-                    Config::Micro::KiteLongerRangedUnits.insert(type.getUnitType());
+					if (type.isUnit())
+					{
+						Config::Micro::KiteLongerRangedUnits.insert(type.getUnitType());
+					}
+					else
+					{
+						BWAPI::Broodwar->printf("can't KiteLongerRangedUnits '%s'", kite[i].GetString());
+					}
                 }
             }
         }
@@ -96,6 +108,7 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
         JSONTools::ReadInt("BOSSFrameLimit", macro, Config::Macro::BOSSFrameLimit);
         JSONTools::ReadInt("PylonSpacing", macro, Config::Macro::PylonSpacing);
 
+		Config::Macro::ProductionJamFrameLimit = GetIntByRace("ProductionJamFrameLimit", macro);
 		Config::Macro::BuildingSpacing = GetIntByRace("BuildingSpacing", macro);
 		Config::Macro::WorkersPerRefinery = GetIntByRace("WorkersPerRefinery", macro);
 		Config::Macro::WorkersPerPatch = GetDoubleByRace("WorkersPerPatch", macro);
@@ -108,7 +121,6 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
         JSONTools::ReadString("ErrorLogFilename", debug, Config::Debug::ErrorLogFilename);
         JSONTools::ReadBool("LogAssertToErrorFile", debug, Config::Debug::LogAssertToErrorFile);
         JSONTools::ReadBool("DrawGameInfo", debug, Config::Debug::DrawGameInfo);
-		JSONTools::ReadBool("DrawStrategySketch", debug, Config::Debug::DrawStrategySketch);
 		JSONTools::ReadBool("DrawBuildOrderSearchInfo", debug, Config::Debug::DrawBuildOrderSearchInfo);
         JSONTools::ReadBool("DrawUnitHealthBars", debug, Config::Debug::DrawUnitHealthBars);
         JSONTools::ReadBool("DrawResourceInfo", debug, Config::Debug::DrawResourceInfo);
@@ -123,6 +135,7 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
         JSONTools::ReadBool("DrawEnemyUnitInfo", debug, Config::Debug::DrawEnemyUnitInfo);
         JSONTools::ReadBool("DrawBWTAInfo", debug, Config::Debug::DrawBWTAInfo);
         JSONTools::ReadBool("DrawMapGrid", debug, Config::Debug::DrawMapGrid);
+		JSONTools::ReadBool("DrawMapDistances", debug, Config::Debug::DrawMapDistances);
 		JSONTools::ReadBool("DrawBaseInfo", debug, Config::Debug::DrawBaseInfo);
 		JSONTools::ReadBool("DrawStrategyBossInfo", debug, Config::Debug::DrawStrategyBossInfo);
 		JSONTools::ReadBool("DrawUnitTargetInfo", debug, Config::Debug::DrawUnitTargetInfo);
@@ -152,49 +165,55 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
     {
         const rapidjson::Value & strategy = doc["Strategy"];
 
+		const rapidjson::Value * strategyCombos = nullptr;
+		if (strategy.HasMember("StrategyCombos") && strategy["StrategyCombos"].IsObject())
+		{
+			strategyCombos = &strategy["StrategyCombos"];
+		}
+
 		Config::Strategy::ScoutHarassEnemy = GetBoolByRace("ScoutHarassEnemy", strategy);
+		Config::Strategy::ScoutHarassEnemy = GetBoolByRace("SurrenderWhenHopeIsLost", strategy);
 
         JSONTools::ReadString("ReadDirectory", strategy, Config::Strategy::ReadDir);
         JSONTools::ReadString("WriteDirectory", strategy, Config::Strategy::WriteDir);
 
-        // If we have set a strategy for the current matchup, set it.
-		std::string strategyName;
-		if (strategy.HasMember(matchup) && _ParseStrategy(strategy[matchup], strategyName))
-        {
-			Config::Strategy::StrategyName = strategyName;
-		}
-		// Failing that, look for a strategy for the current race.
-		else if (strategy.HasMember(ourRace) && _ParseStrategy(strategy[ourRace], strategyName))
+		// check if we are using an enemy specific strategy
+		JSONTools::ReadBool("UseEnemySpecificStrategy", strategy, Config::Strategy::UseEnemySpecificStrategy);
+		if (Config::Strategy::UseEnemySpecificStrategy && strategy.HasMember("EnemySpecificStrategy") && strategy["EnemySpecificStrategy"].IsObject())
 		{
-			Config::Strategy::StrategyName = strategyName;
-		}
+			const rapidjson::Value & specific = strategy["EnemySpecificStrategy"];
+			const std::string enemyName = BWAPI::Broodwar->enemy()->getName();
 
-        // check if we are using an enemy specific strategy
-        JSONTools::ReadBool("UseEnemySpecificStrategy", strategy, Config::Strategy::UseEnemySpecificStrategy);
-        if (Config::Strategy::UseEnemySpecificStrategy && strategy.HasMember("EnemySpecificStrategy") && strategy["EnemySpecificStrategy"].IsObject())
-        {
-            const std::string enemyName = BWAPI::Broodwar->enemy()->getName();
-            const rapidjson::Value & specific = strategy["EnemySpecificStrategy"];
-
-            // check to see if our current enemy name is listed anywhere in the specific strategies
-            if (specific.HasMember(enemyName.c_str()) && specific[enemyName.c_str()].IsObject())
-            {
-                const rapidjson::Value & enemyStrategies = specific[enemyName.c_str()];
+			// check to see if our current enemy name is listed in the specific strategies
+			if (specific.HasMember(enemyName.c_str()))
+			{
+				std::string strategyName;
 
 				// if that enemy has a strategy listed for our current race, use it                                              
-				if (enemyStrategies.HasMember(ourRace) && enemyStrategies[ourRace].IsString())
+				if (_ParseStrategy(specific[enemyName.c_str()], strategyName, mapWeightString, ourRaceStr, strategyCombos))
 				{
-					Config::Strategy::StrategyName = enemyStrategies[ourRace].GetString();
-					Config::Strategy::FoundEnemySpecificStrategy = true;
-				}
-				// Or if the enemy has a strategy mix, do that.
-				else if (_ParseStrategy(enemyStrategies, strategyName))
-                {
 					Config::Strategy::StrategyName = strategyName;
-                    Config::Strategy::FoundEnemySpecificStrategy = true;
-                }
-            }
-        }
+					Config::Strategy::FoundEnemySpecificStrategy = true;   // defaults to false; see Config.cpp
+				}
+			}
+		}
+
+		// If we don't have a strategy for this enemy, fall back on a more general strategy.
+		if (!Config::Strategy::FoundEnemySpecificStrategy)
+		{
+			std::string strategyName;
+
+			// If we have set a strategy for the current matchup, set it.
+			if (strategy.HasMember(matchup) && _ParseStrategy(strategy[matchup], strategyName, mapWeightString, "StrategyMix", strategyCombos))
+			{
+				Config::Strategy::StrategyName = strategyName;
+			}
+			// Failing that, look for a strategy for the current race.
+			else if (strategy.HasMember(ourRace) && _ParseStrategy(strategy[ourRace], strategyName, mapWeightString, "StrategyMix", strategyCombos))
+			{
+				Config::Strategy::StrategyName = strategyName;
+			}
+		}
 
         // Parse all the Strategies
         if (strategy.HasMember("Strategies") && strategy["Strategies"].IsObject())
@@ -270,7 +289,6 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
     Config::ConfigFile::ConfigFileParsed = true;
 }
 
-
 void ParseUtils::ParseTextCommand(const std::string & commandString)
 {
     std::stringstream ss(commandString);
@@ -316,7 +334,8 @@ void ParseUtils::ParseTextCommand(const std::string & commandString)
         else if (variableName == "drawunittargetinfo") { Config::Debug::DrawUnitTargetInfo = GetBoolFromString(val); }
         else if (variableName == "drawbwtainfo") { Config::Debug::DrawBWTAInfo = GetBoolFromString(val); }
         else if (variableName == "drawmapgrid") { Config::Debug::DrawMapGrid = GetBoolFromString(val); }
-        else if (variableName == "drawsquadinfo") { Config::Debug::DrawSquadInfo = GetBoolFromString(val); }
+		else if (variableName == "drawmapdistances") { Config::Debug::DrawMapDistances = GetBoolFromString(val); }
+		else if (variableName == "drawsquadinfo") { Config::Debug::DrawSquadInfo = GetBoolFromString(val); }
         else if (variableName == "drawworkerinfo") { Config::Debug::DrawWorkerInfo = GetBoolFromString(val); }
         else if (variableName == "drawmousecursorinfo") { Config::Debug::DrawMouseCursorInfo = GetBoolFromString(val); }
         else if (variableName == "drawbuildinginfo") { Config::Debug::DrawBuildingInfo = GetBoolFromString(val); }
@@ -362,64 +381,119 @@ BWAPI::Race ParseUtils::GetRace(const std::string & raceName)
 // Parse a strategy declaration and return the chosen strategy.
 // If a strategy, return it in stratName:
 //   "Zerg_11Gas10Pool"
-// If a strategy mix declaration, pick the strategy randomly:
+// If a strategy mix declaration, pick the strategy randomly by weight:
 //   { "StrategyMix" : [
 //     { "Weight" : 30, "Strategy" : "Zerg_4PoolFast" },
 //     { "Weight" : 20, "Strategy" : "Zerg_4PoolSlow" },
 //     { "Weight" : 50, "Strategy" : "Zerg_5Pool" }
 //   ]},
 // Return whether parsing was successful.
-// Internal routine not for public use.
-bool ParseUtils::_ParseStrategy(const rapidjson::Value & item, std::string & stratName)
+// Internal routine not for wider use.
+bool ParseUtils::_ParseStrategy(
+	const rapidjson::Value & item,
+	std::string & stratName,        // updated and returned
+	const std::string & mapWeightString,
+	const std::string & objectString,
+	const rapidjson::Value * strategyCombos)
 {
 	if (item.IsString())
 	{
-		stratName = item.GetString();
-		return true;
+		stratName = std::string(item.GetString());
+		return _LookUpStrategyCombo(item, stratName, mapWeightString, objectString, strategyCombos);
 	}
 
-	if (item.IsObject() && item.HasMember("StrategyMix") && item["StrategyMix"].IsArray())
+	if (item.IsObject() && item.HasMember(objectString.c_str()))
 	{
-		const rapidjson::Value & mix = item["StrategyMix"];
-
-		std::vector<std::string> strategies;    // strategy name
-		std::vector<int> weights;               // cumulative weight of strategy
-		int totalWeight = 0;                    // cumulative weight of last strategy (so far)
-
-		// 1. Collect the weights and strategies.
-		for (size_t i(0); i < mix.Size(); ++i)
+		if (item[objectString.c_str()].IsString())
 		{
-			if (mix[i].IsObject() &&
-				mix[i].HasMember("Strategy") && mix[i]["Strategy"].IsString() &&
-				mix[i].HasMember("Weight") && mix[i]["Weight"].IsNumber())
-			{
-				strategies.push_back(mix[i]["Strategy"].GetString());
-				int weight = mix[i]["Weight"].GetInt();
-				totalWeight += weight;
-				weights.push_back(totalWeight);
-			}
-			else {
-				return false;
-			}
+			stratName = std::string(item[objectString.c_str()].GetString());
+			return _LookUpStrategyCombo(item[objectString.c_str()], stratName, mapWeightString, objectString, strategyCombos);
 		}
-
-		// 2. Choose a strategy at random by weight.
-		std::uniform_int_distribution<int> uniform_dist(0, totalWeight-1);
-		std::random_device rng_seed;
-		std::mt19937 rng(rng_seed());
-		int w = uniform_dist(rng);        // a lot of trouble to get one random number...
-		for (size_t i = 0; i < weights.size(); ++i)
+		else if (item[objectString.c_str()].IsArray())
 		{
-			if (w < weights[i])
+			const rapidjson::Value & mix = item[objectString.c_str()];
+
+			std::vector<std::string> strategies;    // strategy name
+			std::vector<int> weights;               // cumulative weight of strategy
+			int totalWeight = 0;                    // cumulative weight of last strategy (so far)
+
+			// 1. Collect the weights and strategies.
+			for (size_t i(0); i < mix.Size(); ++i)
 			{
-				stratName = strategies[i];
-				return true;
+				if (mix[i].IsObject() &&
+					mix[i].HasMember("Strategy") && mix[i]["Strategy"].IsString())
+				{
+					int weight;
+					if (mix[i].HasMember(mapWeightString.c_str()) && mix[i][mapWeightString.c_str()].IsInt())
+					{
+						weight = mix[i][mapWeightString.c_str()].GetInt();
+					}
+					else if (mix[i].HasMember("Weight") && mix[i]["Weight"].IsInt())
+					{
+						weight = mix[i]["Weight"].GetInt();
+					}
+					else
+					{
+						continue;
+					}
+					strategies.push_back(mix[i]["Strategy"].GetString());
+					totalWeight += weight;
+					weights.push_back(totalWeight);
+				}
+				else
+				{
+					return false;
+				}
 			}
+
+			// 2. Choose a strategy at random by weight.
+			std::uniform_int_distribution<int> uniform_dist(0, totalWeight - 1);
+			std::random_device rng_seed;
+			std::mt19937 rng(rng_seed());
+			int w = uniform_dist(rng);        // a lot of trouble to get one random number...
+			for (size_t i = 0; i < weights.size(); ++i)
+			{
+				if (w < weights[i])
+				{
+					stratName = strategies[i];
+					return _LookUpStrategyCombo(item, stratName, mapWeightString, objectString, strategyCombos);
+				}
+			}
+			UAB_ASSERT(false, "random strategy fell through");
 		}
-		UAB_ASSERT(false, "random strategy fell through");
 	}
 
 	return false;
+}
+
+// Mutually recursive with _ParseStrategy above.
+// This allows a strategy name in a strategy combo to refer to another strategy combo.
+// DON'T CREATE A LOOP IN THE STRATEGY COMBOS or the program will fall into an infinite loop.
+bool ParseUtils::_LookUpStrategyCombo(
+	const rapidjson::Value & item,
+	std::string & stratName,        // updated and returned
+	const std::string & mapWeightString,
+	const std::string & objectString,
+	const rapidjson::Value * strategyCombos)
+{
+	if (strategyCombos && strategyCombos->HasMember(stratName.c_str()))
+	{
+		if ((*strategyCombos)[stratName.c_str()].IsString())
+		{
+			stratName = (*strategyCombos)[stratName.c_str()].GetString();
+			return true;
+		}
+		if ((*strategyCombos)[stratName.c_str()].IsObject())
+		{
+			return _ParseStrategy((*strategyCombos)[stratName.c_str()], stratName, mapWeightString, objectString, strategyCombos);
+		}
+		// If it's neither of those things, complain.
+		BWAPI::Broodwar->printf("StrategyCombo %s is not valid", stratName.c_str());
+		return false;
+	}
+
+	// No need for further lookup. What we have is what we want.
+	return true;
 }
 
 bool ParseUtils::GetBoolFromString(const std::string & str)

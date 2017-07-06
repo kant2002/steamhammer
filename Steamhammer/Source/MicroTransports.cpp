@@ -1,10 +1,11 @@
-#include "TransportManager.h"
+#include "MicroTransports.h"
 #include "MapTools.h"
+#include "UnitUtil.h"
 
 using namespace UAlbertaBot;
 
-TransportManager::TransportManager() :
-	_transportShip(NULL)
+MicroTransports::MicroTransports()
+	: _transportShip(nullptr)
 	, _currentRegionVertexIndex(-1)
 	, _minCorner(-1,-1)
 	, _maxCorner(-1,-1)
@@ -13,17 +14,12 @@ TransportManager::TransportManager() :
 {
 }
 
-void TransportManager::executeMicro(const BWAPI::Unitset & targets) 
+// No micro to execute here. Does nothing, never called.
+void MicroTransports::executeMicro(const BWAPI::Unitset & targets) 
 {
-	const BWAPI::Unitset & transportUnits = getUnits();
-
-	if (transportUnits.empty())
-	{
-		return;
-	}	
 }
 
-void TransportManager::calculateMapEdgeVertices()
+void MicroTransports::calculateMapEdgeVertices()
 {
 	BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getEnemyMainBaseLocation();
 
@@ -32,7 +28,7 @@ void TransportManager::calculateMapEdgeVertices()
 		return;
 	}
 
-	const BWAPI::Position basePosition = BWAPI::Position(BWAPI::Broodwar->self()->getStartLocation());
+	const BWAPI::Position basePosition = InformationManager::Instance().getMyMainBaseLocation()->getPosition();
 	const std::vector<BWAPI::TilePosition> & closestTobase = MapTools::Instance().getClosestTilesTo(basePosition);
 
 	std::set<BWAPI::Position> unsortedVertices;
@@ -97,18 +93,13 @@ void TransportManager::calculateMapEdgeVertices()
 	_mapEdgeVertices = sortedVertices;
 }
 
-void TransportManager::drawTransportInformation(int x = 0, int y = 0)
+void MicroTransports::drawTransportInformation(int x = 0, int y = 0)
 {
 	if (!Config::Debug::DrawUnitTargetInfo)
 	{
 		return;
 	}
 
-	if (x && y)
-	{
-		//BWAPI::Broodwar->drawTextScreen(x, y, "ScoutInfo: %s", _scoutStatus.c_str());
-		//BWAPI::Broodwar->drawTextScreen(x, y + 10, "GasSteal: %s", _gasStealStatus.c_str());
-	}
 	for (size_t i(0); i < _mapEdgeVertices.size(); ++i)
 	{
 		BWAPI::Broodwar->drawCircleMap(_mapEdgeVertices[i], 4, BWAPI::Colors::Green, false);
@@ -116,41 +107,103 @@ void TransportManager::drawTransportInformation(int x = 0, int y = 0)
 	}
 }
 
-void TransportManager::update()
+void MicroTransports::update()
 {
-    if (!_transportShip && getUnits().size() > 0)
+	// If we haven't found our transport, or it went away, look again.
+	// Only supports having 1 transport unit.
+	if (!UnitUtil::IsValidUnit(_transportShip))
     {
-        _transportShip = *getUnits().begin();
+		if (getUnits().empty())
+		{
+			_transportShip = nullptr;
+		}
+		else
+		{
+			_transportShip = *(getUnits().begin());
+		}
     }
 
-	// calculate enemy region vertices if we haven't yet
+	// If we still have no transport, or it's still gone, there is nothing to do.
+	if (!UnitUtil::IsValidUnit(_transportShip))
+	{
+		_transportShip = nullptr;
+		return;
+	}
+
+	// Calculate a sneaky path to reach the enemy base.
 	if (_mapEdgeVertices.empty())
 	{
 		calculateMapEdgeVertices();
 	}
 
-	moveTroops();
+	// If we're not full yet, wait.
+	if (_transportShip->getSpaceRemaining() > 0)
+	{
+		return;
+	}
+
+	// All clear. Go do stuff.
+	unloadTroops();
 	moveTransport();
 	
 	drawTransportInformation();
 }
 
-void TransportManager::moveTransport()
+// Called when the transport exists and is not full.
+void MicroTransports::loadTroops()
 {
-	if (!_transportShip || !_transportShip->exists() || !(_transportShip->getHitPoints() > 0))
+	// If we're still busy loading the previous unit, wait.
+	if (_transportShip->getLastCommand().getType() == BWAPI::UnitCommandTypes::Load)
 	{
 		return;
 	}
 
+	for (const BWAPI::Unit unit : getUnits())
+	{
+		if (unit != _transportShip && !unit->isLoaded())
+		{
+			_transportShip->load(unit);
+			return;
+		}
+	}
+}
+
+// Only called when the transport exists and is loaded.
+void MicroTransports::unloadTroops()
+{
+	// Unload if we're close to the destination, or if we're scary low on hit points.
+	// It's possible that we'll land on a cliff and the units will be stuck there.
+	const int transportHP = _transportShip->getHitPoints() + _transportShip->getShields();
+	
+	const BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getEnemyMainBaseLocation();
+
+	if ((transportHP < 50 || (enemyBaseLocation && _transportShip->getDistance(enemyBaseLocation->getPosition()) < 300)) &&
+		_transportShip->canUnloadAtPosition(_transportShip->getPosition()))
+	{
+		// get the unit's current command
+		BWAPI::UnitCommand currentCommand(_transportShip->getLastCommand());
+
+		// if we've already told this unit to unload, wait
+		if (currentCommand.getType() == BWAPI::UnitCommandTypes::Unload_All || currentCommand.getType() == BWAPI::UnitCommandTypes::Unload_All_Position)
+		{
+			return;
+		}
+
+		_transportShip->unloadAll(_transportShip->getPosition());
+	}	
+}
+
+// Called when the transport exists and is loaded.
+void MicroTransports::moveTransport()
+{
 	// If I didn't finish unloading the troops, wait
 	BWAPI::UnitCommand currentCommand(_transportShip->getLastCommand());
-	if ((currentCommand.getType() == BWAPI::UnitCommandTypes::Unload_All 
-	 || currentCommand.getType() == BWAPI::UnitCommandTypes::Unload_All_Position)
-	 && _transportShip->getLoadedUnits().size() > 0)
+	if ((currentCommand.getType() == BWAPI::UnitCommandTypes::Unload_All || currentCommand.getType() == BWAPI::UnitCommandTypes::Unload_All_Position) &&
+		_transportShip->getLoadedUnits().size() > 0)
 	{
 		return;
 	}
-	
+
 	if (_to.isValid() && _from.isValid())
 	{
 		followPerimeter(_to, _from);
@@ -161,39 +214,7 @@ void TransportManager::moveTransport()
 	}
 }
 
-void TransportManager::moveTroops()
-{
-	if (!_transportShip || !_transportShip->exists() || !(_transportShip->getHitPoints() > 0))
-	{
-		return;
-	}
-	//unload zealots if close enough or dying
-	int transportHP = _transportShip->getHitPoints() + _transportShip->getShields();
-	
-	BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getEnemyMainBaseLocation();
-
-	if (enemyBaseLocation && (_transportShip->getDistance(enemyBaseLocation->getPosition()) < 300 || transportHP < 100)
-		&& _transportShip->canUnloadAtPosition(_transportShip->getPosition()))
-	{
-		//unload troops 
-		//and return? 
-
-		// get the unit's current command
-		BWAPI::UnitCommand currentCommand(_transportShip->getLastCommand());
-
-		// if we've already told this unit to unload, wait
-		if (currentCommand.getType() == BWAPI::UnitCommandTypes::Unload_All || currentCommand.getType() == BWAPI::UnitCommandTypes::Unload_All_Position)
-		{
-			return;
-		}
-
-		//else unload
-		_transportShip->unloadAll(_transportShip->getPosition());
-	}
-	
-}
-
-void TransportManager::followPerimeter(int clockwise)
+void MicroTransports::followPerimeter(int clockwise)
 {
 	BWAPI::Position goTo = getFleePosition(clockwise);
 
@@ -205,7 +226,7 @@ void TransportManager::followPerimeter(int clockwise)
 	Micro::SmartMove(_transportShip, goTo);
 }
 
-void TransportManager::followPerimeter(BWAPI::Position to, BWAPI::Position from)
+void MicroTransports::followPerimeter(BWAPI::Position to, BWAPI::Position from)
 {
 	static int following = 0;
 	if (following)
@@ -233,19 +254,19 @@ void TransportManager::followPerimeter(BWAPI::Position to, BWAPI::Position from)
 		// BWAPI::Broodwar->printf("FOLLOW PERIMETER TO SECOND WAYPOINT!");
 		//follow perimeter to second waypoint! 
 		//clockwise or counterclockwise? 
-		int closestPolygonIndex = getClosestVertexIndex(_transportShip);
+		//int closestPolygonIndex = getClosestVertexIndex(_transportShip);
+		int closestPolygonIndex = getClosestVertexIndex(to);
 		UAB_ASSERT(closestPolygonIndex != -1, "Couldn't find a closest vertex");  // ensures map edge exists
 
+		// This controls which way around the map we go.
 		if (_mapEdgeVertices[(closestPolygonIndex + 1) % _mapEdgeVertices.size()].getApproxDistance(_waypoints[1]) <
 			_mapEdgeVertices[(closestPolygonIndex - 1) % _mapEdgeVertices.size()].getApproxDistance(_waypoints[1]))
 		{
-			// BWAPI::Broodwar->printf("FOLLOW clockwise");
 			following = 1;
 			followPerimeter(following);
 		}
 		else
 		{
-			// BWAPI::Broodwar->printf("FOLLOW counter clockwise");
 			following = -1;
 			followPerimeter(following);
 		}
@@ -259,14 +280,19 @@ void TransportManager::followPerimeter(BWAPI::Position to, BWAPI::Position from)
 	}
 }
 
-int TransportManager::getClosestVertexIndex(BWAPI::UnitInterface * unit)
+int MicroTransports::getClosestVertexIndex(BWAPI::Unit unit)
+{
+	return getClosestVertexIndex(unit->getPosition());
+}
+
+int MicroTransports::getClosestVertexIndex(BWAPI::Position p)
 {
 	int closestIndex = -1;
-	double closestDistance = 10000000;
+	int closestDistance = 10000000;
 
 	for (size_t i(0); i < _mapEdgeVertices.size(); ++i)
 	{
-		double dist = unit->getDistance(_mapEdgeVertices[i]);
+		int dist = p.getApproxDistance(_mapEdgeVertices[i]);
 		if (dist < closestDistance)
 		{
 			closestDistance = dist;
@@ -277,30 +303,10 @@ int TransportManager::getClosestVertexIndex(BWAPI::UnitInterface * unit)
 	return closestIndex;
 }
 
-int TransportManager::getClosestVertexIndex(BWAPI::Position p)
-{
-	int closestIndex = -1;
-	double closestDistance = 10000000;
-
-	for (size_t i(0); i < _mapEdgeVertices.size(); ++i)
-	{
-		
-		double dist = p.getApproxDistance(_mapEdgeVertices[i]);
-		if (dist < closestDistance)
-		{
-			closestDistance = dist;
-			closestIndex = i;
-		}
-	}
-
-	return closestIndex;
-}
-
-std::pair<int,int> TransportManager::findSafePath(BWAPI::Position to, BWAPI::Position from)
+std::pair<int,int> MicroTransports::findSafePath(BWAPI::Position to, BWAPI::Position from)
 {
 	// BWAPI::Broodwar->printf("FROM: [%d,%d]",from.x, from.y);
 	// BWAPI::Broodwar->printf("TO: [%d,%d]", to.x, to.y);
-
 
 	//closest map edge point to destination
 	int endPolygonIndex = getClosestVertexIndex(to);
@@ -309,8 +315,7 @@ std::pair<int,int> TransportManager::findSafePath(BWAPI::Position to, BWAPI::Pos
 	UAB_ASSERT_WARNING(endPolygonIndex != -1, "Couldn't find a closest vertex");
 	BWAPI::Position enemyEdge = _mapEdgeVertices[endPolygonIndex];
 
-	BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getEnemyMainBaseLocation();
-	BWAPI::Position enemyPosition = enemyBaseLocation->getPosition();
+	BWAPI::Position enemyPosition = order.getPosition();
 
 	//find the projections on the 4 edges
 	UAB_ASSERT_WARNING((_minCorner.isValid() && _maxCorner.isValid()), "Map corners should have been set! (transport mgr)");
@@ -332,11 +337,8 @@ std::pair<int,int> TransportManager::findSafePath(BWAPI::Position to, BWAPI::Pos
 	int maxIndex = (d1 > d2 ? d1 : d2) > (d3 > d4 ? d3 : d4) ?
 						  (d1 > d2 ? 0 : 1) : (d3 > d4 ? 2 : 3);
 	
-	
-
 	int minIndex = (d1 < d2 ? d1 : d2) < (d3 < d4 ? d3 : d4) ?
 						   (d1 < d2 ? 0 : 1) : (d3 < d4 ? 2 : 3);
-
 
 	if (maxIndex > minIndex)
 	{
@@ -360,9 +362,9 @@ std::pair<int,int> TransportManager::findSafePath(BWAPI::Position to, BWAPI::Pos
 
 }
 
-BWAPI::Position TransportManager::getFleePosition(int clockwise)
+BWAPI::Position MicroTransports::getFleePosition(int clockwise)
 {
-	UAB_ASSERT_WARNING(!_mapEdgeVertices.empty(), "We should have a transport route!");
+	UAB_ASSERT(!_mapEdgeVertices.empty(), "We should have a transport route!");
 
 	//BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getEnemyMainBaseLocation();
 
@@ -403,18 +405,27 @@ BWAPI::Position TransportManager::getFleePosition(int clockwise)
 
 }
 
-void TransportManager::setTransportShip(BWAPI::UnitInterface * unit)
+void MicroTransports::setTransportShip(BWAPI::Unit unit)
 {
 	_transportShip = unit;
 }
 
-void TransportManager::setFrom(BWAPI::Position from)
+bool MicroTransports::hasTransportShip() const
+{
+	return UnitUtil::IsValidUnit(_transportShip);
+}
+
+void MicroTransports::setFrom(BWAPI::Position from)
 {
 	if (from.isValid())
+	{
 		_from = from;
+	}
 }
-void TransportManager::setTo(BWAPI::Position to)
+
+void MicroTransports::setTo(BWAPI::Position to)
 {
-	if (to.isValid())
+	if (to.isValid()){
 		_to = to;
+	}
 }

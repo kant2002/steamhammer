@@ -7,7 +7,16 @@ namespace UAlbertaBot
 
 namespace SquadOrderTypes
 {
-    enum { None, Idle, Attack, Defend, Regroup, Drop, Survey, SquadOrderTypes };
+    enum {
+		None,
+		Idle,      // workers, overlords with no other job
+		Attack,    // go attack
+		Defend,    // defend a base
+		Hold,      // hold ground, stand ready to defend until needed (Drop squad)
+		Load,      // load into a transport (Drop squad)
+		Drop,      // go drop on the enemy (Drop squad)
+		Survey,    // scout around (barely implemented)
+		SquadOrderTypes };
 }
 
 class SquadOrder
@@ -59,13 +68,32 @@ public:
 		{
 			case SquadOrderTypes::None:    return '-';
 			case SquadOrderTypes::Idle:    return 'I';
-			case SquadOrderTypes::Attack:  return 'A';
-			case SquadOrderTypes::Defend:  return 'D';
-			case SquadOrderTypes::Regroup: return 'G';
-			case SquadOrderTypes::Drop:    return 'T';
+			case SquadOrderTypes::Attack:  return 'a';
+			case SquadOrderTypes::Defend:  return 'd';
+			case SquadOrderTypes::Hold:    return 'H';
+			case SquadOrderTypes::Load:    return 'L';
+			case SquadOrderTypes::Drop:    return 'D';
 			case SquadOrderTypes::Survey:  return 'S';
 		}
 		return '?';
+	}
+
+	// These orders are considered combat orders and are linked to combat-related micro.
+	bool isCombatOrder() const
+	{
+		return
+			_type == SquadOrderTypes::Attack ||
+			_type == SquadOrderTypes::Defend ||
+			_type == SquadOrderTypes::Hold ||
+			_type == SquadOrderTypes::Drop;
+	}
+
+	// These orders use the regrouping mechanism to retreat when facing superior enemies.
+	// Combat orders not in this group fight on against any odds.
+	bool isRegroupableOrder() const
+	{
+		return
+			_type == SquadOrderTypes::Attack;
 	}
 
 };

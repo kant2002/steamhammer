@@ -14,7 +14,6 @@ TimerManager::TimerManager()
 	_timerNames.push_back("Scout");
 	_timerNames.push_back("UnitInfo");
 	_timerNames.push_back("MapGrid");
-	_timerNames.push_back("MapTools");
 	_timerNames.push_back("Search");
 }
 
@@ -52,7 +51,7 @@ void TimerManager::displayTimers(int x, int y)
             BWAPI::Broodwar->printf("Timer Debug: %s %lf", _timerNames[i].c_str(), elapsed);
         }
 
-		int width = (int)((total == 0) ? 0 : (_barWidth * (elapsed / total)));
+		int width = (total == 0) ? 0 : int(_barWidth * (elapsed / total));
 
 		BWAPI::Broodwar->drawTextScreen(x, y+yskip-3, "\x04 %s", _timerNames[i].c_str());
 		BWAPI::Broodwar->drawBoxScreen(x+60, y+yskip, x+60+width+1, y+yskip+8, BWAPI::Colors::White);

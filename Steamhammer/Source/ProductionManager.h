@@ -17,6 +17,7 @@ class ProductionManager
     ProductionManager();
     
     BuildOrderQueue     _queue;
+	int					_lastProductionFrame;            // for detecting jams
     BWAPI::TilePosition _predictedTilePosition;
     bool                _assignedWorkerForThisBuilding;
     bool                _haveLocationForThisBuilding;

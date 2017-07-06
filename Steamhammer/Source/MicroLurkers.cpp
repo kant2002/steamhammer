@@ -1,13 +1,13 @@
-#include "LurkerManager.h"
+#include "MicroLurkers.h"
 #include "UnitUtil.h"
 
 using namespace UAlbertaBot;
 
-LurkerManager::LurkerManager()
+MicroLurkers::MicroLurkers()
 {
 }
 
-void LurkerManager::executeMicro(const BWAPI::Unitset & targets)
+void MicroLurkers::executeMicro(const BWAPI::Unitset & targets)
 {
 	const BWAPI::Unitset & lurkers = getUnits();
 
@@ -21,7 +21,7 @@ void LurkerManager::executeMicro(const BWAPI::Unitset & targets)
 	for (auto & lurker : lurkers)
 	{
 		bool lurkerNearChokepoint = false;
-		for (auto & choke : BWTA::getChokepoints())
+		for (const auto & choke : BWTA::getChokepoints())
 		{
 			if (choke->getCenter().getDistance(lurker->getPosition()) < 64)
 			{
@@ -31,7 +31,7 @@ void LurkerManager::executeMicro(const BWAPI::Unitset & targets)
 		}
 
 		// if the order is to attack or defend
-		if (order.getType() == SquadOrderTypes::Attack || order.getType() == SquadOrderTypes::Defend)
+		if (order.isCombatOrder())
 		{
 			// if there are targets
 			if (!LurkerTargets.empty())
@@ -72,7 +72,7 @@ void LurkerManager::executeMicro(const BWAPI::Unitset & targets)
 	}
 }
 
-BWAPI::Unit LurkerManager::getTarget(BWAPI::Unit lurker, const BWAPI::Unitset & targets)
+BWAPI::Unit MicroLurkers::getTarget(BWAPI::Unit lurker, const BWAPI::Unitset & targets)
 {
 	int bestPriorityDistance = 1000000;
 	int bestPriority = 0;
@@ -82,22 +82,22 @@ BWAPI::Unit LurkerManager::getTarget(BWAPI::Unit lurker, const BWAPI::Unitset & 
 	BWAPI::Unit bestTargetThreatInRange = nullptr;
 	double bestTargetThreatInRangeLTD = 0;
 
-	int highPriority = 0;
-	double closestDist = std::numeric_limits<double>::infinity();
-	BWAPI::Unit closestTarget = nullptr;
-
 	int lurkerRange = BWAPI::UnitTypes::Zerg_Lurker.groundWeapon().maxRange();
 
 	BWAPI::Unitset targetsInRange;
-	for (auto & target : targets)
+	for (const auto target : targets)
 	{
-		if (target->getDistance(lurker) <= lurkerRange && UnitUtil::CanAttack(lurker, target))
+		if (target->getDistance(lurker) <= lurkerRange && !target->isFlying())
 		{
 			targetsInRange.insert(target);
 		}
 	}
 
 	const BWAPI::Unitset & newTargets = targetsInRange.empty() ? targets : targetsInRange;
+
+	int highPriority = 0;
+	double closestDist = std::numeric_limits<double>::infinity();
+	BWAPI::Unit closestTarget = nullptr;
 
 	// check first for units that are in range of our attack that can cause damage
 	// choose the highest priority one from them at the lowest health
@@ -112,6 +112,7 @@ BWAPI::Unit LurkerManager::getTarget(BWAPI::Unit lurker, const BWAPI::Unitset & 
 		double LTD = UnitUtil::CalculateLTD(target, lurker);
 		int priority = getAttackPriority(lurker, target);
 		bool targetIsThreat = LTD > 0;
+
 		BWAPI::Broodwar->drawTextMap(target->getPosition(), "%d", priority);
 
 		if (!closestTarget || (priority > highPriority) || (priority == highPriority && distance < closestDist))
@@ -131,7 +132,7 @@ BWAPI::Unit LurkerManager::getTarget(BWAPI::Unit lurker, const BWAPI::Unitset & 
 }
 
 // get the attack priority of a type in relation to a zergling
-int LurkerManager::getAttackPriority(BWAPI::Unit rangedUnit, BWAPI::Unit target)
+int MicroLurkers::getAttackPriority(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 {
 	BWAPI::UnitType rangedType = rangedUnit->getType();
 	BWAPI::UnitType targetType = target->getType();
@@ -201,7 +202,7 @@ int LurkerManager::getAttackPriority(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 	}
 }
 
-BWAPI::Unit LurkerManager::closestrangedUnit(BWAPI::Unit target, std::set<BWAPI::Unit> & rangedUnitsToAssign)
+BWAPI::Unit MicroLurkers::closestrangedUnit(BWAPI::Unit target, std::set<BWAPI::Unit> & rangedUnitsToAssign)
 {
 	double minDistance = 0;
 	BWAPI::Unit closest = nullptr;

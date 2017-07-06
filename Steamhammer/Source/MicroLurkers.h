@@ -5,11 +5,11 @@
 
 namespace UAlbertaBot
 {
-	class LurkerManager : public MicroManager
+	class MicroLurkers : public MicroManager
 	{
 	public:
 
-		LurkerManager();
+		MicroLurkers();
 		void executeMicro(const BWAPI::Unitset & targets);
 
 		BWAPI::Unit chooseTarget(BWAPI::Unit rangedUnit, const BWAPI::Unitset & targets, std::map<BWAPI::Unit, int> & numTargeting);

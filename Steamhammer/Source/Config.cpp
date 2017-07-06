@@ -7,7 +7,7 @@ namespace Config
     {
         bool ConfigFileFound                = false;
         bool ConfigFileParsed               = false;
-        std::string ConfigFileLocation      = "bwapi-data/AI/Steamhammer_1.2.2.json";
+        std::string ConfigFileLocation      = "bwapi-data/AI/Steamhammer_1.2.3.json";
     }
 
     namespace Strategy
@@ -19,6 +19,7 @@ namespace Config
         std::string ReadDir                 = "bwapi-data/read/";
         std::string WriteDir                = "bwapi-data/write/";
         bool ScoutHarassEnemy               = true;
+		bool SurrenderWhenHopeIsLost        = true;
         bool UseEnemySpecificStrategy       = true;
         bool FoundEnemySpecificStrategy     = false;
     }
@@ -55,7 +56,6 @@ namespace Config
     namespace Debug								
     {
         bool DrawGameInfo                   = true;
-        bool DrawStrategySketch             = false;
         bool DrawUnitHealthBars             = false;
         bool DrawProductionInfo             = true;
         bool DrawBuildOrderSearchInfo       = false;
@@ -70,6 +70,7 @@ namespace Config
         bool DrawEnemyUnitInfo              = false;
         bool DrawBWTAInfo                   = false;
         bool DrawMapGrid                    = false;
+		bool DrawMapDistances				= false;
 		bool DrawBaseInfo					= false;
 		bool DrawStrategyBossInfo			= false;
 		bool DrawUnitTargetInfo				= false;
@@ -103,8 +104,10 @@ namespace Config
         int BOSSFrameLimit                  = 160;
         int WorkersPerRefinery              = 3;
 		double WorkersPerPatch              = 3.0;
+		int AbsoluteMaxWorkers				= 75;
         int BuildingSpacing                 = 1;
         int PylonSpacing                    = 3;
+		int ProductionJamFrameLimit			= 360;
     }
 
     namespace Tools								

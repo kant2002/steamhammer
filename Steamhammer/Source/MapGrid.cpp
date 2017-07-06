@@ -23,11 +23,6 @@ MapGrid::MapGrid(int mapWidth, int mapHeight, int cellSize)
 	calculateCellCenters();
 }
 
-BWAPI::Position MapGrid::getNaturalExpansion() 
-{
-	return naturalExpansion;
-}
-
 //  The least-recently explored cell accessible by land.
 BWAPI::Position MapGrid::getLeastExplored() 
 {
@@ -192,10 +187,10 @@ void MapGrid::GetUnits(BWAPI::Unitset & units, BWAPI::Position center, int radiu
 			int row = y;
 			int col = x;
 
-			GridCell & cell(getCellByIndex(row,col));
+			const GridCell & cell(getCellByIndex(row,col));
 			if(ourUnits)
 			{
-				for (auto & unit : cell.ourUnits)
+				for (const auto unit : cell.ourUnits)
 				{
 					BWAPI::Position d(unit->getPosition() - center);
 					if(d.x * d.x + d.y * d.y <= radiusSq)
@@ -209,7 +204,7 @@ void MapGrid::GetUnits(BWAPI::Unitset & units, BWAPI::Position center, int radiu
 			}
 			if(oppUnits)
 			{
-				for (auto & unit : cell.oppUnits) if (unit->getType() != BWAPI::UnitTypes::Unknown && unit->isVisible())
+				for (const auto unit : cell.oppUnits) if (unit->getType() != BWAPI::UnitTypes::Unknown && unit->isVisible())
 				{
 					BWAPI::Position d(unit->getPosition() - center);
 					if(d.x * d.x + d.y * d.y <= radiusSq)
@@ -223,4 +218,22 @@ void MapGrid::GetUnits(BWAPI::Unitset & units, BWAPI::Position center, int radiu
 			}
 		}
 	}
+}
+
+// The bot scanned the given position. Record it so we don't scan the same position
+// again before it wears off.
+void MapGrid::scanAtPosition(const BWAPI::Position & pos)
+{
+	GridCell & cell = getCell(pos);
+	cell.timeLastScan = BWAPI::Broodwar->getFrameCount();
+}
+
+// Is a comsat scan already active at the given position?
+// This implementation is a rough appromimation; it only checks whether an ongoing scan
+// is in the same grid cell as the given position.
+bool MapGrid::scanIsActiveAt(const BWAPI::Position & pos)
+{
+	const GridCell & cell = getCell(pos);
+
+	return cell.timeLastScan + GridCell::ScanDuration > BWAPI::Broodwar->getFrameCount();
 }

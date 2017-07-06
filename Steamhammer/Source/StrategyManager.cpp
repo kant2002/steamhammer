@@ -138,36 +138,78 @@ const MetaPairVector StrategyManager::getProtossBuildOrderGoal()
 	int numZealots = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Protoss_Zealot);
 	int numDragoons = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Protoss_Dragoon);
 	int numDarkTemplar = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Protoss_Dark_Templar);
+	int numReavers = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Protoss_Reaver);
+	int numCorsairs = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Protoss_Corsair);
+	int numCarriers = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Protoss_Carrier);
+
+	bool hasStargate = UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Protoss_Stargate) > 0;
 
 	int maxProbes = WorkerManager::Instance().getMaxWorkers();
 
-    if (_openingGroup == "zealots")
+	BWAPI::Player self = BWAPI::Broodwar->self();
+
+	if (_openingGroup == "zealots")
     {
         goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Zealot, numZealots + 6));
 
-        // once we have a 2nd nexus start making dragoons
-        if (numNexusAll >= 2)
-        {
-			goal.push_back(MetaPair(BWAPI::UpgradeTypes::Singularity_Charge, 1));
-			goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Dragoon, numDragoons + 4));
-        }
-		// And once we have a third, get zealot speed.
 		if (numNexusAll >= 3)
 		{
+			// In the end, switch to carriers; no more dragoons.
+			goal.push_back(MetaPair(BWAPI::UpgradeTypes::Carrier_Capacity, 1));
+			goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Carrier, numCarriers + 1));
+		}
+		else if (numNexusAll >= 2)
+		{
+			// Once we have a 2nd nexus, add dragoons.
+			goal.push_back(MetaPair(BWAPI::UpgradeTypes::Singularity_Charge, 1));
+			goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Dragoon, numDragoons + 4));
+		}
+
+		// Once dragoons are out, get zealot speed.
+		if (numDragoons > 0)
+		{
 			goal.push_back(MetaPair(BWAPI::UpgradeTypes::Leg_Enhancements, 1));
+		}
+
+		// Finally add templar archives.
+		if (UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Protoss_Citadel_of_Adun) > 0)
+		{
+			goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Templar_Archives, 1));
+		}
+
+		// If we have templar archives, make
+		// 1. a small fixed number of dark templar to force a reaction, and
+		// 2. an even number of high templar to merge into archons (so the high templar disappear quickly).
+		if (UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Protoss_Templar_Archives) != 0)
+		{
+			goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Dark_Templar, std::max(3, numDarkTemplar)));
+			goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_High_Templar, 2));
 		}
 	}
 	else if (_openingGroup == "dragoons")
     {
 		goal.push_back(MetaPair(BWAPI::UpgradeTypes::Singularity_Charge, 1));
 		goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Dragoon, numDragoons + 6));
-    }
+
+		// Once we have a 2nd nexus, add reavers.
+		if (numNexusAll >= 2)
+		{
+			goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Reaver, numReavers + 1));
+		}
+
+		// If we have templar archives, make a small fixed number of DTs to force a reaction.
+		if (UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Protoss_Templar_Archives) != 0)
+		{
+			goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Dark_Templar, std::max(3, numDarkTemplar)));
+		}
+
+	}
 	else if (_openingGroup == "dark templar")
     {
         goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Dark_Templar, numDarkTemplar + 2));
 
-        // if we have a 2nd nexus then get some goons out
-        if (numNexusAll >= 2)
+		// Once we have a 2nd nexus, add dragoons.
+		if (numNexusAll >= 2)
         {
 			goal.push_back(MetaPair(BWAPI::UpgradeTypes::Singularity_Charge, 1));
 			goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Dragoon, numDragoons + 4));
@@ -175,34 +217,34 @@ const MetaPairVector StrategyManager::getProtossBuildOrderGoal()
     }
 	else if (_openingGroup == "drop")
 	{
-		if (numZealots == 0)
-		{
-			goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Zealot, 4));
-			goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Shuttle, 1));
-		}
-		else
-		{
-			goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Zealot, numZealots + 8));
-		}
+		goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Dark_Templar, numDarkTemplar + 2));
+
+		// The drop prep is carried out entirely by the opening book.
+		// Immediately transition into something else.
+		_openingGroup = "dragoons";
 	}
 	else
     {
 		UAB_ASSERT_WARNING(false, "Unknown Opening Group: %s", _openingGroup.c_str());
     }
     
-	// if we have 2 nexus, make an observer
-	// or if the enemy has cloaked units
-	if (numNexusCompleted >= 3 || InformationManager::Instance().enemyHasCloakTech())
+	// If we're doing a corsair thing and it's still working, slowly add more.
+	if (_enemyRace == BWAPI::Races::Zerg &&
+		hasStargate &&
+		numCorsairs < 6 &&
+		self->deadUnitCount(BWAPI::UnitTypes::Protoss_Corsair) == 0)
+	{
+		goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Corsair, numCorsairs + 1));
+	}
+
+	// Get observers if we have a second base, or if the enemy has cloaked units.
+	if (numNexusCompleted >= 2 || InformationManager::Instance().enemyHasCloakTech())
 	{
 		goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Robotics_Facility, 1));
 		
-		if (BWAPI::Broodwar->self()->completedUnitCount(BWAPI::UnitTypes::Protoss_Robotics_Facility) > 0)
+		if (self->completedUnitCount(BWAPI::UnitTypes::Protoss_Robotics_Facility) > 0)
 		{
-			goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Observatory, 1));
-		}
-		if (BWAPI::Broodwar->self()->completedUnitCount(BWAPI::UnitTypes::Protoss_Observatory) > 0)
-		{
-			goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Observer, 1));
+			goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Observer, 2));
 		}
 	}
 
@@ -253,7 +295,7 @@ const MetaPairVector StrategyManager::getTerranBuildOrderGoal()
 		goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_SCV, std::min(maxSCVs, numSCVs + 1)));
 		goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Bunker, 1));
 		
-		if (BWAPI::Broodwar->self()->minerals() > 250)
+		if (self->minerals() > 250)
 		{
 			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Barracks, numRax + 1));
 		}
@@ -279,10 +321,17 @@ const MetaPairVector StrategyManager::getTerranBuildOrderGoal()
 		}
 		if (hasAcademy)
 		{
-			// 1 medic for each 8 marines. If you use stim, 1:6 might be a better ratio.
-			int medicGoal = std::max(numMedics, numMarines / 8);
+			// 1 medic for each 6 marines.
+			int medicGoal = std::max(numMedics, numMarines / 6);
 			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Medic, medicGoal));
-			goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::U_238_Shells, 1));
+			if (!self->hasResearched(BWAPI::TechTypes::Stim_Packs))
+			{
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::TechTypes::Stim_Packs, 1));
+			}
+			else
+			{
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::U_238_Shells, 1));
+			}
 		}
         if (numMarines > 16)
         {
@@ -305,30 +354,53 @@ const MetaPairVector StrategyManager::getTerranBuildOrderGoal()
     }
 	else if (_openingGroup == "vultures")
     {
-        goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Vulture, numVultures + 6));
+        goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Vulture, numVultures + 3));
 		goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Ion_Thrusters, 1));
 
-        if (numVultures >= 8)
+        if (numVultures >= 6)
         {
-            goal.push_back(std::pair<MacroAct, int>(BWAPI::TechTypes::Tank_Siege_Mode, 1));
-            goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode, numTanks + 2));
+			// The rush is over, transition out on the next call.
+			_openingGroup = "tanks";
         }
     }
 	else if (_openingGroup == "tanks")
     {
-        goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode, numTanks + 4));
+		goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode, numVultures + 1));
+		goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode, numTanks + 3));
 		goal.push_back(std::pair<MacroAct, int>(BWAPI::TechTypes::Tank_Siege_Mode, 1));
 
 		if (numTanks >= 8)
 		{
 			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Goliath, numGoliaths + 4));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Ion_Thrusters, 1));
 		}
 		if (numGoliaths >= 4)
 		{
 			goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Charon_Boosters, 1));
 		}
+		if (self->hasResearched(BWAPI::TechTypes::Tank_Siege_Mode))
+		{
+			// Maintain 1 vessel to spot for the tanks.
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Science_Vessel, 1));
+		}
     }
-    else
+	else if (_openingGroup == "drop")
+	{
+		goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Ion_Thrusters, 1));
+		goal.push_back(MetaPair(BWAPI::UnitTypes::Terran_Vulture, numVultures + 1));
+
+		// The drop prep is carried out entirely by the opening book.
+		// Immediately transition into something else.
+		if (_enemyRace == BWAPI::Races::Zerg)
+		{
+			_openingGroup = "bio";
+		}
+		else
+		{
+			_openingGroup = "tanks";
+		}
+	}
+	else
     {
 		BWAPI::Broodwar->printf("Unknown Opening Group: %s", _openingGroup.c_str());
     }
@@ -368,7 +440,7 @@ const MetaPairVector StrategyManager::getTerranBuildOrderGoal()
 	return goal;
 }
 
-// BOSS method of choosing a zerg production plan. CURRENTLY UNUSED!
+// BOSS method of choosing a zerg production plan. UNUSED!
 // See freshProductionPlan() for the current method.
 const MetaPairVector StrategyManager::getZergBuildOrderGoal() const
 {
@@ -738,7 +810,7 @@ void StrategyManager::performBuildOrderSearch()
 // this can cause issues for the build order search system so don't plan a search on these frames
 bool StrategyManager::canPlanBuildOrderNow() const
 {
-	for (const auto & unit : BWAPI::Broodwar->self()->getUnits())
+	for (const auto unit : BWAPI::Broodwar->self()->getUnits())
 	{
 		if (unit->getRemainingTrainTime() == 0)
 		{

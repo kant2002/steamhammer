@@ -9,6 +9,7 @@ GameCommander::GameCommander()
     , _initialScoutSet(false)
 	, _scoutAlways(false)
 	, _scoutIfNeeded(false)
+	, _surrenderTime(0)
 {
 }
 
@@ -19,6 +20,21 @@ void GameCommander::update()
 	// populate the unit vectors we will pass into various managers
 	handleUnitAssignments();
 
+	// Decide whether to give up early. Implements config option SurrenderWhenHopeIsLost.
+	if (surrenderMonkey())
+	{
+		_surrenderTime = BWAPI::Broodwar->getFrameCount();
+		BWAPI::Broodwar->printf("gg");
+	}
+	if (_surrenderTime)
+	{
+		if (BWAPI::Broodwar->getFrameCount() - _surrenderTime >= 36)  // 36 frames = 1.5 game seconds
+		{
+			BWAPI::Broodwar->leaveGame();
+		}
+		return;
+	}
+
 	// utility managers
 	_timerManager.startTimer(TimerManager::InformationManager);
 	InformationManager::Instance().update();
@@ -27,10 +43,6 @@ void GameCommander::update()
 	_timerManager.startTimer(TimerManager::MapGrid);
 	MapGrid::Instance().update();
 	_timerManager.stopTimer(TimerManager::MapGrid);
-
-	_timerManager.startTimer(TimerManager::MapTools);
-	//MapTools::Instance().update();
-	_timerManager.stopTimer(TimerManager::MapTools);
 
 	_timerManager.startTimer(TimerManager::Search);
 	BOSSManager::Instance().update(35 - _timerManager.getTotalElapsed());
@@ -72,6 +84,7 @@ void GameCommander::drawDebugInterface()
 	ProductionManager::Instance().drawProductionInformation(30, 50);
 	BOSSManager::Instance().drawSearchInformation(490, 100);
     BOSSManager::Instance().drawStateInformation(250, 0);
+	MapTools::Instance().drawHomeDistanceMap();
     
 	_combatCommander.drawSquadInformation(200, 30);
     _timerManager.displayTimers(490, 225);
@@ -317,7 +330,7 @@ void GameCommander::onUnitMorph(BWAPI::Unit unit)
 // Used only to choose a worker to scout.
 BWAPI::Unit GameCommander::getAnyFreeWorker()
 {
-	for (auto & unit : _validUnits)
+	for (const auto unit : _validUnits)
 	{
 		if (unit->getType().isWorker()
 			&& !isAssigned(unit)
@@ -338,6 +351,60 @@ void GameCommander::assignUnit(BWAPI::Unit unit, BWAPI::Unitset & set)
     else if (_combatUnits.contains(unit)) { _combatUnits.erase(unit); }
 
     set.insert(unit);
+}
+
+// Decide whether to give up early. See config option SurrenderWhenHopeIsLost.
+bool GameCommander::surrenderMonkey()
+{
+	if (!Config::Strategy::SurrenderWhenHopeIsLost)
+	{
+		return false;
+	}
+
+	// Only check once every five seconds. No hurry to give up.
+	if (BWAPI::Broodwar->getFrameCount() % (5 * 24) != 0)
+	{
+		return false;
+	}
+
+	// Surrender if all conditions are met:
+	// 1. We don't have the cash to make a worker.
+	// 2. We have no unit that can attack.
+	// 3. The enemy has at least one visible unit that can destroy buildings.
+	// Terran does not float buildings, so we check if the enemy can attack ground.
+
+	// 1. Our cash.
+	if (BWAPI::Broodwar->self()->minerals() >= 50)
+	{
+		return false;
+	}
+
+	// 2. Our units.
+	for (const auto unit : _validUnits)
+	{
+		if (unit->canAttack())
+		{
+			return false;
+		}
+	}
+
+	// 3. Enemy units.
+	bool safe = true;
+	for (const auto unit : BWAPI::Broodwar->enemy()->getUnits())
+	{
+		if (unit->isVisible() && UnitUtil::CanAttackGround(unit))
+		{
+			safe = false;
+			break;
+		}
+	}
+	if (safe)
+	{
+		return false;
+	}
+
+	// Surrender monkey says surrender!
+	return true;
 }
 
 GameCommander & GameCommander::Instance()

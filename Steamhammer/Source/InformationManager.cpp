@@ -168,10 +168,11 @@ void InformationManager::chooseNewMainBase()
 
 // The given unit was just created or morphed.
 // If it is a resource depot for our new base, record it.
-// NOTE: It is a base only if it's in exactly the right position according to BWTA,
-// Offset hatcheries or whatever will not be recorded.
+// NOTE: It is a base only if it's in the right position according to BWTA.
+// A resource depot will not be recorded if it is offset by too much.
 // NOTE: This records the initial depot at the start of the game.
 // There's no need to take special action to record the starting base.
+// NOTE: Does not detect when a hatchery is cancelled during construction.
 void InformationManager::maybeAddBase(BWAPI::Unit unit)
 {
 	if (unit->getType().isResourceDepot())
@@ -195,12 +196,12 @@ void InformationManager::update()
 
 void InformationManager::updateUnitInfo() 
 {
-	for (auto & unit : BWAPI::Broodwar->enemy()->getUnits())
+	for (auto & unit : _enemy->getUnits())
 	{
 		updateUnit(unit);
 	}
 
-	for (auto & unit : BWAPI::Broodwar->self()->getUnits())
+	for (auto & unit : _self->getUnits())
 	{
 		updateUnit(unit);
 	}
@@ -228,7 +229,7 @@ void InformationManager::updateBaseLocationInfo()
 		{
 			if (isEnemyBuildingInRegion(BWTA::getRegion(startLocation->getTilePosition()))) 
 			{
-				updateOccupiedRegions(BWTA::getRegion(startLocation->getTilePosition()), BWAPI::Broodwar->enemy());
+				updateOccupiedRegions(BWTA::getRegion(startLocation->getTilePosition()), _enemy);
 
 				// On a competition map, our base and the enemy base will never be in the same region.
 				// If we find an enemy building in our region, it's a proxy.
@@ -248,7 +249,8 @@ void InformationManager::updateBaseLocationInfo()
 			}
 
 			// if it's explored, increment
-			// TODO: If the enemy is zerg, we can be a little quicker by looking for creep.
+			// TODO If the enemy is zerg, we can be a little quicker by looking for creep.
+			// TODO If we see a mineral patch that has been mined, that should be a base.
 			if (BWAPI::Broodwar->isExplored(startLocation->getTilePosition())) 
 			{
 				exploredStartLocations++;
@@ -271,40 +273,36 @@ void InformationManager::updateBaseLocationInfo()
 			
 			_mainBaseLocations[_enemy] = unexplored;
 			baseInferred(unexplored);
-			updateOccupiedRegions(BWTA::getRegion(unexplored->getTilePosition()), BWAPI::Broodwar->enemy());
+			updateOccupiedRegions(BWTA::getRegion(unexplored->getTilePosition()), _enemy);
 		}
 	// otherwise we do know it, so push it back
 	}
 	else 
 	{
-		updateOccupiedRegions(BWTA::getRegion(_mainBaseLocations[_enemy]->getTilePosition()), BWAPI::Broodwar->enemy());
+		updateOccupiedRegions(BWTA::getRegion(_mainBaseLocations[_enemy]->getTilePosition()), _enemy);
 	}
 
-	// for each enemy unit we know about
+	// The enemy occupies a region if it has a building there.
 	for (const auto & kv : _unitData[_enemy].getUnits())
 	{
 		const UnitInfo & ui(kv.second);
 		BWAPI::UnitType type = ui.type;
 
-		// if the unit is a building
 		if (type.isBuilding()) 
 		{
-			// update the enemy occupied regions
-			updateOccupiedRegions(BWTA::getRegion(BWAPI::TilePosition(ui.lastPosition)), BWAPI::Broodwar->enemy());
+			updateOccupiedRegions(BWTA::getRegion(BWAPI::TilePosition(ui.lastPosition)), _enemy);
 		}
 	}
 
-	// for each of our units
+	// We occupy a region if we have a building there.
 	for (const auto & kv : _unitData[_self].getUnits())
 	{
 		const UnitInfo & ui(kv.second);
 		BWAPI::UnitType type = ui.type;
 
-		// if the unit is a building
 		if (type.isBuilding()) 
 		{
-			// update the enemy occupied regions
-			updateOccupiedRegions(BWTA::getRegion(BWAPI::TilePosition(ui.lastPosition)), BWAPI::Broodwar->self());
+			updateOccupiedRegions(BWTA::getRegion(BWAPI::TilePosition(ui.lastPosition)), _self);
 		}
 	}
 }
@@ -463,6 +461,7 @@ int InformationManager::getMyNumGeysers()
 }
 
 // Current number of completed refineries at all my completed bases.
+// TODO an untraced bug can cause this to falsely return too low a value
 int InformationManager::getMyNumRefineries()
 {
 	int count = 0;
@@ -475,7 +474,7 @@ int InformationManager::getMyNumRefineries()
 			depot &&                // should never be null, but we check anyway
 			(depot->isCompleted() || UnitUtil::IsMorphedBuildingType(depot->getType())))
 		{
-			for (auto geyser : base->getGeysers())
+			for (const auto geyser : base->getGeysers())
 			{
 				if (geyser &&
 					geyser->exists() &&
@@ -519,7 +518,7 @@ void InformationManager::drawExtendedInterface()
     int verticalOffset = -10;
 
     // draw enemy units
-    for (const auto & kv : getUnitData(BWAPI::Broodwar->enemy()).getUnits())
+    for (const auto & kv : getUnitData(_enemy).getUnits())
 	{
         const UnitInfo & ui(kv.second);
 
@@ -589,7 +588,7 @@ void InformationManager::drawExtendedInterface()
     // draw neutral units and our units
     for (auto & unit : BWAPI::Broodwar->getAllUnits())
     {
-        if (unit->getPlayer() == BWAPI::Broodwar->enemy())
+        if (unit->getPlayer() == _enemy)
         {
             continue;
         }
@@ -681,7 +680,7 @@ void InformationManager::drawUnitInformation(int x, int y)
 
 	BWAPI::Broodwar->drawTextScreen(x, y-10, "\x03 Self Loss:\x04 Minerals: \x1f%d \x04Gas: \x07%d", _unitData[_self].getMineralsLost(), _unitData[_self].getGasLost());
     BWAPI::Broodwar->drawTextScreen(x, y, "\x03 Enemy Loss:\x04 Minerals: \x1f%d \x04Gas: \x07%d", _unitData[_enemy].getMineralsLost(), _unitData[_enemy].getGasLost());
-	BWAPI::Broodwar->drawTextScreen(x, y+10, "\x04 Enemy: %s", BWAPI::Broodwar->enemy()->getName().c_str());
+	BWAPI::Broodwar->drawTextScreen(x, y+10, "\x04 Enemy: %s", _enemy->getName().c_str());
 	BWAPI::Broodwar->drawTextScreen(x, y+20, "\x04 UNIT NAME");
 	BWAPI::Broodwar->drawTextScreen(x+140, y+20, "\x04#");
 	BWAPI::Broodwar->drawTextScreen(x+160, y+20, "\x04X");
@@ -715,7 +714,7 @@ void InformationManager::drawMapInformation()
         return;
     }
 
-	//we will iterate through all the base locations, and draw their outlines.
+	// iterate through all the base locations, and draw their outlines.
 	for (std::set<BWTA::BaseLocation*>::const_iterator i = BWTA::getBaseLocations().begin(); i != BWTA::getBaseLocations().end(); i++)
 	{
 		BWAPI::TilePosition p = (*i)->getTilePosition();
@@ -792,11 +791,11 @@ void InformationManager::drawBaseInformation(int x, int y)
 
 		char inferredChar = ' ';
 		BWAPI::Player player = _theBases[base].owner;
-		if (player == BWAPI::Broodwar->self())
+		if (player == _self)
 		{
 			color = green;
 		}
-		else if (player == BWAPI::Broodwar->enemy())
+		else if (player == _enemy)
 		{
 			color = orange;
 			if (_theBases[base].resourceDepot == nullptr)
@@ -829,7 +828,6 @@ void InformationManager::updateUnit(BWAPI::Unit unit)
 	}
 }
 
-// is the unit valid?
 bool InformationManager::isValidUnit(BWAPI::Unit unit) 
 {
 	// we only care about our units and enemy units

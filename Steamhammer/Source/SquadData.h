@@ -19,7 +19,7 @@ public:
 
     bool            canAssignUnitToSquad(BWAPI::Unit unit, const Squad & squad) const;
     void            assignUnitToSquad(BWAPI::Unit unit, Squad & squad);
-    void            addSquad(const std::string & squadName, const Squad & squad);
+    void            addSquad(const Squad & squad);
     void            removeSquad(const std::string & squadName);
     void            clearSquad(const std::string & squadName);
 	void            drawSquadInformation(int x, int y);

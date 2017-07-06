@@ -26,6 +26,8 @@ class CombatCommander
 	void			loadOrUnloadBunkers();
 	void			doComsatScan();
 
+	bool			unitIsGoodToDrop(const BWAPI::Unit unit) const;
+
 	void			cancelDyingBuildings();
 
 	int             getNumType(BWAPI::Unitset & units, BWAPI::UnitType type);
@@ -34,11 +36,10 @@ class CombatCommander
     BWAPI::Unit     findClosestWorkerToTarget(BWAPI::Unitset & unitsToAssign, BWAPI::Unit target);
 
 	BWAPI::Position getDefendLocation();
-    BWAPI::Position getMainAttackLocation();
+	BWAPI::Position getMainAttackLocation(const Squad * squad);
 	BWAPI::Position getSurveyLocation();
 
     void            initializeSquads();
-    void            verifySquadUniqueMembership();
     void            assignFlyingDefender(Squad & squad);
     void            emptySquad(Squad & squad, BWAPI::Unitset & unitsToAssign);
     int             getNumGroundDefendersInSquad(Squad & squad);

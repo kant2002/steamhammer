@@ -7,8 +7,8 @@ const size_t IdlePriority = 0;
 const size_t AttackPriority = 2;
 const size_t BaseDefensePriority = 3;
 const size_t ScoutDefensePriority = 4;
-const size_t DropPriority = 5;
-const size_t SurveyPriority = 10;    // consists of only 1 overlord, no need to steal from it
+const size_t DropPriority = 5;         // don't steal from Drop squad for Defense squad
+const size_t SurveyPriority = 10;      // consists of only 1 overlord, no need to steal from it
 
 CombatCommander::CombatCommander() 
     : _initialized(false)
@@ -16,19 +16,21 @@ CombatCommander::CombatCommander()
 {
 }
 
+// Called once at the start of the game.
+// You can also create new squads at other times.
 void CombatCommander::initializeSquads()
 {
 	// The idle squad includes workers at work (not idle at all) and unassigned overlords.
-    SquadOrder idleOrder(SquadOrderTypes::Idle, BWAPI::Position(BWAPI::Broodwar->self()->getStartLocation()), 100, "Chill Out");
-	_squadData.addSquad("Idle", Squad("Idle", idleOrder, IdlePriority));
+    SquadOrder idleOrder(SquadOrderTypes::Idle, BWAPI::Position(BWAPI::Broodwar->self()->getStartLocation()), 100, "Chill out");
+	_squadData.addSquad(Squad("Idle", idleOrder, IdlePriority));
 
-    // the main attack squad will pressure the enemy's closest base location
-    SquadOrder mainAttackOrder(SquadOrderTypes::Attack, getMainAttackLocation(), 800, "Attack Enemy Base");
-	_squadData.addSquad("MainAttack", Squad("MainAttack", mainAttackOrder, AttackPriority));
+    // the main attack squad will pressure an enemy base location
+    SquadOrder mainAttackOrder(SquadOrderTypes::Attack, getMainAttackLocation(nullptr), 800, "Attack enemy base");
+	_squadData.addSquad(Squad("MainAttack", mainAttackOrder, AttackPriority));
 
 	// The flying squad separates air units so they can act independently.
 	// It gets the same order as the attack squad.
-	_squadData.addSquad("Flying", Squad("Flying", mainAttackOrder, AttackPriority));
+	_squadData.addSquad(Squad("Flying", mainAttackOrder, AttackPriority));
 
 	BWAPI::Position ourBasePosition = BWAPI::Position(BWAPI::Broodwar->self()->getStartLocation());
 
@@ -36,23 +38,24 @@ void CombatCommander::initializeSquads()
 	if (Config::Micro::ScoutDefenseRadius > 0)
 	{
 		SquadOrder enemyScoutDefense(SquadOrderTypes::Defend, ourBasePosition, Config::Micro::ScoutDefenseRadius, "Get the scout");
-		_squadData.addSquad("ScoutDefense", Squad("ScoutDefense", enemyScoutDefense, ScoutDefensePriority));
+		_squadData.addSquad(Squad("ScoutDefense", enemyScoutDefense, ScoutDefensePriority));
 	}
 
-	// add a drop squad if we are using a drop strategy
+	// If we're using a drop opening, create a drop squad.
+	// It is initially ordered to hold ground until it can load up and go.
     if (StrategyManager::Instance().getOpeningGroup() == "drop")
     {
-        SquadOrder zealotDrop(SquadOrderTypes::Drop, ourBasePosition, 900, "Wait for transport");
-        _squadData.addSquad("Drop", Squad("Drop", zealotDrop, DropPriority));
+		SquadOrder doDrop(SquadOrderTypes::Hold, ourBasePosition, 800, "Wait for transport");
+		_squadData.addSquad(Squad("Drop", doDrop, DropPriority));
     }
 
-	// Zerg can put overlords into a survey squad.
+	// Zerg can put overlords into a simpleminded survey squad.
 	// With no evasion skills, it's dangerous to do that against terran.
 	if (BWAPI::Broodwar->self()->getRace() == BWAPI::Races::Zerg &&
 		BWAPI::Broodwar->enemy()->getRace() != BWAPI::Races::Terran)
 	{
 		SquadOrder surveyMap(SquadOrderTypes::Survey, getSurveyLocation(), 100, "Get the surveyors");
-		_squadData.addSquad("Survey", Squad("Survey", surveyMap, SurveyPriority));
+		_squadData.addSquad(Squad("Survey", surveyMap, SurveyPriority));
 	}
 
     _initialized = true;
@@ -69,20 +72,22 @@ void CombatCommander::update(const BWAPI::Unitset & combatUnits)
 
 	int frame8 = BWAPI::Broodwar->getFrameCount() % 8;
 
-	if      (frame8 == 0) { updateIdleSquad(); }
-	else if (frame8 == 1) { updateDropSquads(); }
-	else if (frame8 == 2) { updateScoutDefenseSquad(); }
-	else if (frame8 == 3) { updateBaseDefenseSquads(); }
-	else if (frame8 == 4) { updateAttackSquads(); }
-	else if (frame8 == 5) { updateSurveySquad(); }
-
-	loadOrUnloadBunkers();
-
-	if (frame8 % 4 == 2)
+	if (frame8 == 1)
+	{
+		updateIdleSquad();
+		updateDropSquads();
+		updateScoutDefenseSquad();
+		updateBaseDefenseSquads();
+		updateAttackSquads();
+		updateSurveySquad();
+	}
+	else if (frame8 % 4 == 2)
 	{
 		doComsatScan();
 	}
-	
+
+	loadOrUnloadBunkers();
+
 	_squadData.update();          // update() all the squads
 
 	cancelDyingBuildings();
@@ -101,19 +106,22 @@ void CombatCommander::updateIdleSquad()
     }
 }
 
+// Form the main attack squad (on the ground) and the flying squad.
+// NOTE Nothing here recognizes arbiters or zerg greater spire units.
+//      Therefore they default into the ground squad.
 void CombatCommander::updateAttackSquads()
 {
     Squad & mainAttackSquad = _squadData.getSquad("MainAttack");
 	Squad & flyingSquad = _squadData.getSquad("Flying");
 
-	// Include exactly 1 overlord in each squad, for detection.
-	bool mainOverlord = false;
+	// Include exactly 1 detector in each squad, for detection.
+	bool mainDetector = false;
 	bool mainSquadExists = false;
-	for (auto & unit : mainAttackSquad.getUnits())
+	for (const auto unit : mainAttackSquad.getUnits())
 	{
-		if (unit->getType() == BWAPI::UnitTypes::Zerg_Overlord)
+		if (unit->getType().isDetector())
 		{
-			mainOverlord = true;
+			mainDetector = true;
 		}
 		else
 		{
@@ -121,117 +129,162 @@ void CombatCommander::updateAttackSquads()
 		}
 	}
 
-	bool flyingOverlord = false;
-	bool flyingSquadExists = false;	    // scourge goes to flying squad if any, otherwise main squad
-	for (auto & unit : flyingSquad.getUnits())
+	bool flyingDetector = false;
+	bool flyingSquadExists = false;	    // scourge and carriers to flying squad if any, otherwise main squad
+	for (const auto unit : flyingSquad.getUnits())
 	{
-		if (unit->getType() == BWAPI::UnitTypes::Zerg_Overlord)
+		if (unit->getType().isDetector())
 		{
-			flyingOverlord = true;
+			flyingDetector = true;
 		}
-		else if (unit->getType() == BWAPI::UnitTypes::Zerg_Mutalisk)
+		else if (unit->getType() == BWAPI::UnitTypes::Zerg_Mutalisk ||
+			unit->getType() == BWAPI::UnitTypes::Terran_Wraith ||
+			unit->getType() == BWAPI::UnitTypes::Terran_Valkyrie ||
+			unit->getType() == BWAPI::UnitTypes::Terran_Battlecruiser ||
+			unit->getType() == BWAPI::UnitTypes::Protoss_Corsair ||
+			unit->getType() == BWAPI::UnitTypes::Protoss_Scout)
 		{
 			flyingSquadExists = true;
 		}
 	}
 
-	for (auto & unit : _combatUnits)
+	for (const auto unit : _combatUnits)
     {
-		// Here's a weird bit of strategy left over from UAlbertaBot.
-		// What is the effect?
-        //if (unit->getType() == BWAPI::UnitTypes::Zerg_Scourge && UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Hydralisk) < 30)
-        //{
-        //    continue;
-        //}
-		
-        // get every unit of a lower priority and put it into an attack squad
-		bool isOverlord = unit->getType() == BWAPI::UnitTypes::Zerg_Overlord;
-		if ((unit->getType() == BWAPI::UnitTypes::Zerg_Mutalisk ||
-			(unit->getType() == BWAPI::UnitTypes::Zerg_Scourge && flyingSquadExists) ||
-			(isOverlord && !flyingOverlord && flyingSquadExists)) &&
-			_squadData.canAssignUnitToSquad(unit, flyingSquad))
+        // Scourge and carriers go into the flying squad only if it already exists.
+		// Otherwise they go into the ground squad.
+		bool isDetector = unit->getType().isDetector();
+		if (_squadData.canAssignUnitToSquad(unit, flyingSquad)
+			  &&
+			(unit->getType() == BWAPI::UnitTypes::Zerg_Mutalisk ||
+			unit->getType() == BWAPI::UnitTypes::Zerg_Scourge && flyingSquadExists ||
+			unit->getType() == BWAPI::UnitTypes::Terran_Wraith ||
+			unit->getType() == BWAPI::UnitTypes::Terran_Valkyrie ||
+			unit->getType() == BWAPI::UnitTypes::Terran_Battlecruiser ||
+			unit->getType() == BWAPI::UnitTypes::Protoss_Corsair ||
+			unit->getType() == BWAPI::UnitTypes::Protoss_Scout ||
+			unit->getType() == BWAPI::UnitTypes::Protoss_Carrier && flyingSquadExists ||
+			isDetector && !flyingDetector && flyingSquadExists))
 		{
 			_squadData.assignUnitToSquad(unit, flyingSquad);
-			if (isOverlord)
+			if (isDetector)
 			{
-				flyingOverlord = true;
+				flyingDetector = true;
 			}
 		}
         else if (!unit->getType().isWorker() &&
-			(!isOverlord || isOverlord && !mainOverlord && mainSquadExists) &&
+			(!isDetector || isDetector && !mainDetector && mainSquadExists) &&
 			_squadData.canAssignUnitToSquad(unit, mainAttackSquad))
         {
 			_squadData.assignUnitToSquad(unit, mainAttackSquad);
-			if (isOverlord)
+			if (isDetector)
 			{
-				mainOverlord = true;
+				mainDetector = true;
 			}
         }
     }
 
-    SquadOrder mainAttackOrder(SquadOrderTypes::Attack, getMainAttackLocation(), 800, "Attack Enemy Base");
+    SquadOrder mainAttackOrder(SquadOrderTypes::Attack, getMainAttackLocation(&mainAttackSquad), 800, "Attack enemy base");
     mainAttackSquad.setSquadOrder(mainAttackOrder);
-	flyingSquad.setSquadOrder(mainAttackOrder);
+
+	SquadOrder flyingAttackOrder(SquadOrderTypes::Attack, getMainAttackLocation(&flyingSquad), 800, "Attack enemy base");
+	flyingSquad.setSquadOrder(flyingAttackOrder);
 }
 
+// Despite the name, this supports only 1 drop squad which has 1 transport.
+// Furthermore, it can only drop once and doesn't know how to reset itself to try again.
+// Still, it's a start and it can be effective.
 void CombatCommander::updateDropSquads()
 {
-	if (StrategyManager::Instance().getOpeningGroup() != "drop")
+	// If we don't have a drop squad, then we don't want to drop.
+	// It is created in initializeSquads().
+	if (!_squadData.squadExists("Drop"))
     {
-        return;
+		return;
     }
 
     Squad & dropSquad = _squadData.getSquad("Drop");
 
-    // figure out how many units the drop squad needs
-    bool dropSquadHasTransport = false;
-    int transportSpotsRemaining = 8;
-    auto & dropUnits = dropSquad.getUnits();
+	// The squad is initialized with a Hold order.
+	// There are 3 phases, and in each phase the squad is given a different order:
+	// Collect units (Hold); load the transport (Load); go drop (Drop).
+	// If it has already been told to go, we are done.
+	if (dropSquad.getSquadOrder().getType() != SquadOrderTypes::Hold &&
+		dropSquad.getSquadOrder().getType() != SquadOrderTypes::Load)
+	{
+		return;
+	}
 
-    for (auto & unit : dropUnits)
+    // What units do we have, what units do we need?
+	BWAPI::Unit transportUnit = nullptr;
+    int transportSpotsRemaining = 8;      // all transports are the same size
+	bool anyUnloadedUnits = false;
+	const auto & dropUnits = dropSquad.getUnits();
+
+    for (const auto unit : dropUnits)
     {
-        if (unit->isFlying() && unit->getType().spaceProvided() > 0)
-        {
-            dropSquadHasTransport = true;
-        }
-        else
-        {
-            transportSpotsRemaining -= unit->getType().spaceRequired();
-        }
+		if (unit->exists())
+		{
+			if (unit->isFlying() && unit->getType().spaceProvided() > 0)
+			{
+				transportUnit = unit;
+			}
+			else
+			{
+				transportSpotsRemaining -= unit->getType().spaceRequired();
+				if (!unit->isLoaded())
+				{
+					anyUnloadedUnits = true;
+				}
+			}
+		}
     }
 
-    // if there are still units to be added to the drop squad, do it
-    if (transportSpotsRemaining > 0 || !dropSquadHasTransport)
+	if (transportUnit && transportSpotsRemaining == 0)
+	{
+		if (anyUnloadedUnits)
+		{
+			// The drop squad is complete. Load up.
+			// See Squad::loadTransport().
+			SquadOrder loadOrder(SquadOrderTypes::Load, transportUnit->getPosition(), 800, "Load up");
+			dropSquad.setSquadOrder(loadOrder);
+		}
+		else
+		{
+			// We're full. Change the order to Drop.
+			BWAPI::Position target = InformationManager::Instance().getEnemyMainBaseLocation()
+				? InformationManager::Instance().getEnemyMainBaseLocation()->getPosition()
+				: getMainAttackLocation(&dropSquad);
+
+			SquadOrder dropOrder = SquadOrder(SquadOrderTypes::Drop, target, 300, "Go drop!");
+			dropSquad.setSquadOrder(dropOrder);
+		}
+	}
+	else
     {
-        // take our first amount of combat units that fill up a transport and add them to the drop squad
-        for (auto & unit : _combatUnits)
+		// The drop squad is not complete. Look for more units.
+        for (const auto unit : _combatUnits)
         {
-            // if this is a transport unit and we don't have one in the squad yet, add it
-            if (!dropSquadHasTransport && (unit->getType().spaceProvided() > 0 && unit->isFlying()))
+            // If the squad doesn't have a transport, try to add one.
+			if (!transportUnit &&
+				unit->getType().spaceProvided() > 0 && unit->isFlying() &&
+				_squadData.canAssignUnitToSquad(unit, dropSquad))
             {
                 _squadData.assignUnitToSquad(unit, dropSquad);
-                dropSquadHasTransport = true;
-                continue;
+				transportUnit = unit;
             }
 
-            if (unit->getType().spaceRequired() > transportSpotsRemaining)
+            // If the unit fits and is good to drop, add it to the squad.
+			// Rewrite unitIsGoodToDrop() to select the units of your choice to drop.
+			// Simplest to stick to units that occupy the same space in a transport, to avoid difficulties
+			// like "add zealot, add dragoon, can't add another dragoon--but transport is not full, can't go".
+			else if (unit->getType().spaceRequired() <= transportSpotsRemaining &&
+				unitIsGoodToDrop(unit) &&
+				_squadData.canAssignUnitToSquad(unit, dropSquad))
             {
-                continue;
-            }
-
-            // get every unit of a lower priority and put it into the attack squad
-            if (!unit->getType().isWorker() && _squadData.canAssignUnitToSquad(unit, dropSquad))
-            {
-                _squadData.assignUnitToSquad(unit, dropSquad);
+				_squadData.assignUnitToSquad(unit, dropSquad);
                 transportSpotsRemaining -= unit->getType().spaceRequired();
             }
         }
-    }
-    // otherwise the drop squad is full, so execute the order
-    else
-    {
-        SquadOrder dropOrder(SquadOrderTypes::Drop, getMainAttackLocation(), 800, "Attack Enemy Base");
-        dropSquad.setSquadOrder(dropOrder);
     }
 }
 
@@ -374,8 +427,8 @@ void CombatCommander::updateBaseDefenseSquads()
             // if we don't have a squad assigned to this region already, create one
             if (!_squadData.squadExists(squadName.str()))
             {
-                SquadOrder defendRegion(SquadOrderTypes::Defend, regionCenter, 32 * 25, "Defend Region!");
-                _squadData.addSquad(squadName.str(), Squad(squadName.str(), defendRegion, BaseDefensePriority));
+                SquadOrder defendRegion(SquadOrderTypes::Defend, regionCenter, 32 * 25, "Defend region");
+                _squadData.addSquad(Squad(squadName.str(), defendRegion, BaseDefensePriority));
 			}
         }
 
@@ -440,7 +493,7 @@ void CombatCommander::updateBaseDefenseSquads()
 		}
 
 		bool enemyUnitInRange = false;
-		for (auto & unit : BWAPI::Broodwar->enemy()->getUnits())
+		for (const auto unit : BWAPI::Broodwar->enemy()->getUnits())
 		{
 			if (unit->getPosition().getDistance(order.getPosition()) < order.getRadius())
 			{
@@ -533,7 +586,7 @@ BWAPI::Unit CombatCommander::findClosestDefender(const Squad & defenseSquad, BWA
 
 		int dist = unit->getDistance(pos);
 
-		// Pull workers only if requsted, and not from distant bases.
+		// Pull workers only if requested, and not from distant bases.
 		if (unit->getType().isWorker() && (!pullWorkers || dist > 1000))
         {
             continue;
@@ -651,7 +704,7 @@ void CombatCommander::doComsatScan()
 	}
 
 	// Does the enemy have undetected cloaked units that we may be able to engage?
-	for (auto unit : BWAPI::Broodwar->enemy()->getUnits())
+	for (const auto unit : BWAPI::Broodwar->enemy()->getUnits())
 	{
 		if (unit->isVisible() &&
 			(!unit->isDetected() || unit->getOrder() == BWAPI::Orders::Burrowing) &&
@@ -664,8 +717,18 @@ void CombatCommander::doComsatScan()
 	}
 }
 
-// Get our money back for stuff that is about to be destroyed.
-// TODO does this work for protoss buildings?
+// What units do you want to drop into the enemy base from a transport?
+bool CombatCommander::unitIsGoodToDrop(const BWAPI::Unit unit) const
+{
+	return
+		unit->getType() == BWAPI::UnitTypes::Protoss_Dark_Templar ||
+		unit->getType() == BWAPI::UnitTypes::Terran_Vulture;
+}
+
+// Get our money back at the last moment for stuff that is about to be destroyed.
+// It is not ideal: A building which is destined to die only after it is completed
+// will be completed and die.
+// NOTE See BuildingManager::cancelBuilding() for another way to cancel buildings.
 void CombatCommander::cancelDyingBuildings()
 {
 	for (auto & unit : BWAPI::Broodwar->self()->getUnits())
@@ -692,30 +755,37 @@ void CombatCommander::drawSquadInformation(int x, int y)
 	_squadData.drawSquadInformation(x, y);
 }
 
-BWAPI::Position CombatCommander::getMainAttackLocation()
+// Choose a point of attack for the given squad (which may be null).
+BWAPI::Position CombatCommander::getMainAttackLocation(const Squad * squad)
 {
 	// If we're defensive, try to find a front line to hold.
 	if (!_goAggressive)
 	{
+		// We are guaranteed to always have a main base location, even if it has been destroyed.
+		BWTA::BaseLocation * base = InformationManager::Instance().getMyMainBaseLocation();
+
+		// We may have taken our natural. If so, call that the front line.
 		BWTA::BaseLocation * natural = InformationManager::Instance().getMyNaturalLocation();
 		if (natural && BWAPI::Broodwar->self() == InformationManager::Instance().getBaseOwner(natural))
 		{
-			return natural->getPosition();
+			base = natural;
 		}
 
-		BWTA::BaseLocation * main = InformationManager::Instance().getMyMainBaseLocation();
-		if (main)
-		{
-			return main->getPosition();
-		}
+		return base->getPosition();
+	}
 
-		// we should always have a main base (even if not yet occupied), but if not,
-		// there's no harm in falling through and going aggressive.
+    // What stuff the squad can attack.
+	bool canAttackAir = true;
+	bool canAttackGround = true;
+	if (squad)
+	{
+		canAttackAir = squad->hasAntiAir();
+		canAttackGround = squad->hasAntiGround();
 	}
 
 	// Otherwise we are aggressive. Try to find a spot to attack.
 
-	BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getMainBaseLocation(BWAPI::Broodwar->enemy());
+	BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getEnemyMainBaseLocation();
 
 	// First choice: Attack the enemy main unless we think it's empty.
 	if (enemyBaseLocation)
@@ -732,40 +802,43 @@ BWAPI::Position CombatCommander::getMainAttackLocation()
 		BWAPI::Unitset enemyUnitsInArea;
 		MapGrid::Instance().GetUnits(enemyUnitsInArea, enemyBasePosition, 800, false, true);
 
-		for (auto & unit : enemyUnitsInArea)
+		for (const auto unit : enemyUnitsInArea)
 		{
-			if (unit->getType() != BWAPI::UnitTypes::Zerg_Overlord &&
-				unit->getType() != BWAPI::UnitTypes::Zerg_Larva)
+			if (unit->getType() != BWAPI::UnitTypes::Zerg_Larva &&
+				(unit->isFlying() && canAttackAir || !unit->isFlying() && canAttackGround))
 			{
-				// Enemy base is not empty: Nothing interesting is in the enemy base area.
+				// Enemy base is not empty: Something interesting is in the enemy base area.
 				return enemyBasePosition;
 			}
 		}
 	}
 
-	// Second choice: Attack known enemy buildings
-	for (const auto & kv : InformationManager::Instance().getUnitInfo(BWAPI::Broodwar->enemy()))
+	// Second choice: Attack known enemy buildings.
+	// We assume that a terran can lift the buildings; otherwise, the squad must be able to attack ground.
+	if (canAttackGround || BWAPI::Broodwar->enemy()->getRace() == BWAPI::Races::Terran)
 	{
-		const UnitInfo & ui = kv.second;
-
-		if (ui.type.isBuilding() && ui.lastPosition != BWAPI::Positions::None)
+		for (const auto & kv : InformationManager::Instance().getUnitInfo(BWAPI::Broodwar->enemy()))
 		{
-			return ui.lastPosition;
+			const UnitInfo & ui = kv.second;
+
+			if (ui.type.isBuilding() && ui.lastPosition != BWAPI::Positions::None)
+			{
+				return ui.lastPosition;
+			}
 		}
 	}
 
-	// Third choice: Attack visible enemy units that aren't overlords
-	// TODO should distinguish depending on the squad's air and ground weapons
-	//       don't send zerglings after air units, etc.
-	for (auto & unit : BWAPI::Broodwar->enemy()->getUnits())
+	// Third choice: Attack visible enemy units.
+	for (const auto unit : BWAPI::Broodwar->enemy()->getUnits())
 	{
-		if (unit->getType() == BWAPI::UnitTypes::Zerg_Overlord ||
-			unit->getType() == BWAPI::UnitTypes::Zerg_Larva)
+		if (unit->getType() == BWAPI::UnitTypes::Zerg_Larva ||
+			!UnitUtil::IsValidUnit(unit) ||
+			!unit->isVisible())
 		{
 			continue;
 		}
 
-		if (UnitUtil::IsValidUnit(unit) && unit->isVisible())
+		if (unit->isFlying() && canAttackAir || !unit->isFlying() && canAttackGround)
 		{
 			return unit->getPosition();
 		}

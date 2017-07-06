@@ -21,9 +21,14 @@ void UAlbertaBotModule::onStart()
     // Initialize BOSS, the Build Order Search System
     BOSS::init();
 
-    // Parse the bot's configuration file.
+	// Call BWTA to read and analyze the current map
+	BWTA::readMap();
+	BWTA::analyze();
+
+	// Parse the bot's configuration file.
 	// Change this file path to point to your config file.
     // Any relative path name will be relative to Starcraft installation folder
+	// The config depends on the map and must be read after the map is analyzed.
     ParseUtils::ParseConfigFile(Config::ConfigFile::ConfigFileLocation);
 
     // Set our BWAPI options here    
@@ -44,10 +49,6 @@ void UAlbertaBotModule::onStart()
     {
         BWAPI::Broodwar->printf("%s by %s, based on UAlbertaBot.", Config::BotInfo::BotName.c_str(), Config::BotInfo::Authors.c_str());
     }
-
-    // Call BWTA to read and analyze the current map
-	BWTA::readMap();
-	BWTA::analyze();
 
     if (Config::Modules::UsingStrategyIO)
     {

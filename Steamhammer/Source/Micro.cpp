@@ -1,4 +1,5 @@
 #include "Micro.h"
+#include "MapGrid.h"
 #include "UnitUtil.h"
 
 using namespace UAlbertaBot;
@@ -6,18 +7,6 @@ using namespace UAlbertaBot;
 size_t TotalCommands = 0;
 
 const int dotRadius = 2;
-
-void Micro::drawAPM(int x, int y)
-{
-	// Don't divide by zero, even theoretically.
-	if (BWAPI::Broodwar->getFrameCount() > 0)
-	{
-		int bwapiAPM = BWAPI::Broodwar->getAPM();
-		int myAPM = 0;
-		myAPM = int(TotalCommands / (double(BWAPI::Broodwar->getFrameCount()) / (24 * 60)));
-		BWAPI::Broodwar->drawTextScreen(x, y, "%d %d", bwapiAPM, myAPM);
-	}
-}
 
 void Micro::SmartAttackUnit(BWAPI::Unit attacker, BWAPI::Unit target)
 {
@@ -242,11 +231,19 @@ void Micro::SmartRepair(BWAPI::Unit unit, BWAPI::Unit target)
     }
 }
 
-// Perform a comsat scan at the given position if possible.
-// If it's not possible (no comsat, not enough energy), do nothing.
+// Perform a comsat scan at the given position if possible and necessary.
+// If it's not possible, or we already scanned there, do nothing.
 // Return whether the scan occurred.
 bool Micro::SmartScan(const BWAPI::Position & targetPosition)
 {
+	UAB_ASSERT(targetPosition.isValid(), "bad position");
+
+	// If a scan of this position is still active, don't scan it again.
+	if (MapGrid::Instance().scanIsActiveAt(targetPosition))
+	{
+		return false;
+	}
+
 	// Choose the comsat with the highest energy.
 	// If we're not terran, we're unlikely to have any comsats....
 	int maxEnergy = 49;      // anything greater is enough energy for a scan
@@ -264,10 +261,72 @@ bool Micro::SmartScan(const BWAPI::Position & targetPosition)
 
 	if (comsat)
 	{
+		MapGrid::Instance().scanAtPosition(targetPosition);
 		return comsat->useTech(BWAPI::TechTypes::Scanner_Sweep, targetPosition);
 	}
 
 	return false;
+}
+
+// Stim the given marine or firebat, if possible; otherwise, do nothing.
+// Return whether the stim occurred.
+bool Micro::SmartStim(BWAPI::Unit unit)
+{
+	if (!unit ||
+		unit->getType() != BWAPI::UnitTypes::Terran_Marine && unit->getType() != BWAPI::UnitTypes::Terran_Firebat ||
+		unit->getPlayer() != BWAPI::Broodwar->self())
+	{
+		UAB_ASSERT(false, "bad unit");
+		return false;
+	}
+
+	if (unit->isStimmed())
+	{
+		return false;
+	}
+
+	// if we have issued a command to this unit already this frame, ignore this one
+	if (unit->getLastCommandFrame() >= BWAPI::Broodwar->getFrameCount())
+	{
+		return false;
+	}
+
+	// Allow a small latency for a previous stim command to take effect.
+	// Marines and firebats have only 1 tech to use, so we don't need to check which.
+	if (unit->getLastCommand().getType() == BWAPI::UnitCommandTypes::Use_Tech &&
+		BWAPI::Broodwar->getFrameCount() - unit->getLastCommandFrame() < 8)
+	{
+		return false;
+	}
+
+	// useTech() checks whether stim is researched and any other conditions.
+	return unit->useTech(BWAPI::TechTypes::Stim_Packs);
+}
+
+// Merge the 2 given high templar into an archon.
+// TODO Check whether the 2 templar can reach each other: Is there a ground path between them?
+bool Micro::SmartMergeArchon(BWAPI::Unit templar1, BWAPI::Unit templar2)
+{
+	if (!templar1 || !templar2 ||
+		templar1->getPlayer() != BWAPI::Broodwar->self() ||
+		templar2->getPlayer() != BWAPI::Broodwar->self() ||
+		templar1->getType() != BWAPI::UnitTypes::Protoss_High_Templar ||
+		templar2->getType() != BWAPI::UnitTypes::Protoss_High_Templar ||
+		templar1 == templar2)
+	{
+		UAB_ASSERT(false, "bad unit");
+		return false;
+	}
+
+	// If we have issued a command already this frame, ignore this one.
+	if (templar1->getLastCommandFrame() >= BWAPI::Broodwar->getFrameCount() ||
+		templar2->getLastCommandFrame() >= BWAPI::Broodwar->getFrameCount())
+	{
+		return false;
+	}
+
+	// useTech() checks any other conditions.
+	return templar1->useTech(BWAPI::TechTypes::Archon_Warp, templar2);
 }
 
 void Micro::SmartReturnCargo(BWAPI::Unit worker)

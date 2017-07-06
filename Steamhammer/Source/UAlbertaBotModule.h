@@ -6,7 +6,6 @@
 #include <fstream>
 #include "Logger.h"
 #include "MapTools.h"
-#include "HardCodedInfo.h"
 #include "Config.h"
 
 #include "rapidjson\document.h"

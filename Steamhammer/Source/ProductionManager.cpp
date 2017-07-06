@@ -4,8 +4,9 @@
 
 using namespace UAlbertaBot;
 
-ProductionManager::ProductionManager() 
-	: _assignedWorkerForThisBuilding     (false)
+ProductionManager::ProductionManager()
+	: _lastProductionFrame				 (0)
+	, _assignedWorkerForThisBuilding     (false)
 	, _haveLocationForThisBuilding       (false)
 	, _delayBuildingPredictionUntilFrame (0)
 	, _outOfBook                         (false)
@@ -41,7 +42,6 @@ void ProductionManager::update()
 	StrategyManager::Instance().handleUrgentProductionIssues(_queue);
 
 	// if nothing is currently building, get a new goal from the strategy manager
-	// ORIGINALLY if (_queue.isEmpty() && BWAPI::Broodwar->getFrameCount() > 10)
 	if (_queue.isEmpty())
 		{
 		if (Config::Debug::DrawBuildOrderSearchInfo)
@@ -101,6 +101,7 @@ void ProductionManager::manageBuildOrderQueue()
 		{
 			executeCommand(currentItem.macroAct);
 			_queue.removeHighestPriorityItem();
+			_lastProductionFrame = BWAPI::Broodwar->getFrameCount();
 			continue;
 		}
 
@@ -112,6 +113,7 @@ void ProductionManager::manageBuildOrderQueue()
 		if (!producer && currentItem.macroAct.isUnit() && currentItem.macroAct.getUnitType() == BWAPI::UnitTypes::Terran_Comsat_Station)
 		{
 			_queue.removeHighestPriorityItem();
+			_lastProductionFrame = BWAPI::Broodwar->getFrameCount();
 			continue;
 		}
 
@@ -149,15 +151,26 @@ void ProductionManager::manageBuildOrderQueue()
 
 			// and remove it from the _queue
 			_queue.removeHighestPriorityItem();
+			_lastProductionFrame = BWAPI::Broodwar->getFrameCount();
 
 			// don't actually loop around in here
 			// TODO because we don't keep track of resources used,
 			//      we wait until the next frame to build the next thing.
-			//      Can cause bad delays in late game!
+			//      Can cause delays in late game!
 			break;
 		}
 		else
 		{
+			// We didn't make anything. Check for a possible production jam.
+			// Jams can happen due to bugs, or due to losing prerequisites for planned items.
+			if (BWAPI::Broodwar->getFrameCount() > _lastProductionFrame + Config::Macro::ProductionJamFrameLimit)
+			{
+				// Looks very like a jam. Clear the queue and hope for better luck next time.
+				// BWAPI::Broodwar->printf("breaking a production jam");
+				goOutOfBook();
+				return;
+			}
+
 			// TODO not much of a loop, eh? breaks on all branches
 			break;
 		}
@@ -220,52 +233,17 @@ BWAPI::Unit ProductionManager::getProducer(MacroAct t, BWAPI::Position closestTo
             { 
                 continue; 
             }
-
-			/*
-			NOTE Apparently this entire section is obsoleted by unit->canBuildAddon() above.
-			     I'm leaving it in as a comment for now in case I'm wrong. - Jay
-			
-            bool isBlocked = false;
-
-            // if the unit doesn't have space to build an addon, it can't make one
-            BWAPI::TilePosition addonPosition(unit->getTilePosition().x + unit->getType().tileWidth(), unit->getTilePosition().y + unit->getType().tileHeight() - t.getUnitType().tileHeight());
-            BWAPI::Broodwar->drawBoxMap(addonPosition.x*32, addonPosition.y*32, addonPosition.x*32 + 64, addonPosition.y*32 + 64, BWAPI::Colors::Red);
-            
-            for (int i=0; i<unit->getType().tileWidth() + t.getUnitType().tileWidth(); ++i)
-            {
-                for (int j=0; j<unit->getType().tileHeight(); ++j)
-                {
-                    BWAPI::TilePosition tilePos(unit->getTilePosition().x + i, unit->getTilePosition().y + j);
-
-                    // if the map won't let you build here, we can't build it
-                    if (!BWAPI::Broodwar->isBuildable(tilePos))
-                    {
-                        isBlocked = true;
-                        // BWAPI::Broodwar->drawBoxMap(tilePos.x*32, tilePos.y*32, tilePos.x*32 + 32, tilePos.y*32 + 32, BWAPI::Colors::Red);
-                    }
-
-					// NOTE This test is incorrect. Mining SCVs do not block building an addon.
-                    // if there are any units on the addon tile, we can't build it
-                    BWAPI::Unitset uot = BWAPI::Broodwar->getUnitsOnTile(tilePos.x, tilePos.y);
-                    if (uot.size() > 0 && !(uot.size() == 1 && *(uot.begin()) == unit))
-                    {
-                        isBlocked = true;
-                        BWAPI::Broodwar->drawBoxMap(tilePos.x*32, tilePos.y*32, tilePos.x*32 + 32, tilePos.y*32 + 32, BWAPI::Colors::Red);
-                    }
-               }
-            }
-
-            if (isBlocked)
-            {
-                continue;
-            }
-			*/
         }
         
-        // if the type requires an addon and the producer doesn't have one
-		// TODO apparent bug: t may not be isUnit(): research may also require an addon
+        // if a unit requires an addon and the producer doesn't have one
+		// TODO Addons seem a bit erratic. Bugs are likely.
+		// TODO What exactly is requiredUnits()? On the face of it, the story is that
+		//      this code is for e.g. making tanks, built in a factory which has a machine shop.
+		//      Research that requires an addon is done in the addon, a different case.
+		//      Apparently wrong for e.g. ghosts, which require an addon not on the producer.
 		if (t.isUnit())
 		{
+			bool reject = false;   // innocent until proven guilty
 			typedef std::pair<BWAPI::UnitType, int> ReqPair;
 			for (const ReqPair & pair : t.getUnitType().requiredUnits())
 			{
@@ -274,9 +252,14 @@ BWAPI::Unit ProductionManager::getProducer(MacroAct t, BWAPI::Position closestTo
 				{
 					if (!unit->getAddon() || (unit->getAddon()->getType() != requiredType))
 					{
-						continue;            // TODO looks wrong. want to continue outer loop, right?
+						reject = true;
+						break;     // out of inner loop
 					}
 				}
+			}
+			if (reject)
+			{
+				continue;
 			}
 		}
 
@@ -410,7 +393,7 @@ void ProductionManager::create(BWAPI::Unit producer, BuildOrderItem & item)
 		//BWAPI::TilePosition addonPosition(producer->getTilePosition().x + producer->getType().tileWidth(), producer->getTilePosition().y + producer->getType().tileHeight() - t.unitType.tileHeight());
 		producer->buildAddon(act.getUnitType());
 	}
-	// if we're dealing with a non-building unit
+	// if we're dealing with a non-building unit, or a morphed zerg building
 	else if (act.isUnit())
 	{
 		if (act.getUnitType().getRace() == BWAPI::Races::Zerg)

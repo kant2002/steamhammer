@@ -5,11 +5,12 @@
 
 namespace UAlbertaBot
 {
-class MedicManager : public MicroManager
+class MicroHighTemplar : public MicroManager
 {
 public:
 
-	MedicManager();
+	MicroHighTemplar();
 	void executeMicro(const BWAPI::Unitset & targets);
+	void update();
 };
 }

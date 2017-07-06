@@ -10,7 +10,6 @@ MapTools & MapTools::Instance()
     return instance;
 }
 
-// constructor for MapTools
 MapTools::MapTools()
     : _rows(BWAPI::Broodwar->mapHeight())
     , _cols(BWAPI::Broodwar->mapWidth())
@@ -44,7 +43,6 @@ void MapTools::reset()
 // reads in the map data from bwapi and stores it in our map format
 void MapTools::setBWAPIMapData()
 {
-    // for each row and column
     for (int r(0); r < _rows; ++r)
     {
         for (int c(0); c < _cols; ++c)
@@ -216,7 +214,13 @@ BWAPI::TilePosition MapTools::getTilePosition(int index)
 
 void MapTools::drawHomeDistanceMap()
 {
+	if (!Config::Debug::DrawMapDistances)
+	{
+		return;
+	}
+
     BWAPI::Position homePosition = BWAPI::Position(BWAPI::Broodwar->self()->getStartLocation());
+
     for (int x = 0; x < BWAPI::Broodwar->mapWidth(); ++x)
     {
         for (int y = 0; y < BWAPI::Broodwar->mapHeight(); ++y)

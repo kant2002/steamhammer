@@ -29,7 +29,7 @@ BWAPI::UnitType BuildOrderQueue::getNextUnit()
 		{
 			return act.getUnitType();
 		}
-		else if (!act.isCommand())
+		if (!act.isCommand())
 		{
 			return BWAPI::UnitTypes::None;
 		}

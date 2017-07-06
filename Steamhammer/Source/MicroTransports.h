@@ -7,10 +7,10 @@ namespace UAlbertaBot
 {
 class MicroManager;
 
-class TransportManager : public MicroManager
+class MicroTransports : public MicroManager
 {
 	std::vector<BWAPI::Position>    _mapEdgeVertices; 
-	BWAPI::UnitInterface*	        _transportShip;
+	BWAPI::Unit						_transportShip;
 	int                             _currentRegionVertexIndex;
 	BWAPI::Position					_minCorner;
 	BWAPI::Position					_maxCorner;
@@ -20,22 +20,24 @@ class TransportManager : public MicroManager
 
 	void							calculateMapEdgeVertices();
 	void							drawTransportInformation(int x, int y);
+	void							loadTroops();
+	void							unloadTroops();
 	void							moveTransport();
-	void							moveTroops();
-	BWAPI::Position                 getFleePosition(int clockwise=1);
+	BWAPI::Position                 getFleePosition(int clockwise = 1);
 	void                            followPerimeter(int clockwise=1);
 	void							followPerimeter(BWAPI::Position to, BWAPI::Position from);
-	int                             getClosestVertexIndex(BWAPI::UnitInterface * unit);
+	int                             getClosestVertexIndex(BWAPI::Unit unit);
 	int								getClosestVertexIndex(BWAPI::Position p);
 	std::pair<int, int>				findSafePath(BWAPI::Position from, BWAPI::Position to);
 	
 public:
 
-	TransportManager();
+	MicroTransports();
 
 	void							executeMicro(const BWAPI::Unitset & targets);
 	void							update();
-	void							setTransportShip(BWAPI::UnitInterface * unit);
+	void							setTransportShip(BWAPI::Unit unit);
+	bool							hasTransportShip() const;
 	void							setFrom(BWAPI::Position from);
 	void							setTo(BWAPI::Position to);
 };

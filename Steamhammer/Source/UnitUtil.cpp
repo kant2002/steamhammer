@@ -21,18 +21,20 @@ bool UnitUtil::IsCombatUnit(BWAPI::Unit unit)
         return false;
     }
 
-    // no workers or buildings allowed
-    if (unit && unit->getType().isWorker() || unit->getType().isBuilding())
+    // No workers, buildings, or carrier interceptors (which are not controllable).
+    if (unit->getType().isWorker() ||
+		unit->getType().isBuilding() ||
+		unit->getType() == BWAPI::UnitTypes::Protoss_Interceptor)  // apparently, they canAttack()
     {
         return false;
     }
 
     // check for various types of combat units
-    if (unit->getType().canAttack() || 
+    if (unit->getType().canAttack() ||                            // includes carriers and reavers
         unit->getType() == BWAPI::UnitTypes::Terran_Medic ||
         unit->getType() == BWAPI::UnitTypes::Protoss_High_Templar ||
         unit->getType() == BWAPI::UnitTypes::Protoss_Observer ||
-        unit->isFlying() && unit->getType().spaceProvided() > 0)
+        unit->isFlying() && unit->getType().spaceProvided() > 0)  // transports
     {
         return true;
 	}
@@ -50,46 +52,49 @@ bool UnitUtil::IsValidUnit(BWAPI::Unit unit)
 		&& unit->getPosition().isValid();
 }
 
-Rect UnitUtil::GetRect(BWAPI::Unit unit)
-{
-	Rect r;
-
-	r.x = unit->getLeft();
-	r.y = unit->getTop();
-	r.height = unit->getBottom() - unit->getTop();
-	r.width = unit->getLeft() - unit->getRight();
-
-	return r;
-}
-
-double UnitUtil::GetDistanceBetweenTwoRectangles(Rect & rect1, Rect & rect2)
-{
-	Rect & mostLeft = rect1.x < rect2.x ? rect1 : rect2;
-	Rect & mostRight = rect2.x < rect1.x ? rect1 : rect2;
-	Rect & upper = rect1.y < rect2.y ? rect1 : rect2;
-	Rect & lower = rect2.y < rect1.y ? rect1 : rect2;
-
-	int diffX = std::max(0, mostLeft.x == mostRight.x ? 0 : mostRight.x - (mostLeft.x + mostLeft.width));
-	int diffY = std::max(0, upper.y == lower.y ? 0 : lower.y - (upper.y + upper.height));
-
-	return std::sqrtf(static_cast<float>(diffX*diffX + diffY*diffY));
-}
-
 bool UnitUtil::CanAttack(BWAPI::Unit attacker, BWAPI::Unit target)
 {
-	return GetWeapon(attacker, target) != BWAPI::UnitTypes::None;
+	return CanAttack(attacker->getType(), target->getType());
 }
 
-bool UnitUtil::CanAttackAir(BWAPI::Unit unit)
+// Accounts for cases where units can attack without a weapon of their own.
+// Ignores spellcasters, which have limitations on their attacks.
+// For example, high templar can attack air or ground mobile units, but can't attack buildings.
+bool UnitUtil::CanAttack(BWAPI::UnitType attacker, BWAPI::UnitType target)
 {
-	return unit->getType().airWeapon() != BWAPI::WeaponTypes::None;
+	return target.isFlyer() ? TypeCanAttackAir(attacker) : TypeCanAttackGround(attacker);
 }
 
-bool UnitUtil::CanAttackGround(BWAPI::Unit unit)
+bool UnitUtil::CanAttackAir(BWAPI::Unit attacker)
 {
-	return unit->getType().groundWeapon() != BWAPI::WeaponTypes::None;
+	return TypeCanAttackAir(attacker->getType());
 }
 
+bool UnitUtil::TypeCanAttackAir(BWAPI::UnitType attacker)
+{
+	return attacker.airWeapon() != BWAPI::WeaponTypes::None ||
+		attacker == BWAPI::UnitTypes::Terran_Bunker ||
+		attacker == BWAPI::UnitTypes::Protoss_Carrier;
+}
+
+// NOTE surrenderMonkey() checks CanAttackGround() to see whether the enemy can destroy buildings.
+//      Adding spellcasters to it would break that.
+//      If you do that, make CanAttackBuildings() and have surrenderMonkey() call that.
+bool UnitUtil::CanAttackGround(BWAPI::Unit attacker)
+{
+	return TypeCanAttackGround(attacker->getType());
+}
+
+bool UnitUtil::TypeCanAttackGround(BWAPI::UnitType attacker)
+{
+	return attacker.groundWeapon() != BWAPI::WeaponTypes::None ||
+		attacker == BWAPI::UnitTypes::Terran_Bunker ||
+		attacker == BWAPI::UnitTypes::Protoss_Carrier ||
+		attacker == BWAPI::UnitTypes::Protoss_Reaver;
+}
+
+// NOTE Does not understand bunkers, carriers, or reavers.
+// NOTE Unused but potentially useful.
 double UnitUtil::CalculateLTD(BWAPI::Unit attacker, BWAPI::Unit target)
 {
 	BWAPI::WeaponType weapon = GetWeapon(attacker, target);
@@ -112,11 +117,31 @@ BWAPI::WeaponType UnitUtil::GetWeapon(BWAPI::UnitType attacker, BWAPI::UnitType 
 	return target.isFlyer() ? attacker.airWeapon() : attacker.groundWeapon();
 }
 
-// Tries to take possible range upgrades into account (not quite perfectly).
-// Unused.
+// Tries to take possible range upgrades into account, making pessimistic assumptions about the enemy.
+// Returns 0 if the attacker does not have a way to attack the target.
+// NOTE Does not check whether our reaver, carrier, or bunker has units inside that can attack.
 int UnitUtil::GetAttackRange(BWAPI::Unit attacker, BWAPI::Unit target)
 {
-	BWAPI::WeaponType weapon = GetWeapon(attacker, target);
+	// Reavers, carriers, and bunkers have "no weapon" but still have an attack range.
+	if (attacker->getType() == BWAPI::UnitTypes::Protoss_Reaver && !target->isFlying())
+	{
+		return 8;
+	}
+	if (attacker->getType() == BWAPI::UnitTypes::Protoss_Carrier)
+	{
+		return 8;
+	}
+	if (attacker->getType() == BWAPI::UnitTypes::Terran_Bunker)
+	{
+		if (attacker->getPlayer() == BWAPI::Broodwar->enemy() ||
+			BWAPI::Broodwar->self()->getUpgradeLevel(BWAPI::UpgradeTypes::U_238_Shells))
+		{
+			return 6 * 32;
+		}
+		return 5 * 32;
+	}
+
+	const BWAPI::WeaponType weapon = GetWeapon(attacker, target);
 
 	if (weapon == BWAPI::WeaponTypes::None)
 	{
@@ -128,7 +153,6 @@ int UnitUtil::GetAttackRange(BWAPI::Unit attacker, BWAPI::Unit target)
 	// Count range upgrades,
 	// for ourselves if we have researched it,
 	// for the enemy always (by pessimistic assumption).
-	// TODO can we find out the enemy upgrades?
 	if (attacker->getType() == BWAPI::UnitTypes::Protoss_Dragoon)
 	{
 		if (attacker->getPlayer() == BWAPI::Broodwar->enemy() ||
@@ -141,18 +165,6 @@ int UnitUtil::GetAttackRange(BWAPI::Unit attacker, BWAPI::Unit target)
 	{
 		if (attacker->getPlayer() == BWAPI::Broodwar->enemy() ||
 			BWAPI::Broodwar->self()->getUpgradeLevel(BWAPI::UpgradeTypes::U_238_Shells))
-		{
-			range = 5 * 32;
-		}
-	}
-	else if (attacker->getType() == BWAPI::UnitTypes::Terran_Bunker)
-	{
-		if (attacker->getPlayer() == BWAPI::Broodwar->enemy() ||
-			BWAPI::Broodwar->self()->getUpgradeLevel(BWAPI::UpgradeTypes::U_238_Shells))
-		{
-			range = 6 * 32;
-		}
-		else
 		{
 			range = 5 * 32;
 		}
@@ -177,11 +189,26 @@ int UnitUtil::GetAttackRange(BWAPI::Unit attacker, BWAPI::Unit target)
     return range;
 }
 
+// Range is zero if the attacker cannot attack the target at all.
+// NOTE Currently unused but potentially useful.
 int UnitUtil::GetAttackRangeAssumingUpgrades(BWAPI::UnitType attacker, BWAPI::UnitType target)
 {
-    BWAPI::WeaponType weapon = GetWeapon(attacker, target);
+	// Reavers, carriers, and bunkers have "no weapon" but still have an attack range.
+	if (attacker == BWAPI::UnitTypes::Protoss_Reaver && !target.isFlyer())
+	{
+		return 8;
+	}
+	if (attacker == BWAPI::UnitTypes::Protoss_Carrier)
+	{
+		return 8;
+	}
+	if (attacker == BWAPI::UnitTypes::Terran_Bunker)
+	{
+		return 6 * 32;
+	}
 
-    if (weapon == BWAPI::WeaponTypes::None)
+	BWAPI::WeaponType weapon = GetWeapon(attacker, target);
+	if (weapon == BWAPI::WeaponTypes::None)
     {
         return 0;
     }
@@ -196,10 +223,6 @@ int UnitUtil::GetAttackRangeAssumingUpgrades(BWAPI::UnitType attacker, BWAPI::Un
 	else if (attacker == BWAPI::UnitTypes::Terran_Marine)
 	{
 		range = 5 * 32;
-	}
-	else if (attacker == BWAPI::UnitTypes::Terran_Bunker)
-	{
-		range = 6 * 32;
 	}
 	else if (attacker == BWAPI::UnitTypes::Terran_Goliath && target.isFlyer())
 	{
@@ -217,7 +240,7 @@ int UnitUtil::GetAttackRangeAssumingUpgrades(BWAPI::UnitType attacker, BWAPI::Un
 size_t UnitUtil::GetAllUnitCount(BWAPI::UnitType type)
 {
     size_t count = 0;
-    for (const auto & unit : BWAPI::Broodwar->self()->getUnits())
+    for (const auto unit : BWAPI::Broodwar->self()->getUnits())
     {
         // trivial case: unit which exists matches the type
         if (unit->getType() == type)
@@ -250,7 +273,7 @@ size_t UnitUtil::GetAllUnitCount(BWAPI::UnitType type)
 size_t UnitUtil::GetCompletedUnitCount(BWAPI::UnitType type)
 {
 	size_t count = 0;
-	for (const auto & unit : BWAPI::Broodwar->self()->getUnits())
+	for (const auto unit : BWAPI::Broodwar->self()->getUnits())
 	{
 		if (unit->getType() == type && unit->isCompleted())
 		{
@@ -259,25 +282,4 @@ size_t UnitUtil::GetCompletedUnitCount(BWAPI::UnitType type)
 	}
 
 	return count;
-}
-
-BWAPI::Unit UnitUtil::GetClosestUnitTypeToTarget(BWAPI::UnitType type, BWAPI::Position target)
-{
-	BWAPI::Unit closestUnit = nullptr;
-	double closestDist = 100000;
-
-	for (auto & unit : BWAPI::Broodwar->self()->getUnits())
-	{
-		if (unit->getType() == type)
-		{
-			double dist = unit->getDistance(target);
-			if (!closestUnit || dist < closestDist)
-			{
-				closestUnit = unit;
-				closestDist = dist;
-			}
-		}
-	}
-
-	return closestUnit;
 }
