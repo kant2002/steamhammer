@@ -82,7 +82,7 @@ public:
 	// given a position, get the position we should move to to minimize distance
 	BWAPI::Position getMoveTo(const BWAPI::Position p, const int lookAhead = 1) const
 	{
-		// the initial row an column
+		// the initial row and column
 		int row = p.y / 32;
 		int col = p.x / 32;
 		

@@ -93,10 +93,12 @@ void WorkerManager::handleGasWorkers()
 				{
 					workerData.setWorkerJob(gasWorker, WorkerData::Gas, unit);
 				}
+				else {
+					return;    // won't find any more no matter how often we look
+				}
 			}
 		}
 	}
-
 }
 
 bool WorkerManager::isGasStealRefinery(BWAPI::Unit unit)
@@ -241,7 +243,7 @@ BWAPI::Unit WorkerManager::getClosestMineralWorkerTo(BWAPI::Unit enemyUnit)
 			if (worker->isCarryingMinerals() || worker->isCarryingGas()) {
 				// If it has cargo, pretend it is farther away.
 				// That way we prefer empty workers and lose less cargo.
-				dist += 40;
+				dist += 64;
 			}
 
             if (!closestMineralWorker || dist < closestDist)
@@ -364,13 +366,12 @@ BWAPI::Unit WorkerManager::getGasWorker(BWAPI::Unit refinery)
 
 		if (workerData.getWorkerJob(unit) == WorkerData::Minerals)
 		{
-			double distance = unit->getDistance(refinery);
+			// Don't waste minerals or gas.
 			if (unit->isCarryingMinerals() || unit->isCarryingGas()) {
-				// If it has cargo, pretend it is farther away.
-				// That way we prefer empty workers and lose less cargo.
-				distance += 40;
+				continue;
 			}
 
+			double distance = unit->getDistance(refinery);
 			if (!closestWorker || distance < closestDistance)
 			{
 				closestWorker = unit;
@@ -423,7 +424,7 @@ BWAPI::Unit WorkerManager::getBuilder(Building & b, bool setJobAsBuilder)
 			if (unit->isCarryingMinerals() || unit->isCarryingGas()) {
 				// If it has cargo, pretend it is farther away.
 				// That way we prefer empty workers and lose less cargo.
-				distance += 40;
+				distance += 64;
 			}
 			if (!closestMiningWorker || distance < closestMiningWorkerDistance)
 			{
@@ -440,7 +441,7 @@ BWAPI::Unit WorkerManager::getBuilder(Building & b, bool setJobAsBuilder)
 			if (unit->isCarryingMinerals() || unit->isCarryingGas()) {
 				// If it has cargo, pretend it is farther away.
 				// That way we prefer empty workers and lose less cargo.
-				distance += 40;
+				distance += 64;
 			}
 			if (!closestMovingWorker || distance < closestMovingWorkerDistance)
 			{
@@ -490,7 +491,7 @@ BWAPI::Unit WorkerManager::getMoveWorker(BWAPI::Position p)
 			if (unit->isCarryingMinerals() || unit->isCarryingGas()) {
 				// If it has cargo, pretend it is farther away.
 				// That way we prefer empty workers and lose less cargo.
-				distance += 40;
+				distance += 64;
 			}
 			if (!closestWorker || distance < closestDistance)
 			{
@@ -524,7 +525,7 @@ void WorkerManager::setMoveWorker(int mineralsNeeded, int gasNeeded, BWAPI::Posi
 			if (unit->isCarryingMinerals() || unit->isCarryingGas()) {
 				// If it has cargo, pretend it is farther away.
 				// That way we prefer empty workers and lose less cargo.
-				distance += 40;
+				distance += 64;
 			}
 			if (!closestWorker || distance < closestDistance)
 			{

@@ -31,6 +31,18 @@ void Squad::update()
 	// update all necessary unit information within this squad
 	updateUnits();
 
+	if (_order.getType() == SquadOrderTypes::Survey && BWAPI::Broodwar->getFrameCount() < 24)
+	{
+		if (_units.empty())
+		{
+			return;
+		}
+
+		BWAPI::Unit surveyor = *(_units.begin());
+		Micro::SmartMove(surveyor, _order.getPosition());
+		return;
+	}
+
 	// determine whether or not we should regroup
 	bool needToRegroup = needsToRegroup();
     
@@ -385,7 +397,8 @@ BWAPI::Unit Squad::unitClosestToEnemy()
 
 	for (auto & unit : _units)
 	{
-		if (unit->getType() == BWAPI::UnitTypes::Protoss_Observer)
+		if (unit->getType() == BWAPI::UnitTypes::Zerg_Overlord ||
+			unit->getType() == BWAPI::UnitTypes::Protoss_Observer)
 		{
 			continue;
 		}
@@ -404,7 +417,8 @@ BWAPI::Unit Squad::unitClosestToEnemy()
 	{
 		for (auto & unit : _units)
 		{
-			if (unit->getType() == BWAPI::UnitTypes::Protoss_Observer)
+			if (unit->getType() == BWAPI::UnitTypes::Zerg_Overlord ||
+				unit->getType() == BWAPI::UnitTypes::Protoss_Observer)
 			{
 				continue;
 			}

@@ -260,8 +260,6 @@ const MetaPairVector StrategyManager::getZergBuildOrderGoal() const
 	// the goal to return
 	std::vector<MetaPair> goal;
 	
-	const int droneMax = 48;             // number of drones not to exceed
-
 	int minerals		= BWAPI::Broodwar->self()->minerals();
 	int gas				= BWAPI::Broodwar->self()->gas();
 
@@ -284,18 +282,31 @@ const MetaPairVector StrategyManager::getZergBuildOrderGoal() const
     int nGuardians		= UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Guardian);
 	int nDevourers		= UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Devourer);
 
+	int minDrones = 3 * nGas + 1;        // minimum drones to mine minerals at all
+	const int droneMax = 48;             // number of drones not to exceed
+
 	BWAPI::Player self = BWAPI::Broodwar->self();
 
+	BWAPI::UpgradeType missile = BWAPI::UpgradeTypes::Zerg_Missile_Attacks;
+	BWAPI::UpgradeType armor = BWAPI::UpgradeTypes::Zerg_Carapace;
+	BWAPI::TechType lurker_aspect = BWAPI::TechTypes::Lurker_Aspect;
+
 	if (Config::Strategy::StrategyName == "Zerg_4Pool" ||
-		Config::Strategy::StrategyName == "Zerg_5Pool" ||
-		Config::Strategy::StrategyName == "Zerg_9Pool")
+		Config::Strategy::StrategyName == "Zerg_5PoolFast" ||
+		Config::Strategy::StrategyName == "Zerg_5PoolSlow" ||
+		Config::Strategy::StrategyName == "Zerg_9Pool" ||
+		Config::Strategy::StrategyName == "Zerg_9Pool>expo" ||
+		Config::Strategy::StrategyName == "Zerg_9Hatch9Pool")
 	{
 		// Zerglings.
         goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Zergling, nLings + 6));
-		if (shouldExpandNow())
+		if (minerals > 400)
 		{
 			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hatchery, nHatches + 1));
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 12)));
+			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 2)));
+		}
+		else if (nDrones < 9 * nHatches) {
+			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 1)));
 		}
 	}
 	else if (Config::Strategy::StrategyName == "Zerg_9Pool>Lurk")
@@ -358,8 +369,6 @@ const MetaPairVector StrategyManager::getZergBuildOrderGoal() const
 		}
 		// Decide about upgrades.
 		if (minerals > 600 && gas > 400 && !addingHatch) {
-			BWAPI::UpgradeType missile = BWAPI::UpgradeTypes::Zerg_Missile_Attacks;
-			BWAPI::UpgradeType armor = BWAPI::UpgradeTypes::Zerg_Carapace;
 			int missileUps = self->getUpgradeLevel(missile);
 			int armorUps = self->getUpgradeLevel(armor);
 			if (nEvo == 0) {
@@ -390,7 +399,10 @@ const MetaPairVector StrategyManager::getZergBuildOrderGoal() const
 		}
 	}
 	else if (Config::Strategy::StrategyName == "Zerg_2Hatch>Hydra" ||
-		     Config::Strategy::StrategyName == "Zerg_9Pool>Hydra")
+		     Config::Strategy::StrategyName == "Zerg_9Pool>Hydra" ||
+			 Config::Strategy::StrategyName == "Zerg_3Hatch>HydraLing" ||
+			 Config::Strategy::StrategyName == "Zerg_3Hatch>Hydra" ||
+			 Config::Strategy::StrategyName == "Zerg_3HatchPool>ground")
     {
 		// Hydras.
 		// Decide about hatcheries and drones.
@@ -404,15 +416,21 @@ const MetaPairVector StrategyManager::getZergBuildOrderGoal() const
 				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 6)));
 			}
 		}
-		else if (minerals > 600 && nHydras >= 12 && nDrones < 8 * nHatches) {
+		else if (minerals > 600 && nHydras >= 10 && nDrones < 8 * nHatches) {
 			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 6)));
 		}
 		else if (nHatches == 0 && minerals >= 300) {
 			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hatchery, 1));
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 2)));
+			if (nDrones < minDrones) {
+				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, minDrones));
+			}
+		}
+		else if (gas > 300 && minerals < 100 && nHydras >= 12) {
+			// Mineral shortage, make more drones.
+			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 10)));
 		}
 		else {
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 4)));
+			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 6)));
 		}
 		// Decide about gas.
 		if (nHatches > 0 && minerals / (gas + 24) > 5 && nGas < nHatches && nDrones >= 6 * nHatches) {
@@ -425,20 +443,32 @@ const MetaPairVector StrategyManager::getZergBuildOrderGoal() const
 			if (nHives > 0) {
 				goal.push_back(std::pair<MetaType, int>(BWAPI::UpgradeTypes::Adrenal_Glands, 1));
 			}
-		} else {
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hydralisk, nHydras + 8));
+		}
+		else if (gas > 300 && minerals < 100 && nHydras >= 12) {
+			// Mineral shortage, make fewer hydras.
+			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hydralisk, nHydras + 3));
+		}
+		else {
+			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hydralisk, nHydras + 6));
 			if (self->getUpgradeLevel(BWAPI::UpgradeTypes::Muscular_Augments) == 0) {
 				goal.push_back(std::pair<MetaType, int>(BWAPI::UpgradeTypes::Muscular_Augments, 1));
 			}
 			else if (self->getUpgradeLevel(BWAPI::UpgradeTypes::Grooved_Spines) == 0) {
 				goal.push_back(std::pair<MetaType, int>(BWAPI::UpgradeTypes::Grooved_Spines, 1));
 			}
+			// If we have lurker tech, make lurkers slowly.
+			if (nHydras > 2 && gas > 200 && self->hasResearched(lurker_aspect)) {
+				if (nHydras >= 8 && nLurkers == 0) {
+					goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Lurker, 4));
+				}
+				else {
+					goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Lurker, nLurkers + 1));
+				}
+			}
 		}
 		// Decide about upgrades.
 		// Have to do it step by step because BOSS makes a stupid blocking build order.
 		if (minerals > 600 && gas > 400) {
-			BWAPI::UpgradeType missile = BWAPI::UpgradeTypes::Zerg_Missile_Attacks;
-			BWAPI::UpgradeType armor = BWAPI::UpgradeTypes::Zerg_Carapace;
 			int missileUps = self->getUpgradeLevel(missile);
 			int armorUps = self->getUpgradeLevel(armor);
 			if (missileUps == 0 && !self->isUpgrading(missile)) {
@@ -446,6 +476,9 @@ const MetaPairVector StrategyManager::getZergBuildOrderGoal() const
 			}
 			else if (nLairs + nHives == 0) {
 				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Lair, 1));
+			}
+			else if (nLairs + nHives > 0 && !self->hasResearched(lurker_aspect) && !self->isResearching(lurker_aspect)) {
+				goal.push_back(std::pair<MetaType, int>(lurker_aspect, 1));
 			}
 			else if (nLairs + nHives > 0 && missileUps == 1 && !self->isUpgrading(missile)) {
 				goal.push_back(std::pair<MetaType, int>(missile, 2));
@@ -466,6 +499,7 @@ const MetaPairVector StrategyManager::getZergBuildOrderGoal() const
 
 	}
 	else if (Config::Strategy::StrategyName == "Zerg_vsRush"
+		  || Config::Strategy::StrategyName == "Zerg_vsKillerbot"
 		  || Config::Strategy::StrategyName == "ZvZ_12Pool"
 		  || Config::Strategy::StrategyName == "ZvT_12Pool")
 	{
@@ -525,76 +559,6 @@ const MetaPairVector StrategyManager::getZergBuildOrderGoal() const
 		}
 		else {
 			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 4)));
-		}
-	}
-	else if (Config::Strategy::StrategyName == "Zerg_3Hatch>HydraLing")
-	{
-		// Hydraling.
-		// Decide about hatcheries and drones.
-		if (minerals > 600 && nHydras >= 12 && nDrones >= 8 * nHatches) {
-			if (minerals > 1200 && nHatches > 2) {
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hatchery, nHatches + 2));
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 9)));
-			}
-			else {
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hatchery, nHatches + 1));
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 6)));
-			}
-		}
-		else if (minerals > 600 && nHydras >= 12 && nDrones < 8 * nHatches) {
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 8)));
-		}
-		else if (nHatches == 0 && minerals >= 300) {
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hatchery, 1));
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 8)));
-		}
-		else {
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 4)));
-		}
-		// Decide about unit mix based on gas and minerals.
-		// If low on gas, get lings and research ling upgrades.
-		if (gas <= 100 && minerals >= 600) {
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Zergling, nLings + 10));
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UpgradeTypes::Metabolic_Boost, 1));
-			if (nHatches > 0 && nGas < nHatches) {
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Extractor, nGas + 1));
-			}
-			if (nHives > 0) {
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UpgradeTypes::Adrenal_Glands, 1));
-			}
-		}
-		else {
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hydralisk, nHydras + 8));
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Zergling, nLings + 2));
-		}
-		// Decide about upgrades.
-		if (minerals > 600 && gas > 400) {
-			BWAPI::UpgradeType missile = BWAPI::UpgradeTypes::Zerg_Missile_Attacks;
-			BWAPI::UpgradeType armor = BWAPI::UpgradeTypes::Zerg_Carapace;
-			int missileUps = self->getUpgradeLevel(missile);
-			int armorUps = self->getUpgradeLevel(armor);
-			if (missileUps == 0 && !self->isUpgrading(missile)) {
-				goal.push_back(std::pair<MetaType, int>(missile, 1));
-			}
-			// Get lair in parallel with missile attack upgrade.
-			if (nHatches > 0 && nLairs + nHives == 0) {
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Lair, 1));
-			}
-			else if (missileUps == 1 && nLairs + nHives > 0 && !self->isUpgrading(missile)) {
-				goal.push_back(std::pair<MetaType, int>(missile, 2));
-			}
-			else if (nLairs > 0 && !hasQueensNest) {
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Queens_Nest, 1));
-			}
-			else if (nLairs > 0 && hasQueensNest && nHives == 0) {
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hive, 1));
-			}
-			else if (missileUps == 2 && !self->isUpgrading(missile) && nHives > 0) {
-				goal.push_back(std::pair<MetaType, int>(missile, 3));
-			}
-			else if (missileUps == 3 && armorUps < 3 && !self->isUpgrading(armor) && nHives > 0) {
-				goal.push_back(std::pair<MetaType, int>(armor, armorUps + 1));
-			}
 		}
 	}
 	else if (Config::Strategy::StrategyName == "Zerg_3HatchMuta" ||

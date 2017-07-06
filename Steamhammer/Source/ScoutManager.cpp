@@ -79,6 +79,7 @@ void ScoutManager::moveScouts()
     gasSteal();
 
 	// get the enemy base location, if we have one
+	// Note: In case of an enemy proxy or weird map, this might be our own base. Roll with it.
 	BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getMainBaseLocation(BWAPI::Broodwar->enemy());
 
     int scoutDistanceThreshold = 30;

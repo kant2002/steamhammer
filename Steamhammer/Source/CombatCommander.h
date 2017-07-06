@@ -19,6 +19,8 @@ class CombatCommander
 	void            updateAttackSquads();
     void            updateDropSquads();
 	void            updateIdleSquad();
+	void			updateSurveySquad();
+
 	bool            isSquadUpdateFrame();
 	int             getNumType(BWAPI::Unitset & units, BWAPI::UnitType type);
 
@@ -27,6 +29,7 @@ class CombatCommander
 
 	BWAPI::Position getDefendLocation();
     BWAPI::Position getMainAttackLocation();
+	BWAPI::Position getSurveyLocation();
 
     void            initializeSquads();
     void            verifySquadUniqueMembership();

@@ -27,7 +27,8 @@ void DetectorManager::executeMicro(const BWAPI::Unitset & targets)
 		// conditions for targeting
 		if (unit->getType() == BWAPI::UnitTypes::Zerg_Lurker ||
 			unit->getType() == BWAPI::UnitTypes::Protoss_Dark_Templar ||
-			unit->getType() == BWAPI::UnitTypes::Terran_Wraith) 
+			unit->getType() == BWAPI::UnitTypes::Terran_Wraith ||
+			unit->getType() == BWAPI::UnitTypes::Terran_Vulture_Spider_Mine)
 		{
 			cloakedUnits.insert(unit);
 			cloakedUnitMap[unit] = false;

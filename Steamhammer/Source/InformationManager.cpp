@@ -34,7 +34,6 @@ void InformationManager::updateUnitInfo()
 		updateUnit(unit);
 	}
 
-	// remove bad enemy units
 	_unitData[_enemy].removeBadUnits();
 	_unitData[_self].removeBadUnits();
 }

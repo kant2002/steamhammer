@@ -79,15 +79,18 @@ void MicroManager::execute(const SquadOrder & inputOrder)
                 executeMicro(nearbyEnemies);
             }
             // otherwise we only care about workers if they are in their own region
+			// or are building something
+			// Idea: Don't goose chase the enemy scout.
+			// Unfortunately there are bad side effects.
             else
             {
-                 // if this is the an attack squad
+                 // if this is an attack squad
                 BWAPI::Unitset workersRemoved;
 
                 for (auto & enemyUnit : nearbyEnemies) 
 		        {
-                    // if its not a worker add it to the targets
-			        if (!enemyUnit->getType().isWorker())
+                    // if its not a worker, or if it is but it's building something, add it to the targets
+			        if (!enemyUnit->getType().isWorker() || enemyUnit->isConstructing())
                     {
                         workersRemoved.insert(enemyUnit);
                     }

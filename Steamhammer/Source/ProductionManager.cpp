@@ -347,6 +347,43 @@ void ProductionManager::create(BWAPI::Unit producer, BuildOrderItem & item)
 		// Otherwise it will find some spot near desiredLocation.
 		BWAPI::TilePosition desiredLocation = BWAPI::Broodwar->self()->getStartLocation();
 
+		// If this is a defense building, try to place it toward the enemy.
+		// As an approximation, we offset it toward the nearest choke (if there is one).
+		if (t.getUnitType() == BWAPI::UnitTypes::Terran_Bunker ||
+			t.getUnitType() == BWAPI::UnitTypes::Protoss_Photon_Cannon ||
+			t.getUnitType() == BWAPI::UnitTypes::Zerg_Creep_Colony)
+		{
+			BWTA::Chokepoint * chokepoint = BWTA::getNearestChokepoint(desiredLocation);
+			if (chokepoint) {
+				BWAPI::TilePosition choke = BWAPI::TilePosition(chokepoint->getCenter());
+				double range = 3.0;    // distance from original desiredLocation
+				int newx = desiredLocation.x;
+				int newy = desiredLocation.y;
+				double dx = choke.x - desiredLocation.x;
+				double dy = choke.y - desiredLocation.y;
+				if (dx < 0.5) {
+					// Vertical line. Don't divide by 0!
+					newy += copysign(range, dy);
+				}
+				else {
+					double slope = dy / dx;
+					double xoff = copysign(range / sqrt(1.0 + slope * slope), dx);
+					double yoff = copysign(xoff * slope, dy);
+					newx += floor(xoff + 0.5);
+					newy += floor(yoff + 0.5);
+				}
+				// Ensure that the location is on the map.
+				newx = std::max(0, std::min(BWAPI::Broodwar->mapWidth() - 1, newx));
+				newy = std::max(0, std::min(BWAPI::Broodwar->mapHeight() - 1, newy));
+				//BWAPI::Broodwar->printf("desLoc from (%d, %d) to (%d, %d)",
+				//	desiredLocation.x, desiredLocation.y, newx, newy);
+				BWAPI::TilePosition unused = BWAPI::TilePosition(newx, newy);
+				//BWAPI::Broodwar->drawBoxMap(32*newx, 32*newy, 32*newx+32, 32*newy+32, BWAPI::Colors::Orange, false);
+				//desiredLocation = BWAPI::TilePosition(newx, newy);
+				// TODO doesn't work - presumably buildingmanager doesn't understand changes to desloc
+			}
+		}
+
 		BuildingManager::Instance().addBuildingTask(t.getUnitType(), desiredLocation, item.isGasSteal);
     }
     else if (t.getUnitType().isAddon())

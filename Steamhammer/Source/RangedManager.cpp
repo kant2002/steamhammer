@@ -19,7 +19,9 @@ void RangedManager::assignTargetsOld(const BWAPI::Unitset & targets)
 
 	// figure out targets
 	BWAPI::Unitset rangedUnitTargets;
-    std::copy_if(targets.begin(), targets.end(), std::inserter(rangedUnitTargets, rangedUnitTargets.end()), [](BWAPI::Unit u){ return u->isVisible(); });
+    std::copy_if(targets.begin(), targets.end(), std::inserter(rangedUnitTargets, rangedUnitTargets.end()),
+		[](BWAPI::Unit u){ return u->isVisible() && !(u->getType() == BWAPI::UnitTypes::Zerg_Larva) &&
+		!(u->getType() == BWAPI::UnitTypes::Zerg_Egg); });
 
     for (auto & rangedUnit : rangedUnits)
 	{
@@ -123,22 +125,20 @@ BWAPI::Unit RangedManager::getTarget(BWAPI::Unit rangedUnit, const BWAPI::Unitse
     return closestTarget;
 }
 
-	// get the attack priority of a type in relation to a zergling
+// get the attack priority of a type in relation to a zergling
 int RangedManager::getAttackPriority(BWAPI::Unit rangedUnit, BWAPI::Unit target) 
 {
 	BWAPI::UnitType rangedType = rangedUnit->getType();
 	BWAPI::UnitType targetType = target->getType();
 
-    
-    if (rangedUnit->getType() == BWAPI::UnitTypes::Zerg_Scourge)
+	if (rangedType == BWAPI::UnitTypes::Zerg_Scourge)
     {
-        if (target->getType() == BWAPI::UnitTypes::Protoss_Carrier)
+		if (targetType == BWAPI::UnitTypes::Protoss_Carrier)
         {
             
             return 100;
         }
-
-        if (target->getType() == BWAPI::UnitTypes::Protoss_Corsair)
+		if (targetType == BWAPI::UnitTypes::Protoss_Corsair)
         {
             return 90;
         }
@@ -156,40 +156,82 @@ int RangedManager::getAttackPriority(BWAPI::Unit rangedUnit, BWAPI::Unit target)
         return 0;
     }
 
-    if (rangedUnit->isFlying() && target->getType() == BWAPI::UnitTypes::Protoss_Carrier)
+	if (rangedUnit->isFlying() && targetType == BWAPI::UnitTypes::Protoss_Carrier)
     {
         return 101;
     }
 
     // if the target is building something near our base something is fishy
     BWAPI::Position ourBasePosition = BWAPI::Position(BWAPI::Broodwar->self()->getStartLocation());
-    if (target->getType().isWorker() && (target->isConstructing() || target->isRepairing()) && target->getDistance(ourBasePosition) < 1200)
-    {
-        return 100;
-    }
-
-    if (target->getType().isBuilding() && (target->isCompleted() || target->isBeingConstructed()) && target->getDistance(ourBasePosition) < 1200)
-    {
-        return 90;
-    }
+	if (target->getDistance(ourBasePosition) < 1200) {
+		if (target->getType().isWorker() && (target->isConstructing() || target->isRepairing()))
+		{
+			return 100;
+		}
+		if (target->getType().isBuilding() && (target->isCompleted() || target->isBeingConstructed()))
+		{
+			return 90;
+		}
+	}
     
-	// highest priority is something that can attack us or aid in combat
-    if (targetType ==  BWAPI::UnitTypes::Terran_Bunker || isThreat)
-    {
-        return 11;
-    }
+	// Highest priority is the most dangerous stuff.
+	if (rangedType.isFlyer()) {
+		// We're an air unit.
+		if (targetType == BWAPI::UnitTypes::Zerg_Scourge)
+		{
+			return 15;
+		}
+	}
+	else
+	{
+		// We're a ground unit.
+		if (targetType == BWAPI::UnitTypes::Terran_Vulture_Spider_Mine)
+		{
+			return 15;
+		}
+		if (targetType == BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode ||
+			targetType == BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode ||
+			targetType == BWAPI::UnitTypes::Protoss_Reaver ||
+			targetType == BWAPI::UnitTypes::Zerg_Lurker)
+		{
+			return 14;
+		}
+	}
+	if ((targetType == BWAPI::UnitTypes::Terran_Bunker && target->isCompleted()) ||
+		(targetType == BWAPI::UnitTypes::Protoss_Photon_Cannon && target->isCompleted() && target->isPowered()) ||
+		 targetType == BWAPI::UnitTypes::Protoss_High_Templar)
+	{
+		return 15;
+	}
+
+	// Next is droppers. They may be loaded.
+	if (targetType == BWAPI::UnitTypes::Terran_Dropship ||
+		targetType == BWAPI::UnitTypes::Protoss_Shuttle)
+	{
+		return 13;
+	}
+	// Turrets should be cleared out on principle.
+	if (targetType == BWAPI::UnitTypes::Terran_Missile_Turret)
+	{
+		return 12;
+	}
+	// Next is ordinary dangerous stuff.
+	if (isThreat)
+	{
+		return 11;
+	}
 	// next priority is worker
-	else if (targetType.isWorker()) 
+	if (targetType.isWorker()) 
 	{
         if (rangedUnit->getType() == BWAPI::UnitTypes::Terran_Vulture)
         {
             return 11;
         }
 
-  		return 11;
+  		return 10;
 	}
     // next is special buildings
-	else if (targetType == BWAPI::UnitTypes::Zerg_Spawning_Pool)
+	if (targetType == BWAPI::UnitTypes::Zerg_Spawning_Pool)
 	{
 		return 5;
 	}
