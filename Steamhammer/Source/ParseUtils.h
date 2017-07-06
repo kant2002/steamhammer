@@ -13,5 +13,7 @@ namespace ParseUtils
 	bool _ParseStrategy(const rapidjson::Value & strategy, std::string & stratName);
 
     bool GetBoolFromString(const std::string & str);
+	int GetIntByRace(const char * name, const rapidjson::Value & item);
+	double GetDoubleByRace(const char * name, const rapidjson::Value & item);
 }
 }

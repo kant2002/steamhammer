@@ -44,7 +44,7 @@ bool UnitUtil::IsValidUnit(BWAPI::Unit unit)
 {
 	return unit
 		&& unit->exists()
-		&& unit->isCompleted()
+		&& (unit->isCompleted() || IsMorphedBuildingType(unit->getType()))
 		&& unit->getHitPoints() > 0
 		&& unit->getType() != BWAPI::UnitTypes::Unknown
 		&& unit->getPosition().isValid();
@@ -177,7 +177,6 @@ int UnitUtil::GetAttackRange(BWAPI::Unit attacker, BWAPI::Unit target)
     return range;
 }
 
-// NOTE: Unlike GetAttackRange with units, this ignores possible range upgrades.
 int UnitUtil::GetAttackRangeAssumingUpgrades(BWAPI::UnitType attacker, BWAPI::UnitType target)
 {
     BWAPI::WeaponType weapon = GetWeapon(attacker, target);

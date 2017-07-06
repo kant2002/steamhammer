@@ -5,12 +5,13 @@
 using namespace UAlbertaBot;
 
 ProductionManager::ProductionManager() 
-	: _assignedWorkerForThisBuilding (false)
-	, _haveLocationForThisBuilding   (false)
-	, _outOfBook					 (false)
-	, _targetGasAmount               (0)
-	, _extractorTrickState			 (ExtractorTrick::None)
-	, _extractorTrickBuilding		 (nullptr)
+	: _assignedWorkerForThisBuilding     (false)
+	, _haveLocationForThisBuilding       (false)
+	, _delayBuildingPredictionUntilFrame (0)
+	, _outOfBook                         (false)
+	, _targetGasAmount                   (0)
+	, _extractorTrickState			     (ExtractorTrick::None)
+	, _extractorTrickBuilding		     (nullptr)
 {
     setBuildOrder(StrategyManager::Instance().getOpeningBookBuildOrder());
 }
@@ -48,7 +49,7 @@ void ProductionManager::update()
 			BWAPI::Broodwar->drawTextScreen(150, 10, "Nothing left to build, replanning.");
 		}
 
-		_outOfBook = true;
+		goOutOfBook();
 		StrategyManager::Instance().freshProductionPlan();
 	}
 
@@ -71,8 +72,7 @@ void ProductionManager::onUnitDestroy(BWAPI::Unit unit)
 	if ((unit->getType().isWorker() && !WorkerManager::Instance().isWorkerScout(unit)) ||
 		unit->getType().isBuilding())
 	{
-		_outOfBook = true;
-		_queue.clearAll();
+		goOutOfBook();
 	}
 }
 
@@ -107,14 +107,25 @@ void ProductionManager::manageBuildOrderQueue()
 		// The unit which can produce the currentItem. May be null.
         BWAPI::Unit producer = getProducer(currentItem.macroAct);
 
+		// Work around a bug: If you say you want 2 comsats total, BOSS may order up 2 comsats more
+		// than you already have. So we drop any extra comsat.
+		if (!producer && currentItem.macroAct.isUnit() && currentItem.macroAct.getUnitType() == BWAPI::UnitTypes::Terran_Comsat_Station)
+		{
+			_queue.removeHighestPriorityItem();
+			continue;
+		}
+
 		// check to see if we can make it right now
 		bool canMake = producer && canMakeNow(producer, currentItem.macroAct);
 
 		// if the next item in the list is a building and we can't yet make it
-        if (currentItem.macroAct.isBuilding() && !canMake && currentItem.macroAct.whatBuilds().isWorker())
+        if (currentItem.macroAct.isBuilding() &&
+			!canMake &&
+			currentItem.macroAct.whatBuilds().isWorker() &&
+			BWAPI::Broodwar->getFrameCount() >= _delayBuildingPredictionUntilFrame)
 		{
 			// construct a temporary building object
-			Building b(currentItem.macroAct.getUnitType(), BWAPI::Broodwar->self()->getStartLocation());
+			Building b(currentItem.macroAct.getUnitType(), InformationManager::Instance().getMyMainBaseLocation()->getTilePosition());
 			b.macroLocation = currentItem.macroAct.getMacroLocation();
             b.isGasSteal = currentItem.isGasSteal;
 
@@ -122,6 +133,8 @@ void ProductionManager::manageBuildOrderQueue()
 			producer = WorkerManager::Instance().getBuilder(b, false);
 
 			// predict the worker movement to that building location
+			// NOTE If the worker is set moving, this sets flag _movingToThisBuildingLocation = true
+			//      so that we don't 
 			predictWorkerMovement(b);
 		}
 
@@ -132,6 +145,7 @@ void ProductionManager::manageBuildOrderQueue()
 			create(producer, currentItem);
 			_assignedWorkerForThisBuilding = false;
 			_haveLocationForThisBuilding = false;
+			_delayBuildingPredictionUntilFrame = 0;
 
 			// and remove it from the _queue
 			_queue.removeHighestPriorityItem();
@@ -193,8 +207,8 @@ BWAPI::Unit ProductionManager::getProducer(MacroAct t, BWAPI::Position closestTo
         // if the type is an addon, some special cases
         if (t.isUnit() && t.getUnitType().isAddon())
         {
-            // if the unit already has an addon, it can't make one
-            if (unit->getAddon() != nullptr)
+            // Already has an addon, or is otherwise unable to make one.
+			if (!unit->canBuildAddon())
             {
                 continue;
             }
@@ -207,6 +221,10 @@ BWAPI::Unit ProductionManager::getProducer(MacroAct t, BWAPI::Position closestTo
                 continue; 
             }
 
+			/*
+			NOTE Apparently this entire section is obsoleted by unit->canBuildAddon() above.
+			     I'm leaving it in as a comment for now in case I'm wrong. - Jay
+			
             bool isBlocked = false;
 
             // if the unit doesn't have space to build an addon, it can't make one
@@ -223,9 +241,10 @@ BWAPI::Unit ProductionManager::getProducer(MacroAct t, BWAPI::Position closestTo
                     if (!BWAPI::Broodwar->isBuildable(tilePos))
                     {
                         isBlocked = true;
-                        BWAPI::Broodwar->drawBoxMap(tilePos.x*32, tilePos.y*32, tilePos.x*32 + 32, tilePos.y*32 + 32, BWAPI::Colors::Red);
+                        // BWAPI::Broodwar->drawBoxMap(tilePos.x*32, tilePos.y*32, tilePos.x*32 + 32, tilePos.y*32 + 32, BWAPI::Colors::Red);
                     }
 
+					// NOTE This test is incorrect. Mining SCVs do not block building an addon.
                     // if there are any units on the addon tile, we can't build it
                     BWAPI::Unitset uot = BWAPI::Broodwar->getUnitsOnTile(tilePos.x, tilePos.y);
                     if (uot.size() > 0 && !(uot.size() == 1 && *(uot.begin()) == unit))
@@ -233,13 +252,14 @@ BWAPI::Unit ProductionManager::getProducer(MacroAct t, BWAPI::Position closestTo
                         isBlocked = true;
                         BWAPI::Broodwar->drawBoxMap(tilePos.x*32, tilePos.y*32, tilePos.x*32 + 32, tilePos.y*32 + 32, BWAPI::Colors::Red);
                     }
-                }
+               }
             }
 
             if (isBlocked)
             {
                 continue;
             }
+			*/
         }
         
         // if the type requires an addon and the producer doesn't have one
@@ -473,13 +493,18 @@ void ProductionManager::predictWorkerMovement(const Building & b)
 	}
 	else
 	{
+		// BWAPI::Broodwar->printf("can't place building %s", b.type.getName().c_str());
+		// If we can't place the building now, we probably can't place it next frame either.
+		// Delay for a while before trying again. We could overstep the time limit.
+		_delayBuildingPredictionUntilFrame = 12 + BWAPI::Broodwar->getFrameCount();
 		return;
 	}
 	
-	// draw a box where the building will be placed
 	int x1 = _predictedTilePosition.x * 32;
 	int y1 = _predictedTilePosition.y * 32;
-	if (Config::Debug::DrawWorkerInfo) 
+
+	// draw a box where the building will be placed
+	if (Config::Debug::DrawWorkerInfo)
     {
 		int x2 = x1 + (b.type.tileWidth()) * 32;
 		int y2 = y1 + (b.type.tileHeight()) * 32;
@@ -554,6 +579,12 @@ void ProductionManager::executeCommand(MacroAct act)
 	}
 	else if (cmd == MacroCommandType::ExtractorTrick) {
 		startExtractorTrick();
+	}
+	else if (cmd == MacroCommandType::Aggressive) {
+		CombatCommander::Instance().setAggression(true);
+	}
+	else if (cmd == MacroCommandType::Defensive) {
+		CombatCommander::Instance().setAggression(false);
 	}
 	else {
 		UAB_ASSERT(false, "unknown macro command");
@@ -776,7 +807,7 @@ void ProductionManager::doExtractorTrick()
 		{
 			// We can build a drone now: The extractor finished, or another unit died somewhere.
 			// Well, there is one more condition: We need a larva.
-			BWAPI::Unit larva = getClosestLarvaToPosition(BWAPI::Position(BWAPI::Broodwar->self()->getStartLocation()));
+			BWAPI::Unit larva = getClosestLarvaToPosition(BWAPI::Position(InformationManager::Instance().getMyMainBaseLocation()->getTilePosition()));
 			if (larva)
 			{
 				larva->morph(BWAPI::UnitTypes::Zerg_Drone);
@@ -808,9 +839,10 @@ void ProductionManager::doExtractorTrick()
 }
 
 // We have finished our book line, or are breaking out of it early.
-// Clear the queue and set _outOfBook.
+// Clear the queue, set _outOfBook, go aggressive.
 void ProductionManager::goOutOfBook()
 {
 	_queue.clearAll();
 	_outOfBook = true;
+	CombatCommander::Instance().setAggression(true);
 }

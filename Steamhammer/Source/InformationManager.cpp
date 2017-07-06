@@ -9,11 +9,13 @@ InformationManager::InformationManager()
     : _self(BWAPI::Broodwar->self())
     , _enemy(BWAPI::Broodwar->enemy())
 	, _enemyProxy(false)
+
 	, _enemyHasAntiAir(false)
 	, _enemyHasAirTech(false)
 	, _enemyHasCloakTech(false)
 	, _enemyHasMobileCloakTech(false)
 	, _enemyHasOverlordHunters(false)
+	, _enemyHasMobileDetection(_enemy->getRace() == BWAPI::Races::Zerg)
 {
 	initializeRegionInformation();
 	initializeNaturalBase();
@@ -22,7 +24,6 @@ InformationManager::InformationManager()
 // Set up _mainBaseLocations and _occupiedLocations.
 void InformationManager::initializeRegionInformation()
 {
-	// set initial pointers to null
 	_mainBaseLocations[_self] = BWTA::getStartLocation(_self);
 	_mainBaseLocations[_enemy] = BWTA::getStartLocation(_enemy);
 
@@ -355,37 +356,38 @@ BWTA::BaseLocation * InformationManager::getMainBaseLocation(BWAPI::Player playe
 	return _mainBaseLocations[player];
 }
 
+// Guaranteed non-null. If we have no bases left, it is our start location.
 BWTA::BaseLocation * InformationManager::getMyMainBaseLocation()
 {
+	UAB_ASSERT(_mainBaseLocations[_self], "no base location");
 	return _mainBaseLocations[_self];
 }
 
+// Null until the enemy base is located.
 BWTA::BaseLocation * InformationManager::getEnemyMainBaseLocation()
 {
 	return _mainBaseLocations[_enemy];
 }
 
+// Self, enemy, or neutral.
 BWAPI::Player InformationManager::getBaseOwner(BWTA::BaseLocation * base)
 {
 	return _theBases[base].owner;
 }
 
+// If it's the enemy base, the depot will be null if it has not been seen.
+// If this is our base, there is still a chance that the depot may be null.
+// And if not null, the depot may be incomplete.
 BWAPI::Unit InformationManager::getBaseDepot(BWTA::BaseLocation * base)
 {
-	return _theBases[base].resourceDepot;        // may be null
+	return _theBases[base].resourceDepot;
 }
 
+// May be null.
 BWTA::BaseLocation * InformationManager::getMyNaturalLocation()
 {
 	return _myNaturalBaseLocation;
 }
-
-// The number of bases on the map.
-// TODO not used (yet)
-//int InformationManager::getTotalNumBases() const
-//{
-//	return _theBases.size();
-//}
 
 // The number of bases believed owned by the given player,
 // self, enemy, or neutral.
@@ -421,7 +423,7 @@ int InformationManager::getNumFreeLandBases()
 }
 
 // Current number of mineral patches at all of my bases.
-// Does this decrease as patches mine out, or do the patches just change to mineral content 0?
+// Decreases as patches mine out, increases as new bases are taken.
 int InformationManager::getMyNumMineralPatches()
 {
 	int count = 0;
@@ -452,6 +454,36 @@ int InformationManager::getMyNumGeysers()
 			(depot->isCompleted() || UnitUtil::IsMorphedBuildingType(depot->getType())))
 		{
 			count += base->getGeysers().size();
+		}
+	}
+
+	return count;
+}
+
+// Current number of completed refineries at all my completed bases.
+int InformationManager::getMyNumRefineries()
+{
+	int count = 0;
+
+	for (BWTA::BaseLocation * base : BWTA::getBaseLocations())
+	{
+		BWAPI::Unit depot = _theBases[base].resourceDepot;
+
+		if (_theBases[base].owner == _self &&
+			depot &&                // should never be null, but we check anyway
+			(depot->isCompleted() || UnitUtil::IsMorphedBuildingType(depot->getType())))
+		{
+			for (auto geyser : base->getGeysers())
+			{
+				if (geyser &&
+					geyser->exists() &&
+					geyser->getPlayer() == _self &&
+					geyser->getType().isRefinery() &&
+					geyser->isCompleted())
+				{
+					++count;
+				}
+			}
 		}
 	}
 
@@ -1092,6 +1124,41 @@ bool InformationManager::enemyHasOverlordHunters()
 			ui.type == BWAPI::UnitTypes::Zerg_Scourge)
 		{
 			_enemyHasOverlordHunters = true;
+			return true;
+		}
+	}
+
+	return false;
+}
+
+// Enemy has overlords, observers, comsat, or science vessels.
+bool InformationManager::enemyHasMobileDetection()
+{
+	// Latch: Once they're known to have the tech, they always have it.
+	if (_enemyHasMobileDetection)
+	{
+		return true;
+	}
+
+	// If the enemy is zerg, they have overlords.
+	// If they went random, we may not have known until now.
+	if (_enemy->getRace() == BWAPI::Races::Zerg)
+	{
+		_enemyHasMobileDetection = true;
+		return true;
+	}
+
+	for (const auto & kv : getUnitData(_enemy).getUnits())
+	{
+		const UnitInfo & ui(kv.second);
+
+		if (ui.type == BWAPI::UnitTypes::Terran_Comsat_Station ||
+			ui.type == BWAPI::UnitTypes::Terran_Science_Facility ||
+			ui.type == BWAPI::UnitTypes::Terran_Science_Vessel ||
+			ui.type == BWAPI::UnitTypes::Protoss_Observatory ||
+			ui.type == BWAPI::UnitTypes::Protoss_Observer)
+		{
+			_enemyHasMobileDetection = true;
 			return true;
 		}
 	}

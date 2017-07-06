@@ -1,4 +1,5 @@
 #include "StrategyManager.h"
+#include "CombatCommander.h"
 #include "ProductionManager.h"
 #include "StrategyBossZerg.h"
 #include "UnitUtil.h"
@@ -132,12 +133,13 @@ const MetaPairVector StrategyManager::getProtossBuildOrderGoal()
 	int numPylons = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Protoss_Pylon);
 	int numNexusCompleted = BWAPI::Broodwar->self()->completedUnitCount(BWAPI::UnitTypes::Protoss_Nexus);
 	int numNexusAll = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Protoss_Nexus);
-	int numCyber = BWAPI::Broodwar->self()->completedUnitCount(BWAPI::UnitTypes::Protoss_Cybernetics_Core);
 	int numProbes = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Protoss_Probe);
 	int numCannon = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Protoss_Photon_Cannon);
 	int numZealots = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Protoss_Zealot);
 	int numDragoons = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Protoss_Dragoon);
 	int numDarkTemplar = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Protoss_Dark_Templar);
+
+	int maxProbes = WorkerManager::Instance().getMaxWorkers();
 
     if (_openingGroup == "zealots")
     {
@@ -185,7 +187,7 @@ const MetaPairVector StrategyManager::getProtossBuildOrderGoal()
 	}
 	else
     {
-		UAB_ASSERT_WARNING(false, "Unknown Protoss Opening Group: %s", _openingGroup.c_str());
+		UAB_ASSERT_WARNING(false, "Unknown Opening Group: %s", _openingGroup.c_str());
     }
     
 	// if we have 2 nexus, make an observer
@@ -204,6 +206,9 @@ const MetaPairVector StrategyManager::getProtossBuildOrderGoal()
 		}
 	}
 
+	// Make more probes, up to a limit.
+	goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Probe, std::min(maxProbes, numProbes + 8)));
+
     // if we want to expand, insert a nexus into the build order
 	if (shouldExpandNow())
 	{
@@ -219,8 +224,9 @@ const MetaPairVector StrategyManager::getTerranBuildOrderGoal()
 	std::vector<MetaPair> goal;
 
 	// These counts include uncompleted units.
-	int numWorkers		= UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Terran_SCV);
+	int numSCVs			= UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Terran_SCV);
     int numCC           = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Terran_Command_Center);            
+    int numRefineries   = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Terran_Refinery);            
     int numMarines      = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Terran_Marine);
 	int numMedics       = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Terran_Medic);
 	int numWraith       = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Terran_Wraith);
@@ -233,25 +239,30 @@ const MetaPairVector StrategyManager::getTerranBuildOrderGoal()
 	bool hasAcademy		= UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Terran_Academy) > 0;
 	bool hasArmory		= UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Terran_Armory) > 0;
 
+	int maxSCVs = WorkerManager::Instance().getMaxWorkers();
+
 	BWAPI::Player self = BWAPI::Broodwar->self();
 
 	if (_openingGroup == "anti-rush")
 	{
 		int numRax = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Terran_Barracks);
+
+		CombatCommander::Instance().setAggression(false);
 		
 		goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Marine, numMarines + numRax));
-		goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_SCV, numWorkers + 1));
+		goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_SCV, std::min(maxSCVs, numSCVs + 1)));
 		goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Bunker, 1));
 		
 		if (BWAPI::Broodwar->self()->minerals() > 250)
 		{
-			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Marine, numRax + 1));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Barracks, numRax + 1));
 		}
 
 		// If we survived long enough, transition to something more interesting.
 		if (numMarines >= 10)
 		{
 			_openingGroup = "bio";
+			CombatCommander::Instance().setAggression(true);
 		}
 	}
 	else if (_openingGroup == "bio")
@@ -261,6 +272,10 @@ const MetaPairVector StrategyManager::getTerranBuildOrderGoal()
 		if (numMarines >= 10)
 		{
 			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Academy, 1));
+			if (numRefineries == 0)
+			{
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Refinery, 1));
+			}
 		}
 		if (hasAcademy)
 		{
@@ -269,7 +284,7 @@ const MetaPairVector StrategyManager::getTerranBuildOrderGoal()
 			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Medic, medicGoal));
 			goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::U_238_Shells, 1));
 		}
-        if (numMarines > 20)
+        if (numMarines > 16)
         {
             goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Engineering_Bay, 1));
         }
@@ -293,7 +308,7 @@ const MetaPairVector StrategyManager::getTerranBuildOrderGoal()
         goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Vulture, numVultures + 6));
 		goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Ion_Thrusters, 1));
 
-        if (numVultures > 8)
+        if (numVultures >= 8)
         {
             goal.push_back(std::pair<MacroAct, int>(BWAPI::TechTypes::Tank_Siege_Mode, 1));
             goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode, numTanks + 2));
@@ -302,9 +317,12 @@ const MetaPairVector StrategyManager::getTerranBuildOrderGoal()
 	else if (_openingGroup == "tanks")
     {
         goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode, numTanks + 4));
-        goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Goliath, numGoliaths + 4));
-        goal.push_back(std::pair<MacroAct, int>(BWAPI::TechTypes::Tank_Siege_Mode, 1));
+		goal.push_back(std::pair<MacroAct, int>(BWAPI::TechTypes::Tank_Siege_Mode, 1));
 
+		if (numTanks >= 8)
+		{
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Goliath, numGoliaths + 4));
+		}
 		if (numGoliaths >= 4)
 		{
 			goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Charon_Boosters, 1));
@@ -312,14 +330,22 @@ const MetaPairVector StrategyManager::getTerranBuildOrderGoal()
     }
     else
     {
-        BWAPI::Broodwar->printf("Unknown Terran Opening Group: %s", Config::Strategy::StrategyName.c_str());
+		BWAPI::Broodwar->printf("Unknown Opening Group: %s", _openingGroup.c_str());
     }
 
-	// Comsat would be good, but the bot usually thinks the spot is blocked by SCVs.
-	//if (numCC > 0 && hasAcademy)
-	//{
-	//	goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Comsat_Station, UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Terran_Command_Center)));
-	//}
+	if (numCC > 1 || InformationManager::Instance().enemyHasCloakTech())
+	{
+		goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Academy, 1));
+		if (numRefineries == 0)
+		{
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Refinery, 1));
+		}
+	}
+
+	if (numCC > 0 && hasAcademy)
+	{
+		goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Comsat_Station, UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Terran_Command_Center)));
+	}
 
 	if (hasArmory &&
 		self->getUpgradeLevel(BWAPI::UpgradeTypes::Terran_Vehicle_Weapons) == 0 &&
@@ -328,10 +354,15 @@ const MetaPairVector StrategyManager::getTerranBuildOrderGoal()
 		goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Terran_Vehicle_Weapons, 1));
 	}
 
-    if (shouldExpandNow())
+	// Make more SCVs, up to a limit.
+	if (_openingGroup != "anti-rush")
+	{
+		goal.push_back(MetaPair(BWAPI::UnitTypes::Terran_SCV, std::min(maxSCVs, numSCVs + 6)));
+	}
+
+	if (shouldExpandNow())
     {
         goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Command_Center, numCC + 1));
-        goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_SCV, numWorkers + 10));
     }
 
 	return goal;
@@ -581,10 +612,11 @@ void StrategyManager::handleUrgentProductionIssues(BuildOrderQueue & queue)
 			}
 			else if (BWAPI::Broodwar->self()->getRace() == BWAPI::Races::Terran)
 			{
-				if (BWAPI::Broodwar->self()->allUnitCount(BWAPI::UnitTypes::Terran_Missile_Turret) < 2 &&
+				if (BWAPI::Broodwar->self()->allUnitCount(BWAPI::UnitTypes::Terran_Missile_Turret) < 3 &&
 					!queue.anyInQueue(BWAPI::UnitTypes::Terran_Missile_Turret) &&
 					!BuildingManager::Instance().isBeingBuilt(BWAPI::UnitTypes::Terran_Missile_Turret))
 				{
+					queue.queueAsHighestPriority(MacroAct(BWAPI::UnitTypes::Terran_Missile_Turret));
 					queue.queueAsHighestPriority(MacroAct(BWAPI::UnitTypes::Terran_Missile_Turret));
 					queue.queueAsHighestPriority(MacroAct(BWAPI::UnitTypes::Terran_Missile_Turret));
 

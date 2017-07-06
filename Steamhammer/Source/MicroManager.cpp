@@ -1,4 +1,5 @@
 #include "MicroManager.h"
+#include "MapTools.h"
 
 using namespace UAlbertaBot;
 
@@ -127,22 +128,30 @@ const BWAPI::Unitset & MicroManager::getUnits() const
 
 void MicroManager::regroup(const BWAPI::Position & regroupPosition) const
 {
-    BWAPI::Position ourBasePosition = BWAPI::Position(BWAPI::Broodwar->self()->getStartLocation());
+    BWAPI::Position ourBasePosition = BWAPI::Position(InformationManager::Instance().getMyMainBaseLocation()->getPosition());
     int regroupDistanceFromBase = MapTools::Instance().getGroundDistance(regroupPosition, ourBasePosition);
 
-	// for each of the units we have
 	for (auto & unit : _units)
 	{
         int unitDistanceFromBase = MapTools::Instance().getGroundDistance(unit->getPosition(), ourBasePosition);
 
-		// if the unit is outside the regroup area
-        if (unitDistanceFromBase > regroupDistanceFromBase)
+		// 1. A broodling should never retreat, but attack as long as it lives.
+		// 2. A unit next to a sieged tank should not move away.
+		if (unit->getType() == BWAPI::UnitTypes::Zerg_Broodling ||
+			(BWAPI::Broodwar->enemy()->getRace() == BWAPI::Races::Terran &&
+			!unit->isFlying() &&
+			 BWAPI::Broodwar->getClosestUnit(unit->getPosition(),
+				BWAPI::Filter::IsEnemy && BWAPI::Filter::GetType == BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode,
+				64)))
+		{
+			Micro::SmartAttackMove(unit, unit->getPosition());
+		}
+		else if (unitDistanceFromBase > regroupDistanceFromBase)
         {
             Micro::SmartMove(unit, ourBasePosition);
         }
 		else if (unit->getDistance(regroupPosition) > 96)
 		{
-			// regroup it
 			Micro::SmartMove(unit, regroupPosition);
 		}
 		else

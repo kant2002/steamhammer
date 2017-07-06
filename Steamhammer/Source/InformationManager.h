@@ -44,22 +44,23 @@ public:
 
 class InformationManager 
 {
-	BWAPI::Player _self;
-    BWAPI::Player _enemy;
+	BWAPI::Player	_self;
+    BWAPI::Player	_enemy;
 
-    std::map<BWAPI::Player, UnitData>                   _unitData;
-    std::map<BWAPI::Player, BWTA::BaseLocation *>       _mainBaseLocations;
+	bool			_enemyProxy;
+
+	bool			_enemyHasAntiAir;
+	bool			_enemyHasAirTech;
+	bool			_enemyHasCloakTech;
+	bool			_enemyHasMobileCloakTech;
+	bool			_enemyHasOverlordHunters;
+	bool			_enemyHasMobileDetection;
+
+	std::map<BWAPI::Player, UnitData>                   _unitData;
+	std::map<BWAPI::Player, BWTA::BaseLocation *>       _mainBaseLocations;
 	BWTA::BaseLocation *								_myNaturalBaseLocation;  // whether taken yet or not
 	std::map<BWAPI::Player, std::set<BWTA::Region *> >  _occupiedRegions;        // contains any building
 	std::map<BWTA::BaseLocation *, BaseStatus>			_theBases;
-
-	bool					_enemyProxy;
-
-	bool					_enemyHasAntiAir;
-	bool					_enemyHasAirTech;
-	bool					_enemyHasCloakTech;
-	bool					_enemyHasMobileCloakTech;
-	bool					_enemyHasOverlordHunters;
 
 	InformationManager();
 
@@ -115,6 +116,7 @@ public:
 	int						getNumFreeLandBases();
 	int						getMyNumMineralPatches();
 	int						getMyNumGeysers();
+	int						getMyNumRefineries();
 	int						getAir2GroundSupply(BWAPI::Player player) const;
 
 	bool					isBaseReserved(BWTA::BaseLocation * base);
@@ -127,6 +129,7 @@ public:
 	bool                    enemyHasCloakTech();
 	bool                    enemyHasMobileCloakTech();
 	bool					enemyHasOverlordHunters();
+	bool					enemyHasMobileDetection();
 
 	int						nScourgeNeeded();           // zerg specific
 

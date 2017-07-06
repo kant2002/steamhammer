@@ -4,20 +4,22 @@
 using namespace UAlbertaBot;
 
 Squad::Squad()
-    : _lastRetreatSwitch(0)
+    : _name("Default")
+	, _attackAtMax(false)
+    , _lastRetreatSwitch(0)
     , _lastRetreatSwitchVal(false)
     , _priority(0)
-    , _name("Default")
 {
     int a = 10;   // only you can prevent linker errors
 }
 
 Squad::Squad(const std::string & name, SquadOrder order, size_t priority) 
 	: _name(name)
-	, _order(order)
-    , _lastRetreatSwitch(0)
+	, _attackAtMax(false)
+	, _lastRetreatSwitch(0)
     , _lastRetreatSwitchVal(false)
     , _priority(priority)
+	, _order(order)
 {
 }
 
@@ -76,7 +78,7 @@ void Squad::update()
 		_lurkerManager.regroup(regroupPosition);
         _tankManager.regroup(regroupPosition);
         _medicManager.regroup(regroupPosition);
-		// Note: Detectors and transports do not regroup.
+		// NOTE Detectors and transports do not regroup.
 	}
 	else // otherwise, execute micro
 	{
@@ -116,11 +118,12 @@ void Squad::updateUnits()
 
 void Squad::setAllUnits()
 {
-	// clean up the _units vector in case one of them died
+	// Clean up the _units vector in case one of them died or went into a bunker or transport.
+	// If the unit is unloaded later, it will be added back to a squad.
 	BWAPI::Unitset goodUnits;
 	for (auto & unit : _units)
 	{
-		if (UnitUtil::IsValidUnit(unit))
+		if (UnitUtil::IsValidUnit(unit) && !unit->isLoaded())
 		{
 			goodUnits.insert(unit);
 		}
@@ -165,7 +168,15 @@ void Squad::addUnitsToMicroManagers()
 		UAB_ASSERT(unit, "missing unit");
 		if (unit->isCompleted() && unit->getHitPoints() > 0 && unit->exists())
 		{
-            if (unit->getType() == BWAPI::UnitTypes::Terran_Medic)
+			if (unit->getType().isWorker())
+			{
+				// We accept workers into the squad, but do not give them orders.
+				// WorkerManager is responsible for that.
+				// The squad creator (in CombatCommander) should be sure to give each worker
+				// an appropriate job using the WorkerManager.
+				// squad.clear() releases the worker jobs, so you don't have to worry about that.
+			}
+            else if (unit->getType() == BWAPI::UnitTypes::Terran_Medic)
             {
                 medicUnits.insert(unit);
             }
@@ -173,7 +184,8 @@ void Squad::addUnitsToMicroManagers()
 			{
 				lurkerUnits.insert(unit);
 			}
-			else if (unit->getType() == BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode || unit->getType() == BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode)
+			else if (unit->getType() == BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode ||
+				unit->getType() == BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode)
             {
                 tankUnits.insert(unit);
             }   
@@ -187,9 +199,8 @@ void Squad::addUnitsToMicroManagers()
 			{
 				transportUnits.insert(unit);
 			}
-			// TODO excludes certain units, especially carriers; also valkyries, corsairs, devourers
+			// TODO excludes some units: spellcasters, carriers, reavers; also valkyries, corsairs, devourers
 			else if ((unit->getType().groundWeapon().maxRange() > 32) ||
-				unit->getType() == BWAPI::UnitTypes::Protoss_Reaver ||
 				unit->getType() == BWAPI::UnitTypes::Zerg_Scourge)
 			{
 				rangedUnits.insert(unit);
@@ -222,11 +233,23 @@ bool Squad::needsToRegroup()
 	}
 
 	// If we're nearly maxed and have good income or cash, don't retreat.
-	if (BWAPI::Broodwar->self()->supplyUsed() >= 340 &&
-		(BWAPI::Broodwar->self()->minerals() > 1000 || WorkerManager::Instance().getNumMineralWorkers() > 16))
+	if (BWAPI::Broodwar->self()->supplyUsed() >= 390 &&
+		(BWAPI::Broodwar->self()->minerals() > 1000 || WorkerManager::Instance().getNumMineralWorkers() > 12))
 	{
-		_regroupStatus = std::string("Maxed. Banzai!");
-		return false;
+		_attackAtMax = true;
+	}
+
+	if (_attackAtMax)
+	{
+		if (BWAPI::Broodwar->self()->supplyUsed() < 320)
+		{
+			_attackAtMax = false;
+		}
+		else
+		{
+			_regroupStatus = std::string("Maxed. Banzai!");
+			return false;
+		}
 	}
 
     BWAPI::Unit unitClosest = unitClosestToEnemy();
@@ -339,7 +362,7 @@ void Squad::clear()
 
 bool Squad::unitNearEnemy(BWAPI::Unit unit)
 {
-	assert(unit);
+	UAB_ASSERT(unit, "missing unit");
 
 	BWAPI::Unitset enemyNear;
 
@@ -377,7 +400,9 @@ BWAPI::Position Squad::calcRegroupPosition()
 	{
 		// Don't return the position of an overlord, which may be in a weird place.
 		// Bug fix thanks to AIL!
-		if (!_nearEnemy[unit] && unit->getType() != BWAPI::UnitTypes::Zerg_Overlord)
+		if (!_nearEnemy[unit] &&
+			unit->getType() != BWAPI::UnitTypes::Zerg_Overlord &&
+			unit->getType() != BWAPI::UnitTypes::Protoss_Observer)
 		{
 			int dist = unit->getDistance(_order.getPosition());
 			if (dist < minDist)
@@ -390,7 +415,13 @@ BWAPI::Position Squad::calcRegroupPosition()
 
 	if (regroup == BWAPI::Position(0,0))
 	{
-		return BWTA::getRegion(BWTA::getStartLocation(BWAPI::Broodwar->self())->getTilePosition())->getCenter();
+		// If the natural has been taken, retreat there.
+		if (InformationManager::Instance().getMyNaturalLocation())
+		{
+			return BWTA::getRegion(InformationManager::Instance().getMyNaturalLocation()->getTilePosition())->getCenter();
+		}
+		// Retreat to the main base (guaranteed not null, even if the buildings were destroyed).
+		return BWTA::getRegion(InformationManager::Instance().getMyMainBaseLocation()->getTilePosition())->getCenter();
 	}
 	return regroup;
 }

@@ -22,6 +22,7 @@ class Squad
     std::string         _name;
 	BWAPI::Unitset      _units;
 	std::string         _regroupStatus;
+	bool				_attackAtMax;
     int                 _lastRetreatSwitch;
     bool                _lastRetreatSwitchVal;
     size_t              _priority;

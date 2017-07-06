@@ -240,7 +240,7 @@ BWTA::BaseLocation * MapTools::nextExpansion(bool hidden, bool minOnlyOK)
 	BWTA::BaseLocation * bestBase = nullptr;
     double bestScore = 0.0;
 	
-    BWAPI::TilePosition homeTile = player->getStartLocation();
+	BWAPI::TilePosition homeTile = InformationManager::Instance().getMyMainBaseLocation()->getTilePosition();
 	BWAPI::Position myBasePosition(homeTile);
 	BWTA::BaseLocation * enemyBase = InformationManager::Instance().getEnemyMainBaseLocation();
 

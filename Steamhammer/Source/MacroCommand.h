@@ -15,6 +15,8 @@ enum class MacroCommandType
 	, GasUntil
 	, StealGas
 	, ExtractorTrick    // NOTE implemented, but tickles a bug in BWAPI; don't use it
+	, Aggressive
+	, Defensive
 	};
 
 class MacroCommand
@@ -35,6 +37,8 @@ public:
 			, MacroCommandType::GasUntil
 			, MacroCommandType::StealGas
 			, MacroCommandType::ExtractorTrick
+			, MacroCommandType::Aggressive
+			, MacroCommandType::Defensive
 		};
 	}
 
@@ -108,6 +112,14 @@ public:
 		if (t == MacroCommandType::ExtractorTrick)
 		{
 			return "go extractor trick";
+		}
+		if (t == MacroCommandType::Aggressive)
+		{
+			return "go aggressive";
+		}
+		if (t == MacroCommandType::Defensive)
+		{
+			return "go defensive";
 		}
 
 		UAB_ASSERT(t == MacroCommandType::None, "unrecognized MacroCommandType");

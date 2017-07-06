@@ -26,7 +26,10 @@ class WorkerManager
 	void        handleCombatWorkers();
     void        handleMoveWorkers();
 
-    WorkerManager();
+	BWAPI::Unit getBestEnemyTarget(BWAPI::Unit worker);
+	BWAPI::Unit getClosestEnemyUnit(BWAPI::Unit worker);
+
+	WorkerManager();
 
 public:
 
@@ -48,6 +51,7 @@ public:
 	int         getNumReturnCargoWorkers() const;
 	int			getNumCombatWorkers() const;
 	int         getNumIdleWorkers() const;
+	int			getMaxWorkers() const;
 
     void        setScoutWorker(BWAPI::Unit worker);
 
@@ -63,7 +67,6 @@ public:
     BWAPI::Unit getMoveWorker(BWAPI::Position p);
     BWAPI::Unit getClosestDepot(BWAPI::Unit worker);
     BWAPI::Unit getGasWorker(BWAPI::Unit refinery);
-    BWAPI::Unit getClosestEnemyUnit(BWAPI::Unit worker);
     BWAPI::Unit getClosestMineralWorkerTo(BWAPI::Unit enemyUnit);
     BWAPI::Unit getWorkerScout();
 

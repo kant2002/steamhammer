@@ -548,21 +548,41 @@ BWAPI::TilePosition BuildingManager::getBuildingLocation(const Building & b)
 	}
 
     int distance = Config::Macro::BuildingSpacing;
-	if (b.type == BWAPI::UnitTypes::Protoss_Photon_Cannon || b.type == BWAPI::UnitTypes::Zerg_Creep_Colony) {
+	if (b.type == BWAPI::UnitTypes::Terran_Bunker ||
+		b.type == BWAPI::UnitTypes::Protoss_Photon_Cannon ||
+		b.type == BWAPI::UnitTypes::Zerg_Creep_Colony)
+	{
 		// Pack defenses tightly together.
 		distance = 0;
-		// Get a position toward the choke.
-		// TODO DISABLED because it is way too slow
-		// return BuildingPlacer::Instance().getDefenseBuildLocation(b, distance);
 	}
-	else if (b.type == BWAPI::UnitTypes::Protoss_Pylon && (numPylons < 3))
+	else if (b.type == BWAPI::UnitTypes::Protoss_Pylon)
     {
-		// Early pylons may be spaced differently than other buildings.
-        distance = Config::Macro::PylonSpacing;
+		if (numPylons < 3)
+		{
+			// Early pylons may be spaced differently than other buildings.
+			distance = Config::Macro::PylonSpacing;
+		}
+		else
+		{
+			// Building spacing == 1 is usual. Be more generous with pylons.
+			distance = 2;
+		}
+	}
+
+	// Try to pack protoss buildings more closely together. Space can run out.
+	bool noVerticalSpacing = false;
+	if (b.type == BWAPI::UnitTypes::Protoss_Gateway ||
+		b.type == BWAPI::UnitTypes::Protoss_Forge || 
+		b.type == BWAPI::UnitTypes::Protoss_Stargate || 
+		b.type == BWAPI::UnitTypes::Protoss_Citadel_of_Adun || 
+		b.type == BWAPI::UnitTypes::Protoss_Templar_Archives || 
+		b.type == BWAPI::UnitTypes::Protoss_Gateway)
+	{
+		noVerticalSpacing = true;
 	}
 
 	// Get a position within our region.
-	return BuildingPlacer::Instance().getBuildLocationNear(b, distance);
+	return BuildingPlacer::Instance().getBuildLocationNear(b, distance, noVerticalSpacing);
 }
 
 // The building failed or is canceled.

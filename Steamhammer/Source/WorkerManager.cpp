@@ -62,11 +62,16 @@ void WorkerManager::updateWorkerStatus()
 
 		// Two cases of idleness.
 		// Order can be PlayerGuard for a drone that tries to build and fails.
-		if ((worker->isIdle() || worker->getOrder() == BWAPI::Orders::PlayerGuard) &&
+		if (worker->isIdle() &&
 			workerData.getWorkerJob(worker) != WorkerData::Minerals &&
 			workerData.getWorkerJob(worker) != WorkerData::Build &&
 			workerData.getWorkerJob(worker) != WorkerData::Move &&
 			workerData.getWorkerJob(worker) != WorkerData::Scout)
+		{
+			workerData.setWorkerJob(worker, WorkerData::Idle, nullptr);
+		}
+
+		if (worker->getOrder() == BWAPI::Orders::PlayerGuard)
 		{
 			workerData.setWorkerJob(worker, WorkerData::Idle, nullptr);
 		}
@@ -81,15 +86,35 @@ void WorkerManager::updateWorkerStatus()
 			{
 				workerData.setWorkerJob(worker, WorkerData::Idle, nullptr);
 			}
-		}
+			else
+			{
+				BWAPI::Unit target = getClosestEnemyUnit(worker);
 
+				if (target && target->exists() &&
+					(!target->isMoving() || target->isStuck()) &&
+					worker->getDistance(target) <= 64)
+				{
+					Micro::SmartAttackUnit(worker, target);
+				}
+				else if (worker->getOrder() != BWAPI::Orders::MoveToGas &&
+					worker->getOrder() != BWAPI::Orders::WaitForGas &&
+					worker->getOrder() != BWAPI::Orders::HarvestGas &&
+					worker->getOrder() != BWAPI::Orders::ReturnGas &&
+					worker->getOrder() != BWAPI::Orders::ResetCollision)
+				{
+					workerData.setWorkerJob(worker, WorkerData::Idle, nullptr);
+				}
+			}
+		}
+		
 		// If the worker is busy mining and an enemy comes near, maybe fight it.
 		else if (workerData.getWorkerJob(worker) == WorkerData::Minerals)
 		{
 			BWAPI::Unit target = getClosestEnemyUnit(worker);
 
-			if (target && (!target->isMoving() || target->isStuck()) &&
-				target->exists() && worker->getDistance(target) <= 64)
+			if (target && target->exists() &&
+				(!target->isMoving() || target->isStuck()) &&
+				worker->getDistance(target) <= 64)
 			{
 				Micro::SmartAttackUnit(worker, target);
 			}
@@ -253,7 +278,7 @@ void WorkerManager::handleCombatWorkers()
 				BWAPI::Broodwar->drawCircleMap(worker->getPosition().x, worker->getPosition().y, 4, BWAPI::Colors::Yellow, true);
 			}
 
-			BWAPI::Unit target = getClosestEnemyUnit(worker);
+			BWAPI::Unit target = getBestEnemyTarget(worker);
 			if (target)
 			{
 				Micro::SmartAttackUnit(worker, target);
@@ -262,18 +287,53 @@ void WorkerManager::handleCombatWorkers()
 	}
 }
 
+BWAPI::Unit WorkerManager::getBestEnemyTarget(BWAPI::Unit worker)
+{
+	UAB_ASSERT(worker != nullptr, "Worker was null");
+
+	BWAPI::Unit bestTarget = nullptr;
+	int score = 9999;         // smaller is better
+	int bestScore = 9999;
+
+	for (auto & unit : BWAPI::Broodwar->enemy()->getUnits())
+	{
+		if (unit->isFlying())
+		{
+			continue;
+		}
+
+		score = unit->getDistance(worker);
+		if (!unit->isMoving() || unit->isBraking() || unit->isStuck())
+		{
+			score -= 128;
+		}
+		if (unit->getType().topSpeed() >= worker->getType().topSpeed())
+		{
+			score += 64;
+		}
+
+		if (score < bestScore)
+		{
+			bestTarget = unit;
+			bestScore = score;
+		}
+	}
+
+	return bestTarget;
+}
+
 BWAPI::Unit WorkerManager::getClosestEnemyUnit(BWAPI::Unit worker)
 {
     UAB_ASSERT(worker != nullptr, "Worker was null");
 
 	BWAPI::Unit closestUnit = nullptr;
-	double closestDist = 10000;
+	int closestDist = 1000;         // ignore anything farther away
 
 	for (auto & unit : BWAPI::Broodwar->enemy()->getUnits())
 	{
-		double dist = unit->getDistance(worker);
+		int dist = unit->getDistance(worker);
 
-		if ((dist < 400) && (!closestUnit || (dist < closestDist)))
+		if (dist < closestDist)
 		{
 			closestUnit = unit;
 			closestDist = dist;
@@ -291,7 +351,7 @@ void WorkerManager::finishedWithCombatWorkers()
 
 		if (workerData.getWorkerJob(worker) == WorkerData::Combat)
 		{
-			setMineralWorker(worker);
+			workerData.setWorkerJob(worker, WorkerData::Idle, nullptr);
 		}
 	}
 }
@@ -340,10 +400,6 @@ BWAPI::Unit WorkerManager::getWorkerScout()
 	for (auto & worker : workerData.getWorkers())
 	{
         UAB_ASSERT(worker != nullptr, "Worker was null");
-		if (!worker)
-		{
-			continue;
-		}
         if (workerData.getWorkerJob(worker) == WorkerData::Scout) 
 		{
 			return worker;
@@ -866,4 +922,16 @@ int WorkerManager::getNumCombatWorkers() const
 int WorkerManager::getNumIdleWorkers() const
 {
 	return workerData.getNumIdleWorkers();
+}
+
+// The largest number of workers that it is efficient to have right now.
+// NOTE Does not take into account possible preparations for future expansions.
+int WorkerManager::getMaxWorkers() const
+{
+	int patches = InformationManager::Instance().getMyNumMineralPatches();
+	int refineries = InformationManager::Instance().getMyNumRefineries();
+
+	// Never let the max number of workers fall to 0!
+	// Set aside 1 for future opportunities.
+	return 1 + int(Config::Macro::WorkersPerPatch * patches + Config::Macro::WorkersPerRefinery * refineries + 0.5);
 }

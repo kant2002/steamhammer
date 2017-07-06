@@ -19,8 +19,6 @@ void TankManager::executeMicro(const BWAPI::Unitset & targets)
     int siegeTankRange = BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode.groundWeapon().maxRange() - 32;
     bool haveSiege = BWAPI::Broodwar->self()->hasResearched(BWAPI::TechTypes::Tank_Siege_Mode);
 
-
-
 	for (auto & tank : tanks)
 	{
         bool tankNearChokepoint = false; 
@@ -39,7 +37,6 @@ void TankManager::executeMicro(const BWAPI::Unitset & targets)
 			// if there are targets
 			if (!tankTargets.empty())
 			{
-				// find the best target for this zealot
 				BWAPI::Unit target = getTarget(tank, tankTargets);
 
                 if (target && Config::Debug::DrawUnitTargetInfo) 
@@ -47,24 +44,37 @@ void TankManager::executeMicro(const BWAPI::Unitset & targets)
 		            BWAPI::Broodwar->drawLineMap(tank->getPosition(), tank->getTargetPosition(), BWAPI::Colors::Purple);
 	            }
 
-                // if we are within siege range, siege up
-                if (tank->getDistance(target) < siegeTankRange && tank->canSiege() && !tankNearChokepoint)
+				bool shouldSiege = !tankNearChokepoint;
+
+				// Don't siege to fight buildings, unless they can shoot back.
+				if (target &&
+					target->getType().isBuilding() &&
+					target->getType().groundWeapon() == BWAPI::WeaponTypes::None &&
+					target->getType() != BWAPI::UnitTypes::Terran_Bunker)
+				{
+					shouldSiege = false;
+				}
+
+				// Don't siege for a target which is too close.
+				if (target &&
+					tank->getDistance(target) < 64)
+				{
+					shouldSiege = false;
+				}
+
+				if (target && tank->getDistance(target) < siegeTankRange && shouldSiege && tank->canSiege())
                 {
                     tank->siege();
                 }
-                // otherwise unsiege and move in
-                else if ((!target || tank->getDistance(target) > siegeTankRange) && tank->canUnsiege())
+                else if ((!target || tank->getDistance(target) > siegeTankRange || !shouldSiege) && tank->canUnsiege())
                 {
                     tank->unsiege();
                 }
 
-
-                // if we're in siege mode just attack the target
                 if (tank->isSieged())
                 {
                     Micro::SmartAttackUnit(tank, target);
                 }
-                // if we're not in siege mode kite the target
                 else
                 {
                     Micro::SmartKiteTarget(tank, target);
@@ -91,19 +101,16 @@ void TankManager::executeMicro(const BWAPI::Unitset & targets)
 	}
 }
 
-// get a target for the zealot to attack
 BWAPI::Unit TankManager::getTarget(BWAPI::Unit tank, const BWAPI::Unitset & targets)
 {
 	int bestPriorityDistance = 1000000;
     int bestPriority = 0;
     
-    double bestLTD = 0;
-
 	BWAPI::Unit bestTargetThreatInRange = nullptr;
     double bestTargetThreatInRangeLTD = 0;
     
     int highPriority = 0;
-	double closestDist = std::numeric_limits<double>::infinity();
+	int closestDist = 99999;
 	BWAPI::Unit closestTarget = nullptr;
 
     int siegeTankRange = BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode.groundWeapon().maxRange() - 32;
@@ -127,7 +134,7 @@ BWAPI::Unit TankManager::getTarget(BWAPI::Unit tank, const BWAPI::Unitset & targ
             continue;
         }
 
-        double distance         = tank->getDistance(target);
+        int distance			= tank->getDistance(target);
         double LTD              = UnitUtil::CalculateLTD(target, tank);
         int priority            = getAttackPriority(tank, target);
         bool targetIsThreat     = LTD > 0;

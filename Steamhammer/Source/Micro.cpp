@@ -242,6 +242,34 @@ void Micro::SmartRepair(BWAPI::Unit unit, BWAPI::Unit target)
     }
 }
 
+// Perform a comsat scan at the given position if possible.
+// If it's not possible (no comsat, not enough energy), do nothing.
+// Return whether the scan occurred.
+bool Micro::SmartScan(const BWAPI::Position & targetPosition)
+{
+	// Choose the comsat with the highest energy.
+	// If we're not terran, we're unlikely to have any comsats....
+	int maxEnergy = 49;      // anything greater is enough energy for a scan
+	BWAPI::Unit comsat = nullptr;
+	for (const auto unit : BWAPI::Broodwar->self()->getUnits())
+	{
+		if (unit->getType() == BWAPI::UnitTypes::Terran_Comsat_Station &&
+			unit->getEnergy() > maxEnergy &&
+			unit->canUseTech(BWAPI::TechTypes::Scanner_Sweep, targetPosition))
+		{
+			maxEnergy = unit->getEnergy();
+			comsat = unit;
+		}
+	}
+
+	if (comsat)
+	{
+		return comsat->useTech(BWAPI::TechTypes::Scanner_Sweep, targetPosition);
+	}
+
+	return false;
+}
+
 void Micro::SmartReturnCargo(BWAPI::Unit worker)
 {
 	if (!worker || !worker->exists() || worker->getPlayer() != BWAPI::Broodwar->self() ||

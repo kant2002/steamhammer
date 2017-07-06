@@ -5,7 +5,8 @@
 using namespace UAlbertaBot;
 
 GameCommander::GameCommander() 
-    : _initialScoutSet(false)
+	: _combatCommander(CombatCommander::Instance())
+    , _initialScoutSet(false)
 	, _scoutAlways(false)
 	, _scoutIfNeeded(false)
 {
@@ -76,6 +77,8 @@ void GameCommander::drawDebugInterface()
     _timerManager.displayTimers(490, 225);
     drawGameInformation(4, 1);
 
+	drawUnitOrders();
+	
 	// draw position of mouse cursor
 	if (Config::Debug::DrawMouseCursorInfo)
 	{
@@ -113,6 +116,55 @@ void GameCommander::drawGameInformation(int x, int y)
 
     BWAPI::Broodwar->drawTextScreen(x, y, "\x04Time:");
     BWAPI::Broodwar->drawTextScreen(x+50, y, "\x04%d %4dm %3ds", BWAPI::Broodwar->getFrameCount(), (int)(BWAPI::Broodwar->getFrameCount()/(23.8*60)), (int)((int)(BWAPI::Broodwar->getFrameCount()/23.8)%60));
+}
+
+void GameCommander::drawUnitOrders()
+{
+	if (!Config::Debug::DrawUnitOrders)
+	{
+		return;
+	}
+
+	for (const auto unit : BWAPI::Broodwar->getAllUnits())
+	{
+		if (!unit->getPosition().isValid())
+		{
+			continue;
+		}
+
+		std::string extra = "";
+		if (unit->getType() == BWAPI::UnitTypes::Zerg_Egg ||
+			unit->getType() == BWAPI::UnitTypes::Zerg_Cocoon ||
+			unit->getType().isBuilding() && !unit->isCompleted())
+		{
+			extra = unit->getBuildType().getName();
+		}
+		else if (unit->isTraining() && !unit->getTrainingQueue().empty())
+		{
+			extra = unit->getTrainingQueue()[0].getName();
+		}
+		else if (unit->getType() == BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode ||
+			unit->getType() == BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode)
+		{
+			extra = unit->getType().getName();
+		}
+		else if (unit->isResearching())
+		{
+			extra = unit->getTech().getName();
+		}
+		else if (unit->isUpgrading())
+		{
+			extra = unit->getUpgrade().getName();
+		}
+
+		int x = unit->getPosition().x - 8;
+		int y = unit->getPosition().y - 2;
+		if (extra != "")
+		{
+			BWAPI::Broodwar->drawTextMap(x, y, "%c%s", yellow, extra.c_str());
+		}
+		BWAPI::Broodwar->drawTextMap(x, y + 10, "%c%s", cyan, unit->getOrder().getName().c_str());
+	}
 }
 
 // assigns units to various managers

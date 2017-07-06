@@ -30,7 +30,7 @@ public:
 
 class GameCommander 
 {
-	CombatCommander		    _combatCommander;
+	CombatCommander &		_combatCommander;
 	TimerManager		    _timerManager;
 
 	BWAPI::Unitset          _validUnits;
@@ -61,6 +61,7 @@ public:
 
 	void drawDebugInterface();
     void drawGameInformation(int x, int y);
+	void drawUnitOrders();
 
 	BWAPI::Unit getFirstSupplyProvider();
 	// BWAPI::Unit getClosestUnitToTarget(BWAPI::UnitType type, BWAPI::Position target);

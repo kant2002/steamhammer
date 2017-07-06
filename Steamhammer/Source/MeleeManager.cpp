@@ -11,10 +11,10 @@ MeleeManager::MeleeManager()
 
 void MeleeManager::executeMicro(const BWAPI::Unitset & targets) 
 {
-	assignTargetsOld(targets);
+	assignTargets(targets);
 }
 
-void MeleeManager::assignTargetsOld(const BWAPI::Unitset & targets)
+void MeleeManager::assignTargets(const BWAPI::Unitset & targets)
 {
     const BWAPI::Unitset & meleeUnits = getUnits();
 
@@ -43,7 +43,7 @@ void MeleeManager::assignTargetsOld(const BWAPI::Unitset & targets)
             if (meleeUnitShouldRetreat(meleeUnit, targets))
             {
 				// UAB_ASSERT(meleeUnit->exists(), "bad worker");  // TODO temporary debugging - see Micro::SmartMove
-				BWAPI::Position fleeTo(BWAPI::Broodwar->self()->getStartLocation());
+				BWAPI::Position fleeTo(InformationManager::Instance().getMyMainBaseLocation()->getPosition());
                 Micro::SmartMove(meleeUnit, fleeTo);
             }
 			else if (meleeUnitTargets.empty())
@@ -70,27 +70,6 @@ void MeleeManager::assignTargetsOld(const BWAPI::Unitset & targets)
 				Config::Debug::ColorLineTarget);
 		}
 	}
-}
-
-std::pair<BWAPI::Unit, BWAPI::Unit> MeleeManager::findClosestUnitPair(const BWAPI::Unitset & attackers, const BWAPI::Unitset & targets)
-{
-    std::pair<BWAPI::Unit, BWAPI::Unit> closestPair(nullptr, nullptr);
-    double closestDistance = std::numeric_limits<double>::max();
-
-    for (auto & attacker : attackers)
-    {
-        BWAPI::Unit target = getTarget(attacker, targets);
-        double dist = attacker->getDistance(attacker);
-
-        if (!closestPair.first || (dist < closestDistance))
-        {
-            closestPair.first = attacker;
-            closestPair.second = target;
-            closestDistance = dist;
-        }
-    }
-
-    return closestPair;
 }
 
 // get a target for the meleeUnit to attack
@@ -154,9 +133,14 @@ int MeleeManager::getAttackPriority(BWAPI::Unit attacker, BWAPI::Unit unit)
 		}
 	}
 	// Short circuit: Ranged unit which is far enough outside its range is lower priority than a worker.
-	if (type.groundWeapon() != BWAPI::WeaponTypes::None &&
+	if ((type.groundWeapon() != BWAPI::WeaponTypes::None) &&
 		!type.isWorker() &&
 		attacker->getDistance(unit) > 64 + type.groundWeapon().maxRange())
+	{
+		return 8;
+	}
+	else if (type == BWAPI::UnitTypes::Protoss_Reaver &&
+		attacker->getDistance(unit) > 64 + 8 * 32)  // reaver range is 8 tiles
 	{
 		return 8;
 	}
@@ -166,7 +150,9 @@ int MeleeManager::getAttackPriority(BWAPI::Unit attacker, BWAPI::Unit unit)
 		return 10;
 	}
 	// Medics and ordinary combat units. Include workers that are doing stuff.
-	if (type == BWAPI::UnitTypes::Terran_Medic || type == BWAPI::UnitTypes::Protoss_High_Templar)
+	if (type == BWAPI::UnitTypes::Terran_Medic ||
+		type == BWAPI::UnitTypes::Protoss_High_Templar ||
+		type == BWAPI::UnitTypes::Protoss_Reaver)
 	{
 		return 12;
 	}
@@ -211,24 +197,7 @@ int MeleeManager::getAttackPriority(BWAPI::Unit attacker, BWAPI::Unit unit)
 	return 1;
 }
 
-BWAPI::Unit MeleeManager::closestMeleeUnit(BWAPI::Unit target, const BWAPI::Unitset & meleeUnitsToAssign)
-{
-	double minDistance = 0;
-	BWAPI::Unit closest = nullptr;
-
-	for (auto & meleeUnit : meleeUnitsToAssign)
-	{
-		double distance = meleeUnit->getDistance(target);
-		if (!closest || distance < minDistance)
-		{
-			minDistance = distance;
-			closest = meleeUnit;
-		}
-	}
-	
-	return closest;
-}
-
+// Retreat hurt units to allow them to regenerate health (zerg) or shields (protoss).
 bool MeleeManager::meleeUnitShouldRetreat(BWAPI::Unit meleeUnit, const BWAPI::Unitset & targets)
 {
     // terran don't regen so it doesn't make sense to retreat
@@ -254,92 +223,11 @@ bool MeleeManager::meleeUnitShouldRetreat(BWAPI::Unit meleeUnit, const BWAPI::Un
         }
     }
 
-    return true;
-}
-
-
-// still has bug in it somewhere, use Old version
-void MeleeManager::assignTargetsNew(const BWAPI::Unitset & targets)
-{
-    const BWAPI::Unitset & meleeUnits = getUnits();
-
-	// figure out targets
-	BWAPI::Unitset meleeUnitTargets;
-	for (auto & target : targets) 
+	// A broodling should not retreat since it is on a timer and regeneration does it no good.
+	if (meleeUnit->getType() == BWAPI::UnitTypes::Zerg_Broodling)
 	{
-		// conditions for targeting
-		if (!(target->getType().isFlyer()) && 
-			!(target->isLifted()) &&
-			!(target->getType() == BWAPI::UnitTypes::Zerg_Larva) && 
-			!(target->getType() == BWAPI::UnitTypes::Zerg_Egg) &&
-			target->isVisible()) 
-		{
-			meleeUnitTargets.insert(target);
-		}
+		return false;
 	}
 
-    BWAPI::Unitset meleeUnitsToAssign(meleeUnits);
-    std::map<BWAPI::Unit, int> attackersAssigned;
-
-    for (auto & unit : meleeUnitTargets)
-    {
-        attackersAssigned[unit] = 0;
-    }
-
-    int smallThreshold = BWAPI::Broodwar->self()->getRace() == BWAPI::Races::Zerg ? 3 : 1;
-    int bigThreshold = BWAPI::Broodwar->self()->getRace() == BWAPI::Races::Zerg ? 12 : 3;
-
-    // keep assigning targets while we have attackers and targets remaining
-    while (!meleeUnitsToAssign.empty() && !meleeUnitTargets.empty())
-    {
-        auto attackerAssignment = findClosestUnitPair(meleeUnitsToAssign, meleeUnitTargets);
-        BWAPI::Unit & attacker = attackerAssignment.first;
-        BWAPI::Unit & target = attackerAssignment.second;
-
-        UAB_ASSERT_WARNING(attacker, "We should have chosen an attacker!");
-
-        if (!attacker)
-        {
-            break;
-        }
-
-        if (!target)
-        {
-            Micro::SmartMove(attacker, order.getPosition());
-            continue;
-        }
-
-        Micro::SmartAttackUnit(attacker, target);
-
-        // update the number of units assigned to attack the target we found
-        int & assigned = attackersAssigned[attackerAssignment.second];
-        assigned++;
-
-        // if it's a small / fast unit and there's more than 2 things attacking it already, don't assign more
-        if ((target->getType().isWorker() || target->getType() == BWAPI::UnitTypes::Zerg_Zergling) && (assigned >= smallThreshold))
-        {
-            meleeUnitTargets.erase(target);
-        }
-        // if it's a building and there's more than 10 things assigned to it already, don't assign more
-        else if (assigned > bigThreshold)
-        {
-            meleeUnitTargets.erase(target);
-        }
-
-        meleeUnitsToAssign.erase(attacker);
-    }
-
-    // if there's no targets left, attack move to the order destination
-    if (meleeUnitTargets.empty())
-    {
-        for (auto & unit : meleeUnitsToAssign)    
-        {
-			if (unit->getDistance(order.getPosition()) > 100)
-			{
-				// move to it
-				Micro::SmartMove(unit, order.getPosition());
-                BWAPI::Broodwar->drawLineMap(unit->getPosition(), order.getPosition(), BWAPI::Colors::Yellow);
-			}
-        }
-    }
+	return true;
 }

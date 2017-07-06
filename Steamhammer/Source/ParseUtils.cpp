@@ -66,11 +66,12 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
         JSONTools::ReadBool("UseSparcraftSimulation", micro, Config::Micro::UseSparcraftSimulation);
         JSONTools::ReadBool("KiteWithRangedUnits", micro, Config::Micro::KiteWithRangedUnits);
         JSONTools::ReadBool("WorkersDefendRush", micro, Config::Micro::WorkersDefendRush);
-        JSONTools::ReadInt("RetreatMeleeUnitShields", micro, Config::Micro::RetreatMeleeUnitShields);
-        JSONTools::ReadInt("RetreatMeleeUnitHP", micro, Config::Micro::RetreatMeleeUnitHP);
-        JSONTools::ReadInt("RegroupRadius", micro, Config::Micro::CombatRegroupRadius);
-        JSONTools::ReadInt("UnitNearEnemyRadius", micro, Config::Micro::UnitNearEnemyRadius);
-		JSONTools::ReadInt("ScoutDefenseRadius", micro, Config::Micro::ScoutDefenseRadius);
+
+		Config::Micro::RetreatMeleeUnitShields = GetIntByRace("RetreatMeleeUnitShields", micro);
+		Config::Micro::RetreatMeleeUnitHP = GetIntByRace("RetreatMeleeUnitHP", micro);
+		Config::Micro::CombatRegroupRadius = GetIntByRace("RegroupRadius", micro);
+		Config::Micro::UnitNearEnemyRadius = GetIntByRace("UnitNearEnemyRadius", micro);
+		Config::Micro::ScoutDefenseRadius = GetIntByRace("ScoutDefenseRadius", micro);
 
         if (micro.HasMember("KiteLongerRangedUnits") && micro["KiteLongerRangedUnits"].IsArray())
         {
@@ -93,16 +94,11 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
     {
         const rapidjson::Value & macro = doc["Macro"];
         JSONTools::ReadInt("BOSSFrameLimit", macro, Config::Macro::BOSSFrameLimit);
-        JSONTools::ReadInt("BuildingSpacing", macro, Config::Macro::BuildingSpacing);
         JSONTools::ReadInt("PylonSpacing", macro, Config::Macro::PylonSpacing);
-        JSONTools::ReadInt("WorkersPerRefinery", macro, Config::Macro::WorkersPerRefinery);
 
-		// Max workers per mineral patch at a base, a floating point number that varies by race.
-		const char * wppIndex = (BWAPI::Broodwar->self()->getRace().getName() + "_WorkersPerPatch").c_str();
-		if (macro.HasMember(wppIndex) && macro[wppIndex].IsDouble())
-		{
-			Config::Macro::WorkersPerPatch = macro[wppIndex].GetDouble();
-		}
+		Config::Macro::BuildingSpacing = GetIntByRace("BuildingSpacing", macro);
+		Config::Macro::WorkersPerRefinery = GetIntByRace("WorkersPerRefinery", macro);
+		Config::Macro::WorkersPerPatch = GetDoubleByRace("WorkersPerPatch", macro);
 	}
 
     // Parse the Debug Options
@@ -130,7 +126,8 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
 		JSONTools::ReadBool("DrawBaseInfo", debug, Config::Debug::DrawBaseInfo);
 		JSONTools::ReadBool("DrawStrategyBossInfo", debug, Config::Debug::DrawStrategyBossInfo);
 		JSONTools::ReadBool("DrawUnitTargetInfo", debug, Config::Debug::DrawUnitTargetInfo);
-        JSONTools::ReadBool("DrawReservedBuildingTiles", debug, Config::Debug::DrawReservedBuildingTiles);
+		JSONTools::ReadBool("DrawUnitOrders", debug, Config::Debug::DrawUnitOrders);
+		JSONTools::ReadBool("DrawReservedBuildingTiles", debug, Config::Debug::DrawReservedBuildingTiles);
         JSONTools::ReadBool("DrawBOSSStateInfo", debug, Config::Debug::DrawBOSSStateInfo); 
     }
 
@@ -431,11 +428,11 @@ bool ParseUtils::GetBoolFromString(const std::string & str)
 	std::string boolStr(str);
 	std::transform(boolStr.begin(), boolStr.end(), boolStr.begin(), ::tolower);
 
-	if (boolStr == "true" || boolStr == "t")
+	if (boolStr == "true")
 	{
 		return true;
 	}
-	else if (boolStr == "false" || boolStr == "f")
+	else if (boolStr == "false")
 	{
 		return false;
 	}
@@ -445,4 +442,70 @@ bool ParseUtils::GetBoolFromString(const std::string & str)
 	}
 
 	return false;
+}
+
+// Return an integer which may be different depending on our race. The forms are:
+//     "Item" : 10
+// and
+//     "Item" : { "Zerg" : 1, "Protoss" : 2, "Terran" : 3 }
+// Anything that is missing defaults to 0. So
+//     "Item" : { "Zerg" : 1 }
+// is the same as
+//     "Item" : { "Zerg" : 1, "Protoss" : 0, "Terran" : 0 }
+// "Item" itself must be given in one form or another, though, so we can catch typos.
+int ParseUtils::GetIntByRace(const char * name, const rapidjson::Value & item)
+{
+	if (item.HasMember(name))
+	{
+		// "Item" : 10
+		if (item[name].IsInt())
+		{
+			return item[name].GetInt();
+		}
+
+		// "Item" : { "Zerg" : 1, "Protoss" : 2, "Terran" : 3 }
+		if (item[name].IsObject())
+		{
+			const std::string raceStr(BWAPI::Broodwar->self()->getRace().getName());
+			if (item[name].HasMember(raceStr.c_str()) && item[name][raceStr.c_str()].IsInt())
+			{
+				return item[name][raceStr.c_str()].GetInt();
+			}
+		}
+	}
+	else
+	{
+		UAB_ASSERT_WARNING(false, "Wrong/missing config entry '%s'", name);
+	}
+
+	return 0;
+}
+
+// Similar to GetIntByRace(). Defaults to 0.0 (you probably don't want that).
+double ParseUtils::GetDoubleByRace(const char * name, const rapidjson::Value & item)
+{
+	if (item.HasMember(name))
+	{
+		// "Item" : 10.0
+		if (item[name].IsDouble())
+		{
+			return item[name].GetDouble();
+		}
+
+		// "Item" : { "Zerg" : 1.5, "Protoss" : 3.0, "Terran" : 4.5 }
+		if (item[name].IsObject())
+		{
+			const std::string raceStr(BWAPI::Broodwar->self()->getRace().getName());
+			if (item[name].HasMember(raceStr.c_str()) && item[name][raceStr.c_str()].IsDouble())
+			{
+				return item[name][raceStr.c_str()].GetDouble();
+			}
+		}
+	}
+	else
+	{
+		UAB_ASSERT_WARNING(false, "Wrong/missing config entry '%s'", name);
+	}
+
+	return 0.0;
 }

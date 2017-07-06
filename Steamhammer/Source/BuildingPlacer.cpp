@@ -1,6 +1,7 @@
 #include "Common.h"
 #include "BuildingPlacer.h"
 #include "MapGrid.h"
+#include "MapTools.h"
 
 using namespace UAlbertaBot;
 
@@ -31,7 +32,7 @@ bool BuildingPlacer::isInResourceBox(int x, int y) const
 
 void BuildingPlacer::computeResourceBox()
 {
-    BWAPI::Position start(BWAPI::Broodwar->self()->getStartLocation());
+    BWAPI::Position start(InformationManager::Instance().getMyMainBaseLocation()->getPosition());
     BWAPI::Unitset unitsAroundNexus;
 
     for (auto & unit : BWAPI::Broodwar->getAllUnits())
@@ -101,7 +102,7 @@ bool BuildingPlacer::tileBlocksAddon(BWAPI::TilePosition position) const
 
     for (int i=0; i<=2; ++i)
     {
-        for (auto & unit : BWAPI::Broodwar->getUnitsOnTile(position.x - i,position.y))
+        for (auto unit : BWAPI::Broodwar->getUnitsOnTile(position.x - i,position.y))
         {
             if (unit->getType() == BWAPI::UnitTypes::Terran_Command_Center ||
                 unit->getType() == BWAPI::UnitTypes::Terran_Factory ||
@@ -117,11 +118,9 @@ bool BuildingPlacer::tileBlocksAddon(BWAPI::TilePosition position) const
 }
 
 // Can we build this building here with the specified amount of space?
-// space value is stored in this->buildDistance.
+// Space value is buildDist. horizontalOnly means only horizontal spacing.
 bool BuildingPlacer::canBuildHereWithSpace(BWAPI::TilePosition position,const Building & b,int buildDist,bool horizontalOnly) const
 {
-    BWAPI::UnitType type = b.type;
-
     //if we can't build here, we of course can't build here with space
     if (!canBuildHere(position,b))
     {
@@ -149,7 +148,7 @@ bool BuildingPlacer::canBuildHereWithSpace(BWAPI::TilePosition position,const Bu
 
     if (b.type.isAddon())
     {
-        const BWAPI::UnitType builderType = type.whatBuilds().first;
+        const BWAPI::UnitType builderType = b.type.whatBuilds().first;
 
         BWAPI::TilePosition builderTile(position.x - builderType.tileWidth(),position.y + 2 - builderType.tileHeight());
 
@@ -171,7 +170,7 @@ bool BuildingPlacer::canBuildHereWithSpace(BWAPI::TilePosition position,const Bu
         return false;
     }
 
-    // if we can't build here, or space is reserved, or it's in the resource box, we can't build here
+    // if space is reserved, or it's in the resource box, we can't build here
     for (int x = startx; x < endx; x++)
     {
         for (int y = starty; y < endy; y++)
@@ -273,7 +272,7 @@ bool BuildingPlacer::buildable(const Building & b,int x,int y) const
         return false;
     }
 
-	if ((BWAPI::Broodwar->self()->getRace() == BWAPI::Races::Terran) && tileBlocksAddon(tp))
+	if (BWAPI::Broodwar->self()->getRace() == BWAPI::Races::Terran && tileBlocksAddon(tp))
     {
         return false;
     }

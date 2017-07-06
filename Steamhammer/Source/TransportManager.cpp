@@ -1,4 +1,5 @@
 #include "TransportManager.h"
+#include "MapTools.h"
 
 using namespace UAlbertaBot;
 

@@ -13,6 +13,7 @@ namespace Micro
 	void SmartRightClick(BWAPI::Unit unit, BWAPI::Unit target);
     void SmartLaySpiderMine(BWAPI::Unit unit, BWAPI::Position pos);
     void SmartRepair(BWAPI::Unit unit, BWAPI::Unit target);
+	bool SmartScan(const BWAPI::Position & targetPosition);
 	void SmartReturnCargo(BWAPI::Unit worker);
 	void SmartKiteTarget(BWAPI::Unit rangedUnit, BWAPI::Unit target);
     void MutaDanceTarget(BWAPI::Unit muta, BWAPI::Unit target);
