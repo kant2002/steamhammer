@@ -35,7 +35,7 @@ namespace SparCraft
                 System::FatalError("Units with just air weapons currently not supported correctly: " + type.getName());
             }
 
-            if (type.isBuilding() && !(type == BWAPI::UnitTypes::Protoss_Photon_Cannon || type == BWAPI::UnitTypes::Zerg_Sunken_Colony || type == BWAPI::UnitTypes::Terran_Missile_Turret))
+			if (type.isBuilding() && !(type == BWAPI::UnitTypes::Protoss_Photon_Cannon || type == BWAPI::UnitTypes::Zerg_Sunken_Colony || type == BWAPI::UnitTypes::Terran_Missile_Turret))
             {
                 System::FatalError("Non-attacking buildings not currently supported: " + type.getName());
             }
@@ -45,7 +45,7 @@ namespace SparCraft
                 System::FatalError("Spell casting units not currently supported: " + type.getName());
             }
 
-             // Don't support units loading other units yet
+            // Don't support units loading other units yet
             if (type == BWAPI::UnitTypes::Terran_Vulture_Spider_Mine || 
                 type == BWAPI::UnitTypes::Protoss_Carrier || 
                 type == BWAPI::UnitTypes::Protoss_Interceptor || 
@@ -53,11 +53,12 @@ namespace SparCraft
                 type == BWAPI::UnitTypes::Protoss_Scarab ||
                 type == BWAPI::UnitTypes::Zerg_Broodling)
             {
-
                 System::FatalError("Units which have unit projectiles not supported: " + type.getName());
             }
         }
 
+		// Note: Duplicates code with checkSupportedUnitType above.
+		// TODO combine them (maybe simplify the error messages above)
         bool isSupportedUnitType(const BWAPI::UnitType & type)
         {
             if (type == BWAPI::UnitTypes::None || type == BWAPI::UnitTypes::Unknown)
@@ -73,8 +74,10 @@ namespace SparCraft
                 return false;
             }
 
-            if (type.isBuilding() && !(type == BWAPI::UnitTypes::Protoss_Photon_Cannon || type == BWAPI::UnitTypes::Zerg_Sunken_Colony || type == BWAPI::UnitTypes::Terran_Missile_Turret))
-            {
+			// TODO Zerg spore colony is not supported, even if allowed here.
+			if (type.isBuilding() && !(type == BWAPI::UnitTypes::Protoss_Photon_Cannon || type == BWAPI::UnitTypes::Zerg_Sunken_Colony || type == BWAPI::UnitTypes::Terran_Missile_Turret))
+			// if (type.isBuilding() && !(type == BWAPI::UnitTypes::Protoss_Photon_Cannon || type == BWAPI::UnitTypes::Zerg_Sunken_Colony || type == BWAPI::UnitTypes::Zerg_Spore_Colony || type == BWAPI::UnitTypes::Terran_Missile_Turret))
+			{
                 return false;
             }
 

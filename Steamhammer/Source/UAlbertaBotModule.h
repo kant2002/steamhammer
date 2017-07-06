@@ -8,7 +8,6 @@
 #include "MapTools.h"
 #include "HardCodedInfo.h"
 #include "Config.h"
-#include "AutoObserver.h"
 
 #include "rapidjson\document.h"
 
@@ -17,8 +16,6 @@ namespace UAlbertaBot
 
 class UAlbertaBotModule : public BWAPI::AIModule
 {
-	GameCommander   _gameCommander;
-    AutoObserver    _autoObserver;
 
 public:
 

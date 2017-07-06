@@ -1,4 +1,6 @@
 #include "MapTools.h"
+#include "BuildingPlacer.h"
+#include "InformationManager.h"
 
 using namespace UAlbertaBot;
 
@@ -199,7 +201,8 @@ void MapTools::search(DistanceMap & dmap,const int sR,const int sC)
 const std::vector<BWAPI::TilePosition> & MapTools::getClosestTilesTo(BWAPI::Position pos)
 {
     // make sure the distance map is calculated with pos as a destination
-    int a = getGroundDistance(BWAPI::Position(BWAPI::Broodwar->self()->getStartLocation()),pos);
+//    int a = getGroundDistance(BWAPI::Position(BWAPI::Broodwar->self()->getStartLocation()),pos);
+	int a = getGroundDistance(pos, pos);
 
     return _allMaps[pos].getSortedTiles();
 }
@@ -207,11 +210,6 @@ const std::vector<BWAPI::TilePosition> & MapTools::getClosestTilesTo(BWAPI::Posi
 BWAPI::TilePosition MapTools::getTilePosition(int index)
 {
     return BWAPI::TilePosition(index % _cols,index / _cols);
-}
-
-BWAPI::TilePosition MapTools::getNextExpansion()
-{
-    return getNextExpansion(BWAPI::Broodwar->self());
 }
 
 void MapTools::drawHomeDistanceMap()
@@ -230,73 +228,120 @@ void MapTools::drawHomeDistanceMap()
     }
 }
 
-BWAPI::TilePosition MapTools::getNextExpansion(BWAPI::Player player)
+BWAPI::TilePosition MapTools::getNextExpansion(bool hidden, bool minOnlyOK)
 {
-    BWTA::BaseLocation * closestBase = nullptr;
-    double minDistance = 100000;
+	// Abbreviations.
+	BWAPI::Player player = BWAPI::Broodwar->self();
+	BWAPI::Player enemy = BWAPI::Broodwar->enemy();
 
+	// We'll go through the bases and pick the one with the best score.
+	BWTA::BaseLocation * bestBase = nullptr;
+    double bestScore = 0.0;
+	
     BWAPI::TilePosition homeTile = player->getStartLocation();
+	BWAPI::Position myBasePosition(homeTile);
+	BWTA::BaseLocation * enemyBase = InformationManager::Instance().getEnemyMainBaseLocation();
 
-    // for each base location
     for (BWTA::BaseLocation * base : BWTA::getBaseLocations())
     {
-        // if the base has gas
-        if (!base->isMineralOnly() && !(base == BWTA::getStartLocation(player)))
+		double score = 0.0;
+
+        // Do we demand a gas base (!minOnlyOK)?
+		if (!minOnlyOK && base->isMineralOnly())
+		{
+			continue;
+		}
+
+		// Don't expand to an existing base.
+		if (InformationManager::Instance().getBaseOwner(base) != BWAPI::Broodwar->neutral())
+		{
+			continue;
+		}
+        
+        BWAPI::TilePosition tile = base->getTilePosition();
+        bool buildingInTheWay = false;
+
+        for (int x = 0; x < player->getRace().getCenter().tileWidth(); ++x)
         {
-            // get the tile position of the base
-            BWAPI::TilePosition tile = base->getTilePosition();
-            bool buildingInTheWay = false;
-
-            for (int x = 0; x < BWAPI::Broodwar->self()->getRace().getCenter().tileWidth(); ++x)
+			for (int y = 0; y < player->getRace().getCenter().tileHeight(); ++y)
             {
-                for (int y = 0; y < BWAPI::Broodwar->self()->getRace().getCenter().tileHeight(); ++y)
-                {
-                    BWAPI::TilePosition tp(tile.x + x, tile.y + y);
+				if (BuildingPlacer::Instance().isReserved(x,y))
+				{
+					// This happens if we were already planning to expand here. Try somewhere else.
+					buildingInTheWay = true;
+					break;
+				}
 
-                    for (auto & unit : BWAPI::Broodwar->getUnitsOnTile(tp))
+				// TODO bug: this doesn't include enemy buildings which are known but out of sight
+				for (auto & unit : BWAPI::Broodwar->getUnitsOnTile(BWAPI::TilePosition (tile.x + x, tile.y + y)))
+                {
+                    if (unit->getType().isBuilding() && !unit->isLifted())
                     {
-                        if (unit->getType().isBuilding() && !unit->isFlying())
-                        {
-                            buildingInTheWay = true;
-                            break;
-                        }
+                        buildingInTheWay = true;
+                        break;
                     }
                 }
             }
+        }
             
-            if (buildingInTheWay)
-            {
-                continue;
-            }
-
-            // the base's distance from our main nexus
-            BWAPI::Position myBasePosition(player->getStartLocation());
-            BWAPI::Position thisTile = BWAPI::Position(tile);
-            double distanceFromHome = MapTools::Instance().getGroundDistance(thisTile,myBasePosition);
-
-            // if it is not connected, continue
-            if (!BWTA::isConnected(homeTile,tile) || distanceFromHome < 0)
-            {
-                continue;
-            }
-
-            if (!closestBase || distanceFromHome < minDistance)
-            {
-                closestBase = base;
-                minDistance = distanceFromHome;
-            }
+        if (buildingInTheWay)
+        {
+            continue;
         }
 
+        // Want to be close to our own base (unless this is to be a hidden base).
+		double distanceFromUs = MapTools::Instance().getGroundDistance(BWAPI::Position(tile), myBasePosition);
+
+        // if it is not connected, continue
+		if (!BWTA::isConnected(homeTile, tile) || distanceFromUs < 0)
+        {
+            continue;
+        }
+
+		// Want to be far from the enemy base.
+		double distanceFromEnemy = 0.0;
+		if (enemyBase) {
+			BWAPI::TilePosition enemyTile = enemyBase->getTilePosition();
+			distanceFromEnemy = MapTools::Instance().getGroundDistance(BWAPI::Position(tile), BWAPI::Position(enemyTile));
+			if (!BWTA::isConnected(enemyTile, tile) || distanceFromEnemy < 0)
+			{
+				distanceFromEnemy = 0.0;
+			}
+		}
+
+		// Add up the score.
+		score = hidden ? (distanceFromEnemy + distanceFromUs / 2.0) : (distanceFromEnemy / 2.0 - distanceFromUs);
+
+		// More resources -> better.
+		score += 0.01 * base->minerals();
+		if (!minOnlyOK)
+		{
+			score += 0.02 * base->gas();
+		}
+		// Big penalty for enemy buildings in the same region.
+		if (InformationManager::Instance().isEnemyBuildingInRegion(base->getRegion()))
+		{
+			score -= 100.0;
+		}
+
+		// BWAPI::Broodwar->printf("base score %d, %d -> %f",  tile.x, tile.y, score);
+		if (!bestBase || score > bestScore)
+        {
+            bestBase = base;
+			bestScore = score;
+		}
     }
 
-    if (closestBase)
+    if (bestBase)
     {
-        return closestBase->getTilePosition();
-    }
-    else
-    {
-        return BWAPI::TilePositions::None;
-    }
+        return bestBase->getTilePosition();
+	}
+	if (!minOnlyOK)
+	{
+		// We wanted a gas base and there isn't one. Try for a mineral-only base.
+		return getNextExpansion(hidden, true);
+	}
+	return BWAPI::TilePositions::None;
 }
 
 void MapTools::parseMap()

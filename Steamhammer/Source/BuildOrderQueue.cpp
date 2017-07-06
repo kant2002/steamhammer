@@ -5,10 +5,8 @@ using namespace UAlbertaBot;
 BuildOrderQueue::BuildOrderQueue() 
 	: highestPriority(0), 
 	  lowestPriority(0),
-	  defaultPrioritySpacing(10),
-	  numSkippedItems(0)
+	  defaultPrioritySpacing(10)
 {
-	
 }
 
 void BuildOrderQueue::clearAll() 
@@ -21,47 +19,12 @@ void BuildOrderQueue::clearAll()
 	lowestPriority = 0;
 }
 
-BuildOrderItem & BuildOrderQueue::getHighestPriorityItem() 
+BuildOrderItem & BuildOrderQueue::getHighestPriorityItem()
 {
-	// reset the number of skipped items to zero
-	numSkippedItems = 0;
+	UAB_ASSERT(!queue.empty(), "taking from empty queue");
 
 	// the queue will be sorted with the highest priority at the back
 	return queue.back();
-}
-
-BuildOrderItem & BuildOrderQueue::getNextHighestPriorityItem() 
-{
-	assert(queue.size() - 1 - numSkippedItems >= 0);
-
-	// the queue will be sorted with the highest priority at the back
-	return queue[queue.size() - 1 - numSkippedItems];
-}
-
-void BuildOrderQueue::skipItem()
-{
-	// make sure we can skip
-	assert(canSkipItem());
-
-	// skip it
-	numSkippedItems++;
-}
-
-bool BuildOrderQueue::canSkipItem() 
-{
-	// does the queue have more elements
-	bool bigEnough = queue.size() > (size_t)(1 + numSkippedItems);
-
-	if (!bigEnough) 
-	{
-		return false;
-	}
-
-	// is the current highest priority item not blocking a skip
-	bool highestNotBlocking = !queue[queue.size() - 1 - numSkippedItems].blocking;
-
-	// this tells us if we can skip
-	return highestNotBlocking;
 }
 
 void BuildOrderQueue::queueItem(BuildOrderItem b) 
@@ -95,22 +58,22 @@ void BuildOrderQueue::queueItem(BuildOrderItem b)
 	lowestPriority  = (b.priority < lowestPriority)  ? b.priority : lowestPriority;
 }
 
-void BuildOrderQueue::queueAsHighestPriority(MetaType m, bool blocking, bool gasSteal) 
+void BuildOrderQueue::queueAsHighestPriority(MacroAct m, bool gasSteal) 
 {
 	// the new priority will be higher
 	int newPriority = highestPriority + defaultPrioritySpacing;
 
 	// queue the item
-	queueItem(BuildOrderItem(m, newPriority, blocking, gasSteal));
+	queueItem(BuildOrderItem(m, newPriority, gasSteal));
 }
 
-void BuildOrderQueue::queueAsLowestPriority(MetaType m, bool blocking) 
+void BuildOrderQueue::queueAsLowestPriority(MacroAct m) 
 {
 	// the new priority will be higher
 	int newPriority = lowestPriority - defaultPrioritySpacing;
 
 	// queue the item
-	queueItem(BuildOrderItem(m, newPriority, blocking));
+	queueItem(BuildOrderItem(m, newPriority));
 }
 
 void BuildOrderQueue::removeHighestPriorityItem() 
@@ -123,37 +86,66 @@ void BuildOrderQueue::removeHighestPriorityItem()
 	lowestPriority  = queue.empty() ? 0 : lowestPriority;
 }
 
-void BuildOrderQueue::removeCurrentHighestPriorityItem() 
-{
-	// remove the back element of the vector
-	queue.erase(queue.begin() + queue.size() - 1 - numSkippedItems);
-
-	//assert((int)(queue.size()) < size);
-
-	// if the list is not empty, set the highest accordingly
-	highestPriority = queue.empty() ? 0 : queue.back().priority;
-	lowestPriority  = queue.empty() ? 0 : lowestPriority;
-}
-
-size_t BuildOrderQueue::size() 
+size_t BuildOrderQueue::size() const
 {
 	return queue.size();
 }
 
-bool BuildOrderQueue::isEmpty()
+bool BuildOrderQueue::isEmpty() const
 {
-	return (queue.size() == 0);
+	return queue.empty();
 }
 
-BuildOrderItem BuildOrderQueue::operator [] (int i)
+bool BuildOrderQueue::anyInQueue(BWAPI::UpgradeType type)
 {
-	return queue[i];
+	for (auto & item : queue)
+	{
+		if (item.macroAct.isUpgrade() && item.macroAct.getUpgradeType() == type)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
-void BuildOrderQueue::drawQueueInformation(int x, int y) 
+bool BuildOrderQueue::anyInQueue(BWAPI::UnitType type)
 {
-	//x = x + 25;
+	for (auto & item : queue)
+	{
+		if (item.macroAct.isUnit() && item.macroAct.getUnitType() == type)
+		{
+			return true;
+		}
+	}
+	return false;
+}
 
+size_t BuildOrderQueue::numInQueue(BWAPI::UnitType type)
+{
+	size_t count = 0;
+	for (auto & item : queue)
+	{
+		if (item.macroAct.isUnit() && item.macroAct.getUnitType() == type)
+		{
+			++count;
+		}
+	}
+	return count;
+}
+
+void BuildOrderQueue::totalCosts(int & minerals, int & gas)
+{
+	minerals = 0;
+	gas = 0;
+	for (auto & item : queue)
+	{
+		minerals += item.macroAct.mineralPrice();
+		gas += item.macroAct.gasPrice();
+	}
+}
+
+void BuildOrderQueue::drawQueueInformation(int x, int y, bool outOfBook) 
+{
     if (!Config::Debug::DrawProductionInfo)
     {
         return;
@@ -161,39 +153,65 @@ void BuildOrderQueue::drawQueueInformation(int x, int y)
 	
 	std::string prefix = "\x04";
 
-	size_t reps = queue.size() < 12 ? queue.size() : 12;
-
-	// for each unit in the queue
+	size_t reps = std::min(size_t(12), queue.size());
+	int remaining = queue.size() - reps;
+	
+	// for each item in the queue
 	for (size_t i(0); i<reps; i++) {
 
 		prefix = "\x04";
 
-        const MetaType & type = queue[queue.size() - 1 - i].metaType;
+		const BuildOrderItem & item = queue[queue.size() - 1 - i];
+        const MacroAct & act = item.macroAct;
 
-        if (type.isUnit())
+        if (act.isUnit())
         {
-            if (type.getUnitType().isWorker())
+            if (act.getUnitType().isWorker())
             {
                 prefix = "\x1F";
             }
-            else if (type.getUnitType().supplyProvided() > 0)
+            else if (act.getUnitType().supplyProvided() > 0)
             {
                 prefix = "\x03";
             }
-            else if (type.getUnitType().isRefinery())
+            else if (act.getUnitType().isRefinery())
             {
                 prefix = "\x1E";
             }
-            else if (type.isBuilding())
+            else if (act.isBuilding())
             {
                 prefix = "\x11";
             }
-            else if (type.getUnitType().groundWeapon() != BWAPI::WeaponTypes::None || type.getUnitType().airWeapon() != BWAPI::WeaponTypes::None)
+            else if (act.getUnitType().groundWeapon() != BWAPI::WeaponTypes::None || act.getUnitType().airWeapon() != BWAPI::WeaponTypes::None)
             {
                 prefix = "\x06";
             }
         }
+		else if (act.isCommand())
+		{
+			prefix = "\x04";
+		}
 
-		BWAPI::Broodwar->drawTextScreen(x, y+(i*10), " %s%s", prefix.c_str(), type.getName().c_str());
+		BWAPI::Broodwar->drawTextScreen(x, y, " %s%s", prefix.c_str(), TrimRaceName(act.getName()).c_str());
+		y += 10;
 	}
+
+	std::stringstream endMark;
+	if (remaining > 0)
+	{
+		endMark << '+' << remaining << " more ";
+	}
+	if (!outOfBook)
+	{
+		endMark << "[book]";
+	}
+	if (!endMark.str().empty())
+	{
+		BWAPI::Broodwar->drawTextScreen(x, y, " %s%s", "\x04", endMark.str().c_str());
+	}
+}
+
+BuildOrderItem BuildOrderQueue::operator [] (int i)
+{
+	return queue[i];
 }

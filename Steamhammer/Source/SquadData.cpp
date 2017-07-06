@@ -4,7 +4,6 @@ using namespace UAlbertaBot;
 
 SquadData::SquadData() 
 {
-	
 }
 
 void SquadData::update()
@@ -88,7 +87,7 @@ void SquadData::drawSquadInformation(int x, int y)
 	BWAPI::Broodwar->drawTextScreen(x, y, "\x04Squads");
 	BWAPI::Broodwar->drawTextScreen(x, y+20, "\x04NAME");
 	BWAPI::Broodwar->drawTextScreen(x+150, y+20, "\x04SIZE");
-	BWAPI::Broodwar->drawTextScreen(x+200, y+20, "\x04LOCATION");
+	BWAPI::Broodwar->drawTextScreen(x+180, y+20, "\x04LOCATION");
 
 	int yspace = 0;
 
@@ -98,14 +97,15 @@ void SquadData::drawSquadInformation(int x, int y)
 
 		const BWAPI::Unitset & units = squad.getUnits();
 		const SquadOrder & order = squad.getSquadOrder();
+		char code = order.getCharCode();               // A == attack, etc.
 
-		BWAPI::Broodwar->drawTextScreen(x, y+40+((yspace)*10), "\x03%s", squad.getName().c_str());
+		BWAPI::Broodwar->drawTextScreen(x, y+40+((yspace)*10), "\x03 %c %s", code, squad.getName().c_str());
 		BWAPI::Broodwar->drawTextScreen(x+150, y+40+((yspace)*10), "\x03%d", units.size());
-		BWAPI::Broodwar->drawTextScreen(x+200, y+40+((yspace++)*10), "\x03(%d,%d)", order.getPosition().x, order.getPosition().y);
+		BWAPI::Broodwar->drawTextScreen(x+180, y+40+((yspace++)*10), "\x03(%d,%d)", order.getPosition().x, order.getPosition().y);
 
 		BWAPI::Broodwar->drawCircleMap(order.getPosition(), 10, BWAPI::Colors::Green, true);
         BWAPI::Broodwar->drawCircleMap(order.getPosition(), order.getRadius(), BWAPI::Colors::Red, false);
-        BWAPI::Broodwar->drawTextMap(order.getPosition() + BWAPI::Position(0, 12), "%s", squad.getName().c_str());
+        BWAPI::Broodwar->drawTextMap(order.getPosition() + BWAPI::Position(0, 10), "%s", squad.getName().c_str());
 
         for (const BWAPI::Unit unit : units)
         {

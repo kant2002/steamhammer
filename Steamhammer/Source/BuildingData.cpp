@@ -4,7 +4,6 @@ using namespace UAlbertaBot;
 
 BuildingData::BuildingData()
 {
-
 }
 
 void BuildingData::removeBuilding(const Building & b)

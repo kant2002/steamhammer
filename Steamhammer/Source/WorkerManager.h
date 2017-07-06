@@ -12,15 +12,19 @@ class WorkerManager
 {
     WorkerData  workerData;
     BWAPI::Unit previousClosestWorker;
+	bool		_collectGas;
 
-    void        setMineralWorker(BWAPI::Unit unit);
-    bool        isGasStealRefinery(BWAPI::Unit unit);
-    
-    void        handleIdleWorkers();
-    void        handleGasWorkers();
+	void        setMineralWorker(BWAPI::Unit unit);
+	void        setReturnCargoWorker(BWAPI::Unit unit);
+	bool		refineryHasDepot(BWAPI::Unit refinery);
+	bool        isGasStealRefinery(BWAPI::Unit unit);
+
+	void        handleGasWorkers();
+	void        handleIdleWorkers();
+	void		handleReturnCargoWorkers();
+	void        handleRepairWorkers();
+	void        handleCombatWorkers();
     void        handleMoveWorkers();
-    void        handleCombatWorkers();
-    void        handleRepairWorkers();
 
     WorkerManager();
 
@@ -31,24 +35,28 @@ public:
     void        onUnitMorph(BWAPI::Unit unit);
     void        onUnitShow(BWAPI::Unit unit);
     void        onUnitRenegade(BWAPI::Unit unit);
-    void        finishedWithWorker(BWAPI::Unit unit);
 
+    void        finishedWithWorker(BWAPI::Unit unit);
     void        finishedWithCombatWorkers();
 
     void        drawResourceDebugInfo();
     void        updateWorkerStatus();
     void        drawWorkerInformation(int x,int y);
 
-    int         getNumMineralWorkers();
-    int         getNumGasWorkers();
-    int         getNumIdleWorkers();
+    int         getNumMineralWorkers() const;
+    int         getNumGasWorkers() const;
+    int         getNumIdleWorkers() const;
+
     void        setScoutWorker(BWAPI::Unit worker);
+
+	bool		isCollectingGas()              { return _collectGas; };
+	void		setCollectGas(bool collectGas) { _collectGas = collectGas; };
 
     bool        isWorkerScout(BWAPI::Unit worker);
     bool        isFree(BWAPI::Unit worker);
     bool        isBuilder(BWAPI::Unit worker);
 
-    BWAPI::Unit getBuilder(Building & b,bool setJobAsBuilder = true);
+    BWAPI::Unit getBuilder(const Building & b,bool setJobAsBuilder = true);
     BWAPI::Unit getMoveWorker(BWAPI::Position p);
     BWAPI::Unit getClosestDepot(BWAPI::Unit worker);
     BWAPI::Unit getGasWorker(BWAPI::Unit refinery);

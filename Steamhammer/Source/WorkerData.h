@@ -17,7 +17,6 @@ public:
         , gasNeeded(g)
         , position(p)
 	{
-		
 	}
 
 	WorkerMoveData() {}
@@ -28,26 +27,25 @@ class WorkerData
 
 public:
 
-	enum WorkerJob {Minerals, Gas, Build, Combat, Idle, Repair, Move, Scout, Default};
+	enum WorkerJob {Minerals, Gas, Build, Combat, Idle, Repair, Move, Scout, ReturnCargo, Default};
 
 private:
 
 	BWAPI::Unitset workers;
 	BWAPI::Unitset depots;
 
-	std::map<BWAPI::Unit, enum WorkerJob>         workerJobMap;
-	std::map<BWAPI::Unit, BWAPI::Unit>  workerMineralMap;
-	std::map<BWAPI::Unit, BWAPI::Unit>  workerDepotMap;
-	std::map<BWAPI::Unit, BWAPI::Unit>  workerRefineryMap;
-	std::map<BWAPI::Unit, BWAPI::Unit>  workerRepairMap;
-	std::map<BWAPI::Unit, WorkerMoveData>         workerMoveMap;
-	std::map<BWAPI::Unit, BWAPI::UnitType>        workerBuildingTypeMap;
+	std::map<BWAPI::Unit, enum WorkerJob>	workerJobMap;           // worker -> job
+	std::map<BWAPI::Unit, BWAPI::Unit>		workerDepotMap;         // worker -> resource depot (hatchery)
+	std::map<BWAPI::Unit, BWAPI::Unit>		workerRefineryMap;      // worker -> refinery
+	std::map<BWAPI::Unit, BWAPI::Unit>		workerRepairMap;        // worker -> unit to repair
+	std::map<BWAPI::Unit, WorkerMoveData>	workerMoveMap;          // worker -> location
+	std::map<BWAPI::Unit, BWAPI::UnitType>	workerBuildingTypeMap;  // worker -> building type
 
-	std::map<BWAPI::Unit, int>                    depotWorkerCount;
-	std::map<BWAPI::Unit, int>                    refineryWorkerCount;
+	std::map<BWAPI::Unit, int>				depotWorkerCount;       // mineral workers per depot
+	std::map<BWAPI::Unit, int>				refineryWorkerCount;    // gas workers per refinery
 
-    std::map<BWAPI::Unit, int>                    workersOnMineralPatch;
-    std::map<BWAPI::Unit, BWAPI::Unit>  workerMineralAssignment;
+    std::map<BWAPI::Unit, int>				workersOnMineralPatch;  // workers per mineral patch
+    std::map<BWAPI::Unit, BWAPI::Unit>		workerMineralAssignment;// worker -> mineral patch
 
 	void clearPreviousJob(BWAPI::Unit unit);
 
@@ -80,12 +78,12 @@ public:
 	int						getMineralsNearDepot(BWAPI::Unit depot);
 
 	int						getNumAssignedWorkers(BWAPI::Unit unit);
-	BWAPI::Unit   getMineralToMine(BWAPI::Unit worker);
+	BWAPI::Unit				getMineralToMine(BWAPI::Unit worker);
 
 	enum WorkerJob			getWorkerJob(BWAPI::Unit unit);
-	BWAPI::Unit   getWorkerResource(BWAPI::Unit unit);
-	BWAPI::Unit   getWorkerDepot(BWAPI::Unit unit);
-	BWAPI::Unit   getWorkerRepairUnit(BWAPI::Unit unit);
+	BWAPI::Unit				getWorkerResource(BWAPI::Unit unit);
+	BWAPI::Unit				getWorkerDepot(BWAPI::Unit unit);
+	BWAPI::Unit				getWorkerRepairUnit(BWAPI::Unit unit);
 	BWAPI::UnitType			getWorkerBuildingType(BWAPI::Unit unit);
 	WorkerMoveData			getWorkerMoveData(BWAPI::Unit unit);
 

@@ -50,8 +50,6 @@ void Squad::update()
 	if (Config::Debug::DrawSquadInfo && _order.getType() == SquadOrderTypes::Attack) 
 	{
 		BWAPI::Broodwar->drawTextScreen(200, 350, "%s", _regroupStatus.c_str());
-
-		BWAPI::Unit closest = unitClosestToEnemy();
 	}
 
 	// if we do need to regroup, do it
@@ -64,7 +62,10 @@ void Squad::update()
 		    BWAPI::Broodwar->drawTextScreen(200, 150, "REGROUP");
         }
 
-		BWAPI::Broodwar->drawCircleMap(regroupPosition.x, regroupPosition.y, 30, BWAPI::Colors::Purple, true);
+		if (Config::Debug::DrawSquadInfo)
+		{
+			BWAPI::Broodwar->drawCircleMap(regroupPosition.x, regroupPosition.y, 30, BWAPI::Colors::Purple, true);
+		}
         
 		_meleeManager.regroup(regroupPosition);
 		_rangedManager.regroup(regroupPosition);
@@ -79,8 +80,8 @@ void Squad::update()
 		_lurkerManager.execute(_order);
 		_tankManager.execute(_order);
         _medicManager.execute(_order);
-		_transportManager.update();
 
+		_transportManager.update();
 		_detectorManager.setUnitClosestToEnemy(unitClosestToEnemy());
 		_detectorManager.execute(_order);
 	}
@@ -110,15 +111,11 @@ void Squad::updateUnits()
 
 void Squad::setAllUnits()
 {
-	// clean up the _units vector just in case one of them died
+	// clean up the _units vector in case one of them died
 	BWAPI::Unitset goodUnits;
 	for (auto & unit : _units)
 	{
-		if( unit->isCompleted() && 
-			unit->getHitPoints() > 0 && 
-			unit->exists() &&
-			unit->getPosition().isValid() &&
-			unit->getType() != BWAPI::UnitTypes::Unknown)
+		if (UnitUtil::IsValidUnit(unit))
 		{
 			goodUnits.insert(unit);
 		}
@@ -140,6 +137,7 @@ void Squad::setNearEnemyUnits()
 		int bottom = unit->getType().dimensionDown();
 
 		_nearEnemy[unit] = unitNearEnemy(unit);
+
 		if (Config::Debug::DrawSquadInfo) {
 			BWAPI::Broodwar->drawBoxMap(x - left, y - top, x + right, y + bottom,
 				(_nearEnemy[unit]) ? Config::Debug::ColorUnitNearEnemy : Config::Debug::ColorUnitNotNearEnemy);
@@ -206,18 +204,13 @@ void Squad::addUnitsToMicroManagers()
     _medicManager.setUnits(medicUnits);
 }
 
-// calculates whether or not to regroup
+// calculates whether or not to regroup, aka retreat
 bool Squad::needsToRegroup()
 {
-    if (!Config::Micro::UseSparcraftSimulation)
-    {
-        return false;
-    }
-
 	// if we are not attacking, never regroup
 	if (_units.empty() || (_order.getType() != SquadOrderTypes::Attack))
 	{
-		_regroupStatus = std::string("\x04 No combat units available");
+		_regroupStatus = std::string("\x04 No attackers available");
 		return false;
 	}
 
@@ -261,20 +254,20 @@ bool Squad::needsToRegroup()
         return false;
     }
 
-    SparCraft::ScoreType score = 0;
-
-	//do the SparCraft Simulation!
-	CombatSimulation sim;
-    
-	sim.setCombatUnits(unitClosest->getPosition(), Config::Micro::CombatRegroupRadius);
-	score = sim.simulateCombat();
-
 	// if we are DT rushing and we haven't lost a DT yet, no retreat!
 	if (Config::Strategy::StrategyName == "Protoss_DTRush" && (BWAPI::Broodwar->self()->deadUnitCount(BWAPI::UnitTypes::Protoss_Dark_Templar) == 0))
 	{
 		_regroupStatus = std::string("\x04 DARK TEMPLAR HOOOOO!");
 		return false;
 	}
+
+	SparCraft::ScoreType score = 0;
+
+	//do the SparCraft Simulation!
+	CombatSimulation sim;
+    
+	sim.setCombatUnits(unitClosest->getPosition(), Config::Micro::CombatRegroupRadius);
+	score = sim.simulateCombat();
 
     bool retreat = score < 0;
     int switchTime = 100;
@@ -298,11 +291,11 @@ bool Squad::needsToRegroup()
 	
 	if (retreat)
 	{
-		_regroupStatus = std::string("\x04 Retreat - simulation predicts defeat");
+		_regroupStatus = std::string("\x04 Retreat - predict defeat");
 	}
 	else
 	{
-		_regroupStatus = std::string("\x04 Attack - simulation predicts success");
+		_regroupStatus = std::string("\x04 Attack - predict success");
 	}
 
 	return retreat;
@@ -369,7 +362,9 @@ BWAPI::Position Squad::calcRegroupPosition()
 
 	for (auto & unit : _units)
 	{
-		if (!_nearEnemy[unit])
+		// Don't return the position of an overlord, which may be in a weird place.
+		// Bug fix thanks to AIL!
+		if (!_nearEnemy[unit] && unit->getType() != BWAPI::UnitTypes::Zerg_Overlord)
 		{
 			int dist = unit->getDistance(_order.getPosition());
 			if (dist < minDist)
@@ -384,10 +379,7 @@ BWAPI::Position Squad::calcRegroupPosition()
 	{
 		return BWTA::getRegion(BWTA::getStartLocation(BWAPI::Broodwar->self())->getTilePosition())->getCenter();
 	}
-	else
-	{
-		return regroup;
-	}
+	return regroup;
 }
 
 BWAPI::Unit Squad::unitClosestToEnemy()
@@ -406,7 +398,7 @@ BWAPI::Unit Squad::unitClosestToEnemy()
 		// the distance to the order position
 		int dist = MapTools::Instance().getGroundDistance(unit->getPosition(), _order.getPosition());
 
-		if (dist != -1 && (!closest || dist < closestDist))
+		if (dist != -1 && dist < closestDist)
 		{
 			closest = unit;
 			closestDist = dist;
@@ -423,7 +415,8 @@ BWAPI::Unit Squad::unitClosestToEnemy()
 				continue;
 			}
 
-			// the distance to the order position
+			// the distance to the enemy base
+			// TODO does this work at all?
 			int dist = unit->getDistance(BWAPI::Position(BWAPI::Broodwar->enemy()->getStartLocation()));
 
 			if (dist != -1 && (!closest || dist < closestDist))

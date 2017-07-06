@@ -25,10 +25,13 @@ void DetectorManager::executeMicro(const BWAPI::Unitset & targets)
 	for (auto & unit : BWAPI::Broodwar->enemy()->getUnits())
 	{
 		// conditions for targeting
-		if (unit->getType() == BWAPI::UnitTypes::Zerg_Lurker ||
-			unit->getType() == BWAPI::UnitTypes::Protoss_Dark_Templar ||
-			unit->getType() == BWAPI::UnitTypes::Terran_Wraith ||
-			unit->getType() == BWAPI::UnitTypes::Terran_Vulture_Spider_Mine)
+		// TODO is this good enough for arbiters?
+		if (unit->getType().hasPermanentCloak() ||     // dark templar, observer
+			unit->getType().isCloakable() ||           // wraith, ghost
+			unit->getType() == BWAPI::UnitTypes::Terran_Vulture_Spider_Mine ||
+			unit->getType() == BWAPI::UnitTypes::Zerg_Lurker ||
+			unit->isBurrowed() ||
+			(unit->isVisible() && !unit->isDetected()))
 		{
 			cloakedUnits.insert(unit);
 			cloakedUnitMap[unit] = false;
@@ -48,14 +51,15 @@ void DetectorManager::executeMicro(const BWAPI::Unitset & targets)
 		}
 		// otherwise there is no battle or no closest to enemy so we don't want our detectorUnit to die
 		// send him to scout around the map
+		/* no, don't - not so smart for overlords
 		else
 		{
 			BWAPI::Position explorePosition = MapGrid::Instance().getLeastExplored();
 			Micro::SmartMove(detectorUnit, explorePosition);
 		}
+		*/
 	}
 }
-
 
 BWAPI::Unit DetectorManager::closestCloakedUnit(const BWAPI::Unitset & cloakedUnits, BWAPI::Unit detectorUnit)
 {

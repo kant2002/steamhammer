@@ -114,8 +114,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\Source\AutoObserver.cpp" />
     <ClCompile Include="..\Source\BOSSManager.cpp" />
+    <ClCompile Include="..\Source\BuildingData.cpp" />
     <ClCompile Include="..\source\BuildingManager.cpp" />
     <ClCompile Include="..\source\BuildingPlacer.cpp" />
     <ClCompile Include="..\source\BuildOrder.cpp" />
@@ -130,11 +130,11 @@
     <ClCompile Include="..\source\JSONTools.cpp" />
     <ClCompile Include="..\Source\Logger.cpp" />
     <ClCompile Include="..\Source\LurkerManager.cpp" />
+    <ClCompile Include="..\Source\MacroAct.cpp" />
     <ClCompile Include="..\Source\MapGrid.cpp" />
     <ClCompile Include="..\Source\MapTools.cpp" />
     <ClCompile Include="..\Source\MedicManager.cpp" />
     <ClCompile Include="..\source\MeleeManager.cpp" />
-    <ClCompile Include="..\source\MetaType.cpp" />
     <ClCompile Include="..\source\MicroManager.cpp" />
     <ClCompile Include="..\Source\Config.cpp" />
     <ClCompile Include="..\Source\Micro.cpp" />
@@ -144,6 +144,7 @@
     <ClCompile Include="..\source\ScoutManager.cpp" />
     <ClCompile Include="..\Source\Squad.cpp" />
     <ClCompile Include="..\Source\SquadData.cpp" />
+    <ClCompile Include="..\Source\StrategyBossZerg.cpp" />
     <ClCompile Include="..\Source\StrategyManager.cpp" />
     <ClCompile Include="..\Source\TankManager.cpp" />
     <ClCompile Include="..\source\TimerManager.cpp" />
@@ -156,8 +157,8 @@
     <ClCompile Include="..\source\WorkerManager.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\Source\AutoObserver.h" />
     <ClInclude Include="..\Source\BOSSManager.h" />
+    <ClInclude Include="..\Source\BuildingData.h" />
     <ClInclude Include="..\source\BuildingManager.h" />
     <ClInclude Include="..\source\BuildingPlacer.h" />
     <ClInclude Include="..\source\BuildOrder.h" />
@@ -168,16 +169,16 @@
     <ClInclude Include="..\source\DetectorManager.h" />
     <ClInclude Include="..\Source\DistanceMap.hpp" />
     <ClInclude Include="..\Source\GameCommander.h" />
-    <ClInclude Include="..\Source\GameHistory.hpp" />
     <ClInclude Include="..\Source\InformationManager.h" />
     <ClInclude Include="..\source\JSONTools.h" />
     <ClInclude Include="..\Source\Logger.h" />
     <ClInclude Include="..\Source\LurkerManager.h" />
+    <ClInclude Include="..\Source\MacroAct.h" />
+    <ClInclude Include="..\Source\MacroCommand.h" />
     <ClInclude Include="..\Source\MapGrid.h" />
     <ClInclude Include="..\Source\MapTools.h" />
     <ClInclude Include="..\Source\MedicManager.h" />
     <ClInclude Include="..\source\MeleeManager.h" />
-    <ClInclude Include="..\source\MetaType.h" />
     <ClInclude Include="..\source\MicroManager.h" />
     <ClInclude Include="..\Source\Config.h" />
     <ClInclude Include="..\Source\Micro.h" />
@@ -188,6 +189,7 @@
     <ClInclude Include="..\Source\Squad.h" />
     <ClInclude Include="..\Source\SquadData.h" />
     <ClInclude Include="..\Source\SquadOrder.h" />
+    <ClInclude Include="..\Source\StrategyBossZerg.h" />
     <ClInclude Include="..\Source\StrategyManager.h" />
     <ClInclude Include="..\Source\TankManager.h" />
     <ClInclude Include="..\source\TimerManager.h" />

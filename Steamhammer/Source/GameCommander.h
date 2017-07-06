@@ -14,7 +14,6 @@
 namespace UAlbertaBot
 {
 
-
 class UnitToAssign
 {
 public:
@@ -39,6 +38,8 @@ class GameCommander
 	BWAPI::Unitset          _scoutUnits;
 
     bool                    _initialScoutSet;
+	bool					_scoutAlways;
+	bool					_scoutIfNeeded;
 
     void                    assignUnit(BWAPI::Unit unit, BWAPI::Unitset & set);
 	bool                    isAssigned(BWAPI::Unit unit) const;
@@ -55,12 +56,15 @@ public:
 	void setScoutUnits();
 	void setCombatUnits();
 
+	void goScoutAlways();
+	void goScoutIfNeeded();
+
 	void drawDebugInterface();
     void drawGameInformation(int x, int y);
 
 	BWAPI::Unit getFirstSupplyProvider();
-	BWAPI::Unit getClosestUnitToTarget(BWAPI::UnitType type, BWAPI::Position target);
-	BWAPI::Unit getClosestWorkerToTarget(BWAPI::Position target);
+	// BWAPI::Unit getClosestUnitToTarget(BWAPI::UnitType type, BWAPI::Position target);
+	BWAPI::Unit getAnyFreeWorker();
 
 	void onUnitShow(BWAPI::Unit unit);
 	void onUnitHide(BWAPI::Unit unit);
@@ -69,6 +73,8 @@ public:
 	void onUnitRenegade(BWAPI::Unit unit);
 	void onUnitDestroy(BWAPI::Unit unit);
 	void onUnitMorph(BWAPI::Unit unit);
+
+	static GameCommander & Instance();
 };
 
 }

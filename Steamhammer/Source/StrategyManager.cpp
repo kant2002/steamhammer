@@ -1,10 +1,10 @@
-#include "Common.h"
 #include "StrategyManager.h"
+#include "ProductionManager.h"
+#include "StrategyBossZerg.h"
 #include "UnitUtil.h"
 
 using namespace UAlbertaBot;
 
-// constructor
 StrategyManager::StrategyManager() 
 	: _selfRace(BWAPI::Broodwar->self()->getRace())
 	, _enemyRace(BWAPI::Broodwar->enemy()->getRace())
@@ -12,7 +12,6 @@ StrategyManager::StrategyManager()
 {
 }
 
-// get an instance of this
 StrategyManager & StrategyManager::Instance() 
 {
 	static StrategyManager instance;
@@ -90,17 +89,15 @@ void StrategyManager::addStrategy(const std::string & name, Strategy & strategy)
 
 const MetaPairVector StrategyManager::getBuildOrderGoal()
 {
-    BWAPI::Race myRace = BWAPI::Broodwar->self()->getRace();
-
-    if (myRace == BWAPI::Races::Protoss)
+    if (_selfRace == BWAPI::Races::Protoss)
     {
         return getProtossBuildOrderGoal();
     }
-    else if (myRace == BWAPI::Races::Terran)
+	else if (_selfRace == BWAPI::Races::Terran)
 	{
 		return getTerranBuildOrderGoal();
 	}
-    else if (myRace == BWAPI::Races::Zerg)
+	else if (_selfRace == BWAPI::Races::Zerg)
 	{
 		return getZergBuildOrderGoal();
 	}
@@ -173,7 +170,7 @@ const MetaPairVector StrategyManager::getProtossBuildOrderGoal() const
     }
     
     // add observer to the goal if the enemy has cloaked units
-	if (InformationManager::Instance().enemyHasCloakedUnits())
+	if (InformationManager::Instance().enemyHasCloakTech())
 	{
 		goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Robotics_Facility, 1));
 		
@@ -214,32 +211,32 @@ const MetaPairVector StrategyManager::getTerranBuildOrderGoal() const
 
     if (Config::Strategy::StrategyName == "Terran_MarineRush")
     {
-	    goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Terran_Marine, numMarines + 8));
+	    goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Marine, numMarines + 8));
 
         if (numMarines > 5)
         {
-            goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Terran_Engineering_Bay, 1));
+            goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Engineering_Bay, 1));
         }
     }
     else if (Config::Strategy::StrategyName == "Terran_4RaxMarines")
     {
-	    goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Terran_Marine, numMarines + 8));
+	    goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Marine, numMarines + 8));
     }
     else if (Config::Strategy::StrategyName == "Terran_VultureRush")
     {
-        goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Terran_Vulture, numVultures + 8));
+        goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Vulture, numVultures + 8));
 
         if (numVultures > 8)
         {
-            goal.push_back(std::pair<MetaType, int>(BWAPI::TechTypes::Tank_Siege_Mode, 1));
-            goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode, 4));
+            goal.push_back(std::pair<MacroAct, int>(BWAPI::TechTypes::Tank_Siege_Mode, 1));
+            goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode, 4));
         }
     }
     else if (Config::Strategy::StrategyName == "Terran_TankPush")
     {
-        goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode, 6));
-        goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Terran_Goliath, numGoliath + 6));
-        goal.push_back(std::pair<MetaType, int>(BWAPI::TechTypes::Tank_Siege_Mode, 1));
+        goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode, 6));
+        goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Goliath, numGoliath + 6));
+        goal.push_back(std::pair<MacroAct, int>(BWAPI::TechTypes::Tank_Siege_Mode, 1));
     }
     else
     {
@@ -248,8 +245,8 @@ const MetaPairVector StrategyManager::getTerranBuildOrderGoal() const
 
     if (shouldExpandNow())
     {
-        goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Terran_Command_Center, numCC + 1));
-        goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Terran_SCV, numWorkers + 10));
+        goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Command_Center, numCC + 1));
+        goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_SCV, numWorkers + 10));
     }
 
 	return goal;
@@ -291,178 +288,177 @@ const MetaPairVector StrategyManager::getZergBuildOrderGoal() const
 	BWAPI::UpgradeType armor = BWAPI::UpgradeTypes::Zerg_Carapace;
 	BWAPI::TechType lurker_aspect = BWAPI::TechTypes::Lurker_Aspect;
 
-	if (Config::Strategy::StrategyName == "Zerg_4Pool" ||
-		Config::Strategy::StrategyName == "Zerg_5PoolFast" ||
-		Config::Strategy::StrategyName == "Zerg_5PoolSlow" ||
-		Config::Strategy::StrategyName == "Zerg_9Pool" ||
-		Config::Strategy::StrategyName == "Zerg_9Pool>expo" ||
-		Config::Strategy::StrategyName == "Zerg_9Hatch9Pool")
+	if (Config::Strategy::StrategyName == "4PoolHard" ||
+		Config::Strategy::StrategyName == "4PoolSoft" ||
+		Config::Strategy::StrategyName == "5Pool" ||
+		Config::Strategy::StrategyName == "9PoolSpeed" ||
+		Config::Strategy::StrategyName == "9PoolExpo" ||
+		Config::Strategy::StrategyName == "9HatchMain9Pool9Gas" ||
+		Config::Strategy::StrategyName == "9HatchExpo9Pool9Gas" ||
+		Config::Strategy::StrategyName == "3HatchLing")
 	{
-		// Zerglings.
-        goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Zergling, nLings + 6));
+		// Zergling strategies.
+        goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Zergling, nLings + 6));
 		if (minerals > 400)
 		{
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hatchery, nHatches + 1));
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 2)));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Hatchery, nHatches + 1));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 2)));
 		}
 		else if (nDrones < 9 * nHatches) {
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 1)));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 1)));
 		}
 	}
-	else if (Config::Strategy::StrategyName == "Zerg_9Pool>Lurk")
+	else if (Config::Strategy::StrategyName == "9PoolLurk")
 	{
-		// Lurkling.
+		// Lurkling. Unused strategy.
 		// TODO This fails due to BOSS bug--all BOSS searches return no solution,
 		// even if the goal is only to make 4 zerglings and it could be done in 1 step.
-		// See to-do list.
 		bool addingHatch = false;
 		// Decide about hatcheries and drones.
 		if (nHatches == 1 && minerals > 300 && nLurkers >= 4 && nDrones >= 8 * nHatches) {
 			addingHatch = true;
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hatchery, nHatches + 1));
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 6)));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Hatchery, nHatches + 1));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 6)));
 		}
 		else if (minerals > 500 && nLurkers >= 4 && nDrones >= 8 * nHatches) {
 			if (minerals > 1000) {
 				addingHatch = true;
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hatchery, nHatches + 2));
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 9)));
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Hatchery, nHatches + 2));
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 9)));
 			}
 			else {
 				addingHatch = true;
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hatchery, nHatches + 1));
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 6)));
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Hatchery, nHatches + 1));
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 6)));
 			}
 		}
 		else if (minerals > 600 && nLurkers >= 6 && nDrones < 8 * nHatches) {
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 6)));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 6)));
 		}
 		else if (nHatches == 0 && minerals >= 300) {
 			addingHatch = true;
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hatchery, 1));
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 4)));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Hatchery, 1));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 4)));
 		}
 		else {
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 3)));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 3)));
 		}
 		// Decide about unit mix based on gas and minerals.
 		// If low on gas, get lings and research ling upgrades.
 		if (gas <= 100 && minerals >= 300 && !addingHatch) {
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Zergling, nLings + 4));
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UpgradeTypes::Metabolic_Boost, 1));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Zergling, nLings + 4));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Metabolic_Boost, 1));
 			if (nGas < nHatches) {
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Extractor, nGas + 1));
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Extractor, nGas + 1));
 			}
 			if (nHives > 0) {
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UpgradeTypes::Adrenal_Glands, 1));
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Adrenal_Glands, 1));
 			}
 		}
 		else {
 			int nHydrasDone = BWAPI::Broodwar->self()->completedUnitCount(BWAPI::UnitTypes::Zerg_Hydralisk);
 			//if (nHydrasDone > 0) {
-			//	goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Lurker, nLurkers + nHydrasDone));
+			//	goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Lurker, nLurkers + nHydrasDone));
 			//}
 			//else {
-			//	goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hydralisk, 2));
+			//	goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Hydralisk, 2));
 			//}
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Zergling, nLings + 4));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Zergling, nLings + 4));
 		}
 		// Decide about upgrades.
 		if (minerals > 600 && gas > 400 && !addingHatch) {
 			int missileUps = self->getUpgradeLevel(missile);
 			int armorUps = self->getUpgradeLevel(armor);
 			if (nEvo == 0) {
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Evolution_Chamber, 1));
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Evolution_Chamber, 1));
 			}
 			else if (armorUps == 0 && !self->isUpgrading(armor)) {
-				goal.push_back(std::pair<MetaType, int>(armor, 1));
+				goal.push_back(std::pair<MacroAct, int>(armor, 1));
 			}
 			else if (nHatches > 0 && nLairs + nHives == 0) {
 				// Get lair if we somehow lost it.
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Lair, 1));
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Lair, 1));
 			}
 			else if (armorUps == 1 && nLairs + nHives > 0 && !self->isUpgrading(armor)) {
-				goal.push_back(std::pair<MetaType, int>(armor, 2));
+				goal.push_back(std::pair<MacroAct, int>(armor, 2));
 			}
 			else if (nLairs > 0 && !hasQueensNest) {
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Queens_Nest, 1));
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Queens_Nest, 1));
 			}
 			else if (nLairs > 0 && hasQueensNest && nHives == 0) {
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hive, 1));
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Hive, 1));
 			}
 			else if (armorUps == 2 && !self->isUpgrading(armor) && nHives > 0) {
-				goal.push_back(std::pair<MetaType, int>(armor, 3));
+				goal.push_back(std::pair<MacroAct, int>(armor, 3));
 			}
 			else if (armorUps == 3 && missileUps < 3 && !self->isUpgrading(missile) && nHives > 0) {
-				goal.push_back(std::pair<MetaType, int>(armor, missileUps + 1));
+				goal.push_back(std::pair<MacroAct, int>(armor, missileUps + 1));
 			}
 		}
 	}
-	else if (Config::Strategy::StrategyName == "Zerg_2Hatch>Hydra" ||
-		     Config::Strategy::StrategyName == "Zerg_9Pool>Hydra" ||
-			 Config::Strategy::StrategyName == "Zerg_3Hatch>HydraLing" ||
-			 Config::Strategy::StrategyName == "Zerg_3Hatch>Hydra" ||
-			 Config::Strategy::StrategyName == "Zerg_3HatchPool>ground")
+	else if (Config::Strategy::StrategyName == "2HatchHydra" ||
+			 Config::Strategy::StrategyName == "3HatchHydra" ||
+			 Config::Strategy::StrategyName == "ZvP_3HatchPoolHydra")
     {
-		// Hydras.
+		// Hydra strategies.
 		// Decide about hatcheries and drones.
 		if (minerals > 600 && nHydras >= 12 && nDrones >= 8 * nHatches) {
 			if (minerals > 1200 && nHatches > 2) {
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hatchery, nHatches + 2));
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 9)));
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Hatchery, nHatches + 2));
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 9)));
 			}
 			else {
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hatchery, nHatches + 1));
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 6)));
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Hatchery, nHatches + 1));
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 6)));
 			}
 		}
 		else if (minerals > 600 && nHydras >= 10 && nDrones < 8 * nHatches) {
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 6)));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 6)));
 		}
 		else if (nHatches == 0 && minerals >= 300) {
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hatchery, 1));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Hatchery, 1));
 			if (nDrones < minDrones) {
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, minDrones));
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Drone, minDrones));
 			}
 		}
 		else if (gas > 300 && minerals < 100 && nHydras >= 12) {
 			// Mineral shortage, make more drones.
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 10)));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 10)));
 		}
 		else {
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 6)));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 6)));
 		}
 		// Decide about gas.
 		if (nHatches > 0 && minerals / (gas + 24) > 5 && nGas < nHatches && nDrones >= 6 * nHatches) {
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Extractor, nGas + 1));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Extractor, nGas + 1));
 		}
 		// Decide about combat units.
 		if (gas <= 100 && minerals >= 700) {
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Zergling, nLings + 12));
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UpgradeTypes::Metabolic_Boost, 1));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Zergling, nLings + 12));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Metabolic_Boost, 1));
 			if (nHives > 0) {
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UpgradeTypes::Adrenal_Glands, 1));
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Adrenal_Glands, 1));
 			}
 		}
 		else if (gas > 300 && minerals < 100 && nHydras >= 12) {
 			// Mineral shortage, make fewer hydras.
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hydralisk, nHydras + 3));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Hydralisk, nHydras + 3));
 		}
 		else {
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hydralisk, nHydras + 6));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Hydralisk, nHydras + 6));
 			if (self->getUpgradeLevel(BWAPI::UpgradeTypes::Muscular_Augments) == 0) {
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UpgradeTypes::Muscular_Augments, 1));
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Muscular_Augments, 1));
 			}
 			else if (self->getUpgradeLevel(BWAPI::UpgradeTypes::Grooved_Spines) == 0) {
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UpgradeTypes::Grooved_Spines, 1));
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Grooved_Spines, 1));
 			}
 			// If we have lurker tech, make lurkers slowly.
-			if (nHydras > 2 && gas > 200 && self->hasResearched(lurker_aspect)) {
-				if (nHydras >= 8 && nLurkers == 0) {
-					goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Lurker, 4));
+			if (nHydras >= 6 && gas > 200 && self->hasResearched(lurker_aspect)) {
+				if (nHydras >= 10 && nLurkers == 0) {
+					goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Lurker, 4));
 				}
 				else {
-					goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Lurker, nLurkers + 1));
+					goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Lurker, nLurkers + 1));
 				}
 			}
 		}
@@ -472,207 +468,113 @@ const MetaPairVector StrategyManager::getZergBuildOrderGoal() const
 			int missileUps = self->getUpgradeLevel(missile);
 			int armorUps = self->getUpgradeLevel(armor);
 			if (missileUps == 0 && !self->isUpgrading(missile)) {
-				goal.push_back(std::pair<MetaType, int>(missile, 1));
+				goal.push_back(std::pair<MacroAct, int>(missile, 1));
 			}
 			else if (nLairs + nHives == 0) {
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Lair, 1));
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Lair, 1));
 			}
 			else if (nLairs + nHives > 0 && !self->hasResearched(lurker_aspect) && !self->isResearching(lurker_aspect)) {
-				goal.push_back(std::pair<MetaType, int>(lurker_aspect, 1));
+				goal.push_back(std::pair<MacroAct, int>(lurker_aspect, 1));
 			}
 			else if (nLairs + nHives > 0 && missileUps == 1 && !self->isUpgrading(missile)) {
-				goal.push_back(std::pair<MetaType, int>(missile, 2));
+				goal.push_back(std::pair<MacroAct, int>(missile, 2));
 			}
 			else if (nLairs > 0 && !hasQueensNest && nHives == 0) {
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Queens_Nest, 1));
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Queens_Nest, 1));
 			}
 			else if (nLairs > 0 && hasQueensNest && nHives == 0) {
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hive, 1));
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Hive, 1));
 			}
 			else if (nHives > 0 && missileUps == 2 && !self->isUpgrading(missile)) {
-				goal.push_back(std::pair<MetaType, int>(missile, 3));
+				goal.push_back(std::pair<MacroAct, int>(missile, 3));
 			}
 			else if (missileUps == 3 && armorUps < 3 && !self->isUpgrading(armor)) {
-				goal.push_back(std::pair<MetaType, int>(armor, armorUps + 1));
+				goal.push_back(std::pair<MacroAct, int>(armor, armorUps + 1));
 			}
 		}
-
 	}
-	else if (Config::Strategy::StrategyName == "Zerg_vsRush"
-		  || Config::Strategy::StrategyName == "Zerg_vsKillerbot"
+	else if (Config::Strategy::StrategyName == "vsRush"
+		  || Config::Strategy::StrategyName == "vsKillerbot"
+//		  || Config::Strategy::StrategyName == "ZvZ_Overpool9Gas"
+//		  || Config::Strategy::StrategyName == "ZvZ_Overpool11Gas"
+//		  || Config::Strategy::StrategyName == "Overgas11Pool"
+		  || Config::Strategy::StrategyName == "11Gas10Pool"
 		  || Config::Strategy::StrategyName == "ZvZ_12Pool"
-		  || Config::Strategy::StrategyName == "ZvT_12Pool")
+		  || Config::Strategy::StrategyName == "ZvT_12Pool"
+		  || Config::Strategy::StrategyName == "ZvT_13Pool"
+		  || Config::Strategy::StrategyName == "ZvP_2HatchMuta"
+		  || Config::Strategy::StrategyName == "ZvT_2HatchMuta"
+		  || Config::Strategy::StrategyName == "ZvT_3HatchMuta"
+		  || Config::Strategy::StrategyName == "3HatchPoolMuta")
 	{
 		// Mutalisks or lings, depending.
 		// Decide about units.
-		if (gas <= 100 && minerals >= 600) {
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Zergling, nLings + 8));
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UpgradeTypes::Metabolic_Boost, 1));
+		if (gas <= 100 && minerals >= 300) {
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Zergling, nLings + 8));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Metabolic_Boost, 1));
 			if (nHives > 0) {
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UpgradeTypes::Adrenal_Glands, 1));
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Adrenal_Glands, 1));
 			}
 		}
 		else {
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Mutalisk, nMutas + 4));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Mutalisk, nMutas + 4));
 		}
 		// Decide about gas.
 		if (minerals / (gas + 24) > 4 && nGas < nHatches && nDrones >= 5 * nHatches) {
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Extractor, nGas + 1));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Extractor, nGas + 1));
 		}
 		// Decide about upgrades.
 		if (minerals > 600 && gas > 400) {
 			BWAPI::UpgradeType airArmor = BWAPI::UpgradeTypes::Zerg_Flyer_Carapace;
 			int armorUps = self->getUpgradeLevel(airArmor);
 			if (armorUps == 0 && !self->isUpgrading(airArmor)) {
-				goal.push_back(std::pair<MetaType, int>(airArmor, 1));
+				goal.push_back(std::pair<MacroAct, int>(airArmor, 1));
 			}
 			else if (armorUps == 1 && !self->isUpgrading(airArmor)) {
-				goal.push_back(std::pair<MetaType, int>(airArmor, 2));
+				goal.push_back(std::pair<MacroAct, int>(airArmor, 2));
 			}
-			else if (nHives == 0 && armorUps == 2 && !hasQueensNest) {
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Queens_Nest, 1));
+			else if (nHives == 0 && armorUps >= 1 && !hasQueensNest) {
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Queens_Nest, 1));
 			}
-			else if (nHives == 0 && armorUps == 2 && hasQueensNest) {
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hive, 1));
+			else if (nHives == 0 && armorUps >= 1 && hasQueensNest) {
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Hive, 1));
 			}
 			else if (nHives > 0 && armorUps == 2 && !self->isUpgrading(airArmor)) {
-				goal.push_back(std::pair<MetaType, int>(airArmor, 3));
+				goal.push_back(std::pair<MacroAct, int>(airArmor, 3));
 			}
 		}
 		// Decide about hatcheries and drones.
 		if (minerals > 400 && nMutas >= 6 && nDrones >= 8 * nHatches) {
-			if (minerals > 1000 && nHatches >= 2) {
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hatchery, nHatches + 2));
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 12)));
+			if (minerals > 900) {
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Hatchery, nHatches + 2));
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 12)));
 			}
 			else {
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hatchery, nHatches + 1));
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 8)));
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Hatchery, nHatches + 1));
+				goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 8)));
 			}
 		}
 		else if (minerals > 400 && nMutas >= 6 && nDrones < 8 * nHatches) {
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 8)));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 8)));
 		}
 		else if (nHatches == 0 && minerals >= 300) {
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hatchery, 1));
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 8)));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Hatchery, 1));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 8)));
 		}
 		else {
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 4)));
-		}
-	}
-	else if (Config::Strategy::StrategyName == "Zerg_3HatchMuta" ||
-			 Config::Strategy::StrategyName == "Zerg_3Hatch>Muta")
-    {
-		// Mutaling, adding guardian.
-		// Decide about hatcheries and drones.
-		if (minerals > 600 && nMutas >= 12 && nDrones >= 10 * nHatches) {
-			if (minerals > 1200 && nHatches > 2) {
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hatchery, nHatches + 2));
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 10)));
-			}
-			else {
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hatchery, nHatches + 1));
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 6)));
-			}
-		}
-		else if (minerals > 600 && nMutas >= 12 && nDrones < 8 * nHatches) {
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 8)));
-		}
-		else if (nHatches == 0 && minerals >= 300) {
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hatchery, 1));
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 8)));
-		}
-		else {
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 4)));
-		}
-		// Decide about unit mix based on gas and minerals.
-		// If low on gas, get lings and research ling upgrades.
-		if (gas < 100 && minerals >= 600) {
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Zergling, nLings + 10));
-			if (nHatches > 0 && nGas < nHatches) {
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Extractor, nGas + 1));
-			}
-			if (nHives > 0) {
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UpgradeTypes::Adrenal_Glands, 1));
-			}
-		}
-		else if (nGas >= 4) {
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Mutalisk, nMutas + 6));
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Mutalisk, nGuardians + 2));
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Zergling, nLings + 4));
-		}
-		else {
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Mutalisk, nMutas + 8));
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Zergling, nLings + 4));
-		}
-		// Decide about upgrades.
-		if (minerals > 500 && nGas >= 2) {
-			// Air armor first.
-			BWAPI::UpgradeType attack = BWAPI::UpgradeTypes::Zerg_Flyer_Attacks;
-			BWAPI::UpgradeType armor = BWAPI::UpgradeTypes::Zerg_Flyer_Carapace;
-			int attackUps = self->getUpgradeLevel(attack);
-			int armorUps = self->getUpgradeLevel(armor);
-			// Lair and hive.
-			if (nHatches > 0 && nLairs + nHives == 0) {
-				// Get lair in parallel if we've lost it.
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Lair, 1));
-			}
-			else if (nLairs > 0 && nHives == 0 && nGas >= 3) {
-				// Otherwise go straight to hive if we have enough gas.
-				if (hasQueensNest) {
-					goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hive, 1));
-				}
-				else {
-					goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Queens_Nest, 1));
-				}
-			}
-			// Upgrades, including greater spire.
-			if (nHives > 0 && nGas >= 4 && !self->isUpgrading(armor) && !self->isUpgrading(attack)) {
-				// We have enough gas, get greater spire as next priority.
-				goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Greater_Spire, 1));
-			}
-			else if (armorUps < 2 && !self->isUpgrading(armor)) {
-				goal.push_back(std::pair<MetaType, int>(armor, armorUps + 1));
-			}
-			else if (armorUps == 2 && !self->isUpgrading(armor) && nHives > 0) {
-				goal.push_back(std::pair<MetaType, int>(armor, 3));
-			}
-			else if (armorUps == 3 && attackUps < 3 && !self->isUpgrading(attack) && nHives > 0) {
-				goal.push_back(std::pair<MetaType, int>(armor, attackUps + 1));
-			}
-		}
-	}
-    else if (Config::Strategy::StrategyName == "Zerg_3HatchScourge")
-    {
-        if (nScourge > 40)
-        {
-            goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hydralisk, nHydras + 12));
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UpgradeTypes::Muscular_Augments, 1));
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UpgradeTypes::Grooved_Spines, 1));
-		}
-        else
-        {
-            goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Scourge, nScourge + 12));
-        }
-
-		goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 5)));
-		if (shouldExpandNow())
-		{
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hatchery, nHatches + 1));
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 10)));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 4)));
 		}
 	}
 	else {
-		// Any other strategy.
-		goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hydralisk, nHydras + 12));
-		goal.push_back(std::pair<MetaType, int>(BWAPI::UpgradeTypes::Muscular_Augments, 1));
-		goal.push_back(std::pair<MetaType, int>(BWAPI::UpgradeTypes::Grooved_Spines, 1));
-		goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 2)));
+		// Default strategy in case the config is messed up. Kind of stupid.
+		goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Hydralisk, nHydras + 12));
+		goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Muscular_Augments, 1));
+		goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Grooved_Spines, 1));
+		goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 2)));
 		if (shouldExpandNow())
 		{
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Hatchery, nHatches + 1));
-			goal.push_back(std::pair<MetaType, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 10)));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Hatchery, nHatches + 1));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 10)));
 		}
 	}
 
@@ -806,7 +708,7 @@ void StrategyManager::setLearnedStrategy()
     for (auto & kv : _strategies)
     {
         Strategy & strategy = kv.second;
-        if (strategy._race == BWAPI::Broodwar->self()->getRace())
+		if (strategy._race == _selfRace)
         {
             totalGamesPlayed += strategy._wins + strategy._losses;
         }
@@ -819,7 +721,7 @@ void StrategyManager::setLearnedStrategy()
     for (auto & kv : _strategies)
     {
         Strategy & strategy = kv.second;
-        if (strategy._race != BWAPI::Broodwar->self()->getRace())
+		if (strategy._race != _selfRace)
         {
             continue;
         }
@@ -837,4 +739,126 @@ void StrategyManager::setLearnedStrategy()
     }
 
     Config::Strategy::StrategyName = bestUCBStrategy;
+}
+
+void StrategyManager::handleUrgentProductionIssues(BuildOrderQueue & queue)
+{
+	if (_selfRace == BWAPI::Races::Zerg)
+	{
+		StrategyBossZerg::Instance().handleUrgentProductionIssues(queue);
+	}
+	else
+	{
+		// detect if there's a supply block once per second
+		if ((BWAPI::Broodwar->getFrameCount() % 24 == 1) && detectSupplyBlock(queue))
+		{
+			if (Config::Debug::DrawBuildOrderSearchInfo)
+			{
+				BWAPI::Broodwar->printf("Supply block, building supply!");
+			}
+
+			queue.queueAsHighestPriority(MacroAct(BWAPI::Broodwar->self()->getRace().getSupplyProvider()));
+		}
+
+		// If they have mobile cloaked units, get some static detection.
+		if (InformationManager::Instance().enemyHasMobileCloakTech())
+		{
+			if (BWAPI::Broodwar->self()->getRace() == BWAPI::Races::Protoss)
+			{
+				if (BWAPI::Broodwar->self()->allUnitCount(BWAPI::UnitTypes::Protoss_Photon_Cannon) < 2)
+				{
+					queue.queueAsHighestPriority(MacroAct(BWAPI::UnitTypes::Protoss_Photon_Cannon));
+					queue.queueAsHighestPriority(MacroAct(BWAPI::UnitTypes::Protoss_Photon_Cannon));
+				}
+				if (BWAPI::Broodwar->self()->allUnitCount(BWAPI::UnitTypes::Protoss_Forge) == 0)
+				{
+					queue.queueAsHighestPriority(MacroAct(BWAPI::UnitTypes::Protoss_Forge));
+				}
+			}
+			else if (BWAPI::Broodwar->self()->getRace() == BWAPI::Races::Terran)
+			{
+				if (BWAPI::Broodwar->self()->allUnitCount(BWAPI::UnitTypes::Terran_Missile_Turret) < 2)
+				{
+					queue.queueAsHighestPriority(MacroAct(BWAPI::UnitTypes::Terran_Missile_Turret));
+					queue.queueAsHighestPriority(MacroAct(BWAPI::UnitTypes::Terran_Missile_Turret));
+				}
+				if (BWAPI::Broodwar->self()->allUnitCount(BWAPI::UnitTypes::Terran_Engineering_Bay) == 0)
+				{
+					queue.queueAsHighestPriority(MacroAct(BWAPI::UnitTypes::Terran_Engineering_Bay));
+				}
+			}
+
+			if (Config::Debug::DrawBuildOrderSearchInfo)
+			{
+				BWAPI::Broodwar->printf("Enemy has cloaking tech!");
+			}
+		}
+	}
+}
+
+// Return true if we're supply blocked and should build supply.
+// Note: This understands zerg supply but is not used when we are zerg.
+bool StrategyManager::detectSupplyBlock(BuildOrderQueue & queue)
+{
+	// If the _queue is empty or supply is maxed, there is no block.
+	if (queue.isEmpty() || BWAPI::Broodwar->self()->supplyTotal() >= 400)
+	{
+		return false;
+	}
+
+	// If supply is being built now, there's no block. Return right away.
+	// Terran and protoss calculation:
+	if (BuildingManager::Instance().isBeingBuilt(BWAPI::Broodwar->self()->getRace().getSupplyProvider()))
+	{
+		return false;
+	}
+
+	// Terran and protoss calculation:
+	int supplyAvailable = BWAPI::Broodwar->self()->supplyTotal() - BWAPI::Broodwar->self()->supplyUsed();
+
+	// Zerg calculation:
+	// Zerg can create an overlord that doesn't count toward supply until the next check.
+	// To work around it, add up the supply by hand, including hatcheries.
+	if (BWAPI::Broodwar->self()->getRace() == BWAPI::Races::Zerg) {
+		supplyAvailable = -BWAPI::Broodwar->self()->supplyUsed();
+		for (auto & unit : BWAPI::Broodwar->self()->getUnits())
+		{
+			if (unit->getType() == BWAPI::UnitTypes::Zerg_Overlord)
+			{
+				supplyAvailable += 16;
+			}
+			else if (unit->getType() == BWAPI::UnitTypes::Zerg_Egg &&
+				unit->getBuildType() == BWAPI::UnitTypes::Zerg_Overlord)
+			{
+				return false;    // supply is building, return immediately
+				// supplyAvailable += 16;
+			}
+			else if ((unit->getType() == BWAPI::UnitTypes::Zerg_Hatchery && unit->isCompleted()) ||
+				unit->getType() == BWAPI::UnitTypes::Zerg_Lair ||
+				unit->getType() == BWAPI::UnitTypes::Zerg_Hive)
+			{
+				supplyAvailable += 2;
+			}
+		}
+	}
+
+	int supplyCost = queue.getHighestPriorityItem().macroAct.supplyRequired();
+	// Available supply can be negative, which breaks the test below. Fix it.
+	supplyAvailable = std::max(0, supplyAvailable);
+
+	// if we don't have enough supply, we're supply blocked
+	if (supplyAvailable < supplyCost)
+	{
+		// If we're zerg, check to see if a building is planned to be built.
+		// Only count it as releasing supply very early in the game.
+		if (BWAPI::Broodwar->self()->getRace() == BWAPI::Races::Zerg
+			&& BuildingManager::Instance().buildingsQueued().size() > 0
+			&& BWAPI::Broodwar->self()->supplyTotal() <= 18)
+		{
+			return false;
+		}
+		return true;
+	}
+
+	return false;
 }

@@ -6,8 +6,9 @@ using namespace UAlbertaBot;
 
 GameCommander::GameCommander() 
     : _initialScoutSet(false)
+	, _scoutAlways(false)
+	, _scoutIfNeeded(false)
 {
-
 }
 
 void GameCommander::update()
@@ -53,7 +54,7 @@ void GameCommander::update()
 	_timerManager.startTimer(TimerManager::Scout);
     ScoutManager::Instance().update();
 	_timerManager.stopTimer(TimerManager::Scout);
-		
+	
 	_timerManager.stopTimer(TimerManager::All);
 
 	drawDebugInterface();
@@ -64,7 +65,8 @@ void GameCommander::drawDebugInterface()
 	InformationManager::Instance().drawExtendedInterface();
 	InformationManager::Instance().drawUnitInformation(425,30);
 	InformationManager::Instance().drawMapInformation();
-	BuildingManager::Instance().drawBuildingInformation(200,50);
+	InformationManager::Instance().drawBaseInformation(575, 30);
+	BuildingManager::Instance().drawBuildingInformation(200, 50);
 	BuildingPlacer::Instance().drawReservedTiles();
 	ProductionManager::Instance().drawProductionInformation(30, 50);
 	BOSSManager::Instance().drawSearchInformation(490, 100);
@@ -143,16 +145,13 @@ void GameCommander::setValidUnits()
 
 void GameCommander::setScoutUnits()
 {
-    // if we haven't set a scout unit, do it
-    if (_scoutUnits.empty() && !_initialScoutSet)
+    // Send a scout if we haven't yet and should.
+	if (!_initialScoutSet && _scoutUnits.empty())
     {
-        BWAPI::Unit supplyProvider = getFirstSupplyProvider();
-
-		// if it exists
-		if (supplyProvider)
+		if (_scoutAlways ||
+			(_scoutIfNeeded && !InformationManager::Instance().getMainBaseLocation(BWAPI::Broodwar->enemy())))
 		{
-			// grab the closest worker to the supply provider to send to scout
-			BWAPI::Unit workerScout = getClosestWorkerToTarget(supplyProvider->getPosition());
+			BWAPI::Unit workerScout = getAnyFreeWorker();
 
 			// if we find a worker (which we should) add it to the scout units
 			if (workerScout)
@@ -177,8 +176,20 @@ void GameCommander::setCombatUnits()
 	}
 }
 
+// Call when the strategy wants an unconditional worker scout.
+void GameCommander::goScoutAlways()
+{
+	_scoutAlways = true;
+}
+
+// Call when the strategy wants a worker scout provided the enemy is not yet located.
+void GameCommander::goScoutIfNeeded()
+{
+	_scoutIfNeeded = true;
+}
+
 // Get the first spawning pool, supply depot, or pylon.
-// This is the timing of the initial scout. It has nothing to do with supply.
+// This is by default the timing of the initial scout. It has nothing to do with supply.
 BWAPI::Unit GameCommander::getFirstSupplyProvider()
 {
 	BWAPI::Unit supplyProvider = nullptr;
@@ -247,51 +258,22 @@ void GameCommander::onUnitMorph(BWAPI::Unit unit)
 	WorkerManager::Instance().onUnitMorph(unit);
 }
 
-BWAPI::Unit GameCommander::getClosestUnitToTarget(BWAPI::UnitType type, BWAPI::Position target)
-{
-	BWAPI::Unit closestUnit = nullptr;
-	double closestDist = 100000;
-
-	for (auto & unit : _validUnits)
-	{
-		if (unit->getType() == type)
-		{
-			double dist = unit->getDistance(target);
-			if (!closestUnit || dist < closestDist)
-			{
-				closestUnit = unit;
-				closestDist = dist;
-			}
-		}
-	}
-
-	return closestUnit;
-}
-
 // Used only to choose a worker to scout.
-BWAPI::Unit GameCommander::getClosestWorkerToTarget(BWAPI::Position target)
+BWAPI::Unit GameCommander::getAnyFreeWorker()
 {
-	BWAPI::Unit closestUnit = nullptr;
-	double closestDist = 100000;
-
 	for (auto & unit : _validUnits)
 	{
-		if (!isAssigned(unit)
-			&& unit->getType().isWorker()
+		if (unit->getType().isWorker()
+			&& !isAssigned(unit)
 			&& WorkerManager::Instance().isFree(unit)
 			&& !unit->isCarryingMinerals()
 			&& !unit->isCarryingGas())
 		{
-			double dist = unit->getDistance(target);
-			if (!closestUnit || dist < closestDist)
-			{
-				closestUnit = unit;
-				closestDist = dist;
-			}
+			return unit;
 		}
 	}
 
-	return closestUnit;
+	return nullptr;
 }
 
 void GameCommander::assignUnit(BWAPI::Unit unit, BWAPI::Unitset & set)
@@ -300,4 +282,10 @@ void GameCommander::assignUnit(BWAPI::Unit unit, BWAPI::Unitset & set)
     else if (_combatUnits.contains(unit)) { _combatUnits.erase(unit); }
 
     set.insert(unit);
+}
+
+GameCommander & GameCommander::Instance()
+{
+	static GameCommander instance;
+	return instance;
 }

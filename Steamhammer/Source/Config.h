@@ -19,7 +19,6 @@ namespace Config
         extern bool UsingCombatCommander;
         extern bool UsingUnitCommandManager;
         extern bool UsingBuildOrderSearch;  
-        extern bool UsingAutoObserver;
         extern bool UsingStrategyIO;			
     }
     
@@ -35,7 +34,6 @@ namespace Config
         extern std::string StrategyName;
         extern std::string ReadDir;
         extern std::string WriteDir;
-        extern bool GasStealWithScout;
         extern bool ScoutHarassEnemy;
         extern bool UseEnemySpecificStrategy;
         extern bool FoundEnemySpecificStrategy;
@@ -71,10 +69,11 @@ namespace Config
         extern bool DrawEnemyUnitInfo;
         extern bool DrawBWTAInfo;
         extern bool DrawMapGrid;
-        extern bool DrawUnitTargetInfo;
+		extern bool DrawBaseInfo;
+		extern bool DrawUnitTargetInfo;
         extern bool DrawSquadInfo;
         extern bool DrawBOSSStateInfo;
-        extern bool PrintModuleTimeout;		
+        extern bool PrintModuleTimeout;	
 
         extern std::string ErrorLogFilename;
         extern bool LogAssertToErrorFile;

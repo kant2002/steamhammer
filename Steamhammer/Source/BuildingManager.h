@@ -4,6 +4,7 @@
 #include "WorkerManager.h"
 #include "BuildingPlacer.h"
 #include "InformationManager.h"
+#include "MacroAct.h"
 #include "MapTools.h"
 
 namespace UAlbertaBot
@@ -18,7 +19,6 @@ class BuildingManager
     int             _reservedMinerals;				// minerals reserved for planned buildings
     int             _reservedGas;					// gas reserved for planned buildings
 
-    bool            isEvolvedBuilding(BWAPI::UnitType type);
     bool            isBuildingPositionExplored(const Building & b) const;
     void            removeBuildings(const std::vector<Building> & toRemove);
 
@@ -31,7 +31,6 @@ class BuildingManager
 
     char            getBuildingWorkerCode(const Building & b) const;
     
-
 public:
     
     static BuildingManager &	Instance();
@@ -39,15 +38,19 @@ public:
     void                update();
     void                onUnitMorph(BWAPI::Unit unit);
     void                onUnitDestroy(BWAPI::Unit unit);
-    void                addBuildingTask(BWAPI::UnitType type,BWAPI::TilePosition desiredLocation,bool isGasSteal);
+	Building &		    addTrackedBuildingTask(const MacroAct & act, BWAPI::TilePosition desiredLocation, bool isGasSteal);
+	void                addBuildingTask(const MacroAct & act, BWAPI::TilePosition desiredLocation, bool isGasSteal);
     void                drawBuildingInformation(int x,int y);
     BWAPI::TilePosition getBuildingLocation(const Building & b);
 
-    int                 getReservedMinerals();
-    int                 getReservedGas();
+    int                 getReservedMinerals() const;
+    int                 getReservedGas() const;
 
     bool                isBeingBuilt(BWAPI::UnitType type);
 
     std::vector<BWAPI::UnitType> buildingsQueued();
+	
+	void                cancelBuilding(Building & b);
 };
+
 }

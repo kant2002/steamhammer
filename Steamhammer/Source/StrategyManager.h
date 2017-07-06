@@ -1,15 +1,14 @@
 #pragma once
 
 #include "Common.h"
-#include "BWTA.h"
-#include "BuildOrderQueue.h"
 #include "InformationManager.h"
 #include "WorkerManager.h"
 #include "BuildOrder.h"
+#include "BuildOrderQueue.h"
 
 namespace UAlbertaBot
 {
-typedef std::pair<MetaType, size_t> MetaPair;
+typedef std::pair<MacroAct, size_t> MetaPair;
 typedef std::vector<MetaPair> MetaPairVector;
 
 struct Strategy
@@ -66,10 +65,11 @@ public:
             void                    addStrategy(const std::string & name, Strategy & strategy);
             void                    setLearnedStrategy();
             void	                readResults();
-	const	bool				    regroup(int numInRadius);
-	const	bool				    rushDetected();
-	const	int				        defendWithWorkers();
 	const	MetaPairVector		    getBuildOrderGoal();
 	const	BuildOrder &            getOpeningBookBuildOrder() const;
+
+			void					handleUrgentProductionIssues(BuildOrderQueue & queue);
+			bool					detectSupplyBlock(BuildOrderQueue & queue);
 };
+
 }

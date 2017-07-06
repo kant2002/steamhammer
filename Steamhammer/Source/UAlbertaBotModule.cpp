@@ -41,7 +41,7 @@ void UAlbertaBotModule::onStart()
 
     if (Config::BotInfo::PrintInfoOnStart)
     {
-        BWAPI::Broodwar->printf("%s by %s, based on UAlbertaBot", Config::BotInfo::BotName.c_str(), Config::BotInfo::Authors.c_str());
+        BWAPI::Broodwar->printf("%s by %s, based on UAlbertaBot.", Config::BotInfo::BotName.c_str(), Config::BotInfo::Authors.c_str());
     }
 
     // Call BWTA to read and analyze the current map
@@ -96,25 +96,17 @@ void UAlbertaBotModule::onFrame()
         return;
     }
 
-	if (Config::Modules::UsingGameCommander) 
-	{ 
-		_gameCommander.update(); 
-	}
-
-    if (Config::Modules::UsingAutoObserver)
-    {
-        _autoObserver.onFrame();
-    }
+	GameCommander::Instance().update(); 
 }
 
 void UAlbertaBotModule::onUnitDestroy(BWAPI::Unit unit)
 {
-	if (Config::Modules::UsingGameCommander) { _gameCommander.onUnitDestroy(unit); }
+	GameCommander::Instance().onUnitDestroy(unit);
 }
 
 void UAlbertaBotModule::onUnitMorph(BWAPI::Unit unit)
 {
-	if (Config::Modules::UsingGameCommander) { _gameCommander.onUnitMorph(unit); }
+	GameCommander::Instance().onUnitMorph(unit);
 }
 
 void UAlbertaBotModule::onSendText(std::string text) 
@@ -124,25 +116,25 @@ void UAlbertaBotModule::onSendText(std::string text)
 
 void UAlbertaBotModule::onUnitCreate(BWAPI::Unit unit)
 { 
-	if (Config::Modules::UsingGameCommander) { _gameCommander.onUnitCreate(unit); }
+	GameCommander::Instance().onUnitCreate(unit);
 }
 
 void UAlbertaBotModule::onUnitComplete(BWAPI::Unit unit)
 {
-	if (Config::Modules::UsingGameCommander) { _gameCommander.onUnitComplete(unit); }
+	GameCommander::Instance().onUnitComplete(unit);
 }
 
 void UAlbertaBotModule::onUnitShow(BWAPI::Unit unit)
 { 
-	if (Config::Modules::UsingGameCommander) { _gameCommander.onUnitShow(unit); }
+	GameCommander::Instance().onUnitShow(unit);
 }
 
 void UAlbertaBotModule::onUnitHide(BWAPI::Unit unit)
 { 
-	if (Config::Modules::UsingGameCommander) { _gameCommander.onUnitHide(unit); }
+	GameCommander::Instance().onUnitHide(unit);
 }
 
 void UAlbertaBotModule::onUnitRenegade(BWAPI::Unit unit)
 { 
-	if (Config::Modules::UsingGameCommander) { _gameCommander.onUnitRenegade(unit); }
+	GameCommander::Instance().onUnitRenegade(unit);
 }

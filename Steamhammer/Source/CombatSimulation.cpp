@@ -4,7 +4,6 @@ using namespace UAlbertaBot;
 
 CombatSimulation::CombatSimulation()
 {
-	
 }
 
 // sets the starting states based on the combat units within a radius of a given position
@@ -36,8 +35,9 @@ void CombatSimulation::setCombatUnits(const BWAPI::Position & center, const int 
             }
             catch (int e)
             {
-                e=1;
-                //BWAPI::Broodwar->printf("Problem Adding Self Unit with ID: %d", unit->getID());
+				// Ignore the exception and the unit.
+				e = 0;    // use the variable to avoid a pointless warning
+				//BWAPI::Broodwar->printf("Problem Adding Self Unit with ID: %d", unit->getID());
             }
 		}
 	}
@@ -49,7 +49,8 @@ void CombatSimulation::setCombatUnits(const BWAPI::Position & center, const int 
             continue;
         }
 
-        
+		// Pretend that a bunker is actually 5 marines with prorated hit points.
+		// TODO account for repair--we can pretend that the pretend marines have more hit points
         if (ui.type == BWAPI::UnitTypes::Terran_Bunker)
         {
             double hpRatio = static_cast<double>(ui.lastHealth) / ui.type.maxHitPoints();
@@ -71,6 +72,7 @@ void CombatSimulation::setCombatUnits(const BWAPI::Position & center, const int 
             continue;
         }
 
+		// TODO why does it exclude air units? SparCraft claims to support mutas, wraiths, BCs, scouts
         if (!ui.type.isFlyer() && SparCraft::System::isSupportedUnitType(ui.type) && ui.completed)
 		{
             try
@@ -79,6 +81,8 @@ void CombatSimulation::setCombatUnits(const BWAPI::Position & center, const int 
             }
             catch (int e)
             {
+				// Ignore the exception and the unit.
+				e = 0;    // use the variable to avoid a pointless warning
                 //BWAPI::Broodwar->printf("Problem Adding Enemy Unit with ID: %d %d", ui.unitID, e);
             }
 		}
@@ -108,6 +112,7 @@ const SparCraft::Unit CombatSimulation::getSparCraftUnit(const UnitInfo & ui) co
 	BWAPI::UnitType type = ui.type;
 
     // this is a hack, treat medics as a marine for now
+	// TODO this is weird: SparCraft appears to support healing
 	if (type == BWAPI::UnitTypes::Terran_Medic)
 	{
 		type = BWAPI::UnitTypes::Terran_Marine;
@@ -153,14 +158,15 @@ SparCraft::ScoreType CombatSimulation::simulateCombat()
             BWAPI::Broodwar->drawTextScreen(150,200,"%s", ss1.str().c_str());
             BWAPI::Broodwar->drawTextScreen(300,200,"%s", ss2.str().c_str());
 
-	        BWAPI::Broodwar->drawTextScreen(240, 280, "Combat Sim : %d", eval);
+			std::string prefix = (eval < 0) ? "\x06" : "\x07";
+	        BWAPI::Broodwar->drawTextScreen(240, 280, "Combat Sim : %s%d", prefix.c_str(), eval);
         }
         
 	    return eval;
     }
     catch (int e)
     {
-        BWAPI::Broodwar->printf("SparCraft FatalError, simulateCombat() threw");
+        //BWAPI::Broodwar->printf("SparCraft FatalError, simulateCombat() threw");
 
         return e;
     }
@@ -177,7 +183,7 @@ const SparCraft::IDType CombatSimulation::getSparCraftPlayerID(BWAPI::Player pla
 	{
 		return SparCraft::Players::Player_One;
 	}
-	else if (player == BWAPI::Broodwar->enemy())
+	if (player == BWAPI::Broodwar->enemy())
 	{
 		return SparCraft::Players::Player_Two;
 	}

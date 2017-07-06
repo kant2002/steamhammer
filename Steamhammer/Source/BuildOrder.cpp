@@ -14,16 +14,17 @@ BuildOrder::BuildOrder(const BWAPI::Race & race)
 
 }
 
-BuildOrder::BuildOrder(const BWAPI::Race & race, const std::vector<MetaType> & metaVector)
+BuildOrder::BuildOrder(const BWAPI::Race & race, const std::vector<MacroAct> & metaVector)
     : _race(race)
     , _buildOrder(metaVector)
 {
 
 }
 
-void BuildOrder::add(const MetaType & t)
+void BuildOrder::add(const MacroAct & t)
 {
-    UAB_ASSERT(t.getRace() == getRace(), "Trying to add difference Race metatype to build order");
+	// Note: MacroAct commands are the same for all races.
+    UAB_ASSERT(t.getRace() == getRace() || t.isCommand(), "Trying to add different Race MacroAct to build order");
 
     _buildOrder.push_back(t);
 }
@@ -38,12 +39,12 @@ const size_t BuildOrder::size() const
     return _buildOrder.size();
 }
 
-const MetaType & BuildOrder::operator [] (const size_t & index) const
+const MacroAct & BuildOrder::operator [] (const size_t & index) const
 {
     return _buildOrder[index];
 }
 
-MetaType & BuildOrder::operator [] (const size_t & index)
+MacroAct & BuildOrder::operator [] (const size_t & index)
 {
     return _buildOrder[index];
 }

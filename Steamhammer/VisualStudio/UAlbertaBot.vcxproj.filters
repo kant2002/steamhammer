@@ -111,9 +111,6 @@
     <ClCompile Include="..\source\BuildOrder.cpp">
       <Filter>game\macro\buildorders</Filter>
     </ClCompile>
-    <ClCompile Include="..\source\MetaType.cpp">
-      <Filter>game\macro</Filter>
-    </ClCompile>
     <ClCompile Include="..\source\TimerManager.cpp">
       <Filter>game\util</Filter>
     </ClCompile>
@@ -128,9 +125,6 @@
     </ClCompile>
     <ClCompile Include="..\Source\Config.cpp">
       <Filter>common</Filter>
-    </ClCompile>
-    <ClCompile Include="..\Source\AutoObserver.cpp">
-      <Filter>util</Filter>
     </ClCompile>
     <ClCompile Include="..\source\JSONTools.cpp">
       <Filter>util</Filter>
@@ -154,6 +148,9 @@
       <Filter>util</Filter>
     </ClCompile>
     <ClCompile Include="..\Source\LurkerManager.cpp" />
+    <ClCompile Include="..\Source\MacroAct.cpp" />
+    <ClCompile Include="..\Source\BuildingData.cpp" />
+    <ClCompile Include="..\Source\StrategyBossZerg.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Source\CombatCommander.h">
@@ -234,9 +231,6 @@
     <ClInclude Include="..\source\BuildOrder.h">
       <Filter>game\macro\buildorders</Filter>
     </ClInclude>
-    <ClInclude Include="..\source\MetaType.h">
-      <Filter>game\macro</Filter>
-    </ClInclude>
     <ClInclude Include="..\source\TimerManager.h">
       <Filter>game\util</Filter>
     </ClInclude>
@@ -251,9 +245,6 @@
     </ClInclude>
     <ClInclude Include="..\Source\Config.h">
       <Filter>common</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Source\AutoObserver.h">
-      <Filter>util</Filter>
     </ClInclude>
     <ClInclude Include="..\source\JSONTools.h">
       <Filter>util</Filter>
@@ -276,9 +267,10 @@
     <ClInclude Include="..\Source\Logger.h">
       <Filter>util</Filter>
     </ClInclude>
-    <ClInclude Include="..\Source\GameHistory.hpp">
-      <Filter>game\util</Filter>
-    </ClInclude>
     <ClInclude Include="..\Source\LurkerManager.h" />
+    <ClInclude Include="..\Source\MacroAct.h" />
+    <ClInclude Include="..\Source\MacroCommand.h" />
+    <ClInclude Include="..\Source\BuildingData.h" />
+    <ClInclude Include="..\Source\StrategyBossZerg.h" />
   </ItemGroup>
 </Project>

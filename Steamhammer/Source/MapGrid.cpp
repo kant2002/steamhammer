@@ -41,7 +41,7 @@ BWAPI::Position MapGrid::getLeastExplored()
 			// get the center of this cell
 			BWAPI::Position cellCenter = getCellCenter(r,c);
 
-			// don't worry about places that aren't connected to our start locatin
+			// don't worry about places that aren't connected to our start location
 			if (!BWTA::isConnected(BWAPI::TilePosition(cellCenter), BWAPI::Broodwar->self()->getStartLocation()))
 			{
 				continue;

@@ -4,11 +4,11 @@
 using namespace UAlbertaBot;
 
 const size_t IdlePriority = 0;
-const size_t SurveyPriority = 1;
 const size_t AttackPriority = 2;
 const size_t BaseDefensePriority = 3;
 const size_t ScoutDefensePriority = 4;
 const size_t DropPriority = 5;
+const size_t SurveyPriority = 10;    // consists of only 1 overlord, no need to steal from it
 
 CombatCommander::CombatCommander() 
     : _initialized(false)
@@ -85,6 +85,8 @@ void CombatCommander::update(const BWAPI::Unitset & combatUnits)
 	}
 
 	_squadData.update();          // update() all the squads
+
+	cancelDyingBuildings();
 }
 
 void CombatCommander::updateIdleSquad()
@@ -105,21 +107,66 @@ void CombatCommander::updateAttackSquads()
     Squad & mainAttackSquad = _squadData.getSquad("MainAttack");
 	Squad & flyingSquad = _squadData.getSquad("Flying");
 
-    for (auto & unit : _combatUnits)
+	// Include exactly 1 overlord in each squad, for detection.
+	bool mainOverlord = false;
+	bool mainSquadExists = false;
+	for (auto & unit : mainAttackSquad.getUnits())
+	{
+		if (unit->getType() == BWAPI::UnitTypes::Zerg_Overlord)
+		{
+			mainOverlord = true;
+		}
+		else
+		{
+			mainSquadExists = true;
+		}
+	}
+
+	bool flyingOverlord = false;
+	bool flyingSquadExists = false;	    // scourge goes to flying squad if any, otherwise main squad
+	for (auto & unit : flyingSquad.getUnits())
+	{
+		if (unit->getType() == BWAPI::UnitTypes::Zerg_Overlord)
+		{
+			flyingOverlord = true;
+		}
+		else if (unit->getType() == BWAPI::UnitTypes::Zerg_Mutalisk)
+		{
+			flyingSquadExists = true;
+		}
+	}
+
+	for (auto & unit : _combatUnits)
     {
 		// Here's a weird bit of strategy left over from UAlbertaBot.
-        if (unit->getType() == BWAPI::UnitTypes::Zerg_Scourge && UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Hydralisk) < 30)
-        {
-            continue;
-        }
-
-        // get every unit of a lower priority and put it into the attack squad
-		if (unit->getType() == BWAPI::UnitTypes::Zerg_Mutalisk && _squadData.canAssignUnitToSquad(unit, flyingSquad)) {
+		// What is the effect?
+        //if (unit->getType() == BWAPI::UnitTypes::Zerg_Scourge && UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Hydralisk) < 30)
+        //{
+        //    continue;
+        //}
+		
+        // get every unit of a lower priority and put it into an attack squad
+		bool isOverlord = unit->getType() == BWAPI::UnitTypes::Zerg_Overlord;
+		if ((unit->getType() == BWAPI::UnitTypes::Zerg_Mutalisk ||
+			(unit->getType() == BWAPI::UnitTypes::Zerg_Scourge && flyingSquadExists) ||
+			(isOverlord && !flyingOverlord && flyingSquadExists)) &&
+			_squadData.canAssignUnitToSquad(unit, flyingSquad))
+		{
 			_squadData.assignUnitToSquad(unit, flyingSquad);
+			if (isOverlord)
+			{
+				flyingOverlord = true;
+			}
 		}
-        else if (!unit->getType().isWorker() && (unit->getType() != BWAPI::UnitTypes::Zerg_Overlord) && _squadData.canAssignUnitToSquad(unit, mainAttackSquad))
+        else if (!unit->getType().isWorker() &&
+			(!isOverlord || isOverlord && !mainOverlord && mainSquadExists) &&
+			_squadData.canAssignUnitToSquad(unit, mainAttackSquad))
         {
-            _squadData.assignUnitToSquad(unit, mainAttackSquad);
+			_squadData.assignUnitToSquad(unit, mainAttackSquad);
+			if (isOverlord)
+			{
+				mainOverlord = true;
+			}
         }
     }
 
@@ -261,7 +308,7 @@ void CombatCommander::updateDefenseSquads()
         return; 
     }
     
-    BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getMainBaseLocation(BWAPI::Broodwar->enemy());
+    BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getEnemyMainBaseLocation();
     BWTA::Region * enemyRegion = nullptr;
     if (enemyBaseLocation)
     {
@@ -272,12 +319,10 @@ void CombatCommander::updateDefenseSquads()
 	for (BWTA::Region * myRegion : InformationManager::Instance().getOccupiedRegions(BWAPI::Broodwar->self()))
 	{
         // don't defend inside the enemy region, this will end badly when we are stealing gas
-		// BUG: This causes Steamhammer to ignore proxies in its own base and die. Slight oops.
-		// For now, don't steal gas.
-        //if (myRegion == enemyRegion)
-        //{
-        //    continue;
-        //}
+        if (myRegion == enemyRegion)
+        {
+            continue;
+        }
 
 		BWAPI::Position regionCenter = myRegion->getCenter();
 		if (!regionCenter.isValid())
@@ -306,6 +351,7 @@ void CombatCommander::updateDefenseSquads()
 
         // we can ignore the first enemy worker in our region since we assume it is a scout
 		// This is because we can't catch it early. Should skip this check when we can. 
+		// TODO replace with something sensible
         for (auto & unit : enemyUnitsInRegion)
         {
             if (unit->getType().isWorker())
@@ -373,31 +419,30 @@ void CombatCommander::updateDefenseSquads()
 	}
 
     // for each of our defense squads, if there aren't any enemy units near the position, remove the squad
-    std::set<std::string> uselessDefenseSquads;
-    for (const auto & kv : _squadData.getSquads())
-    {
-const Squad & squad = kv.second;
-const SquadOrder & order = squad.getSquadOrder();
-
-if (order.getType() != SquadOrderTypes::Defend)
-{
-	continue;
-}
-
-bool enemyUnitInRange = false;
-for (auto & unit : BWAPI::Broodwar->enemy()->getUnits())
-{
-	if (unit->getPosition().getDistance(order.getPosition()) < order.getRadius())
+	for (const auto & kv : _squadData.getSquads())
 	{
-		enemyUnitInRange = true;
-		break;
-	}
-}
+		const Squad & squad = kv.second;
+		const SquadOrder & order = squad.getSquadOrder();
 
-if (!enemyUnitInRange)
-{
-	_squadData.getSquad(squad.getName()).clear();
-}
+		if (order.getType() != SquadOrderTypes::Defend)
+		{
+			continue;
+		}
+
+		bool enemyUnitInRange = false;
+		for (auto & unit : BWAPI::Broodwar->enemy()->getUnits())
+		{
+			if (unit->getPosition().getDistance(order.getPosition()) < order.getRadius())
+			{
+				enemyUnitInRange = true;
+				break;
+			}
+		}
+
+		if (!enemyUnitInRange)
+		{
+			_squadData.getSquad(squad.getName()).clear();
+		}
 	}
 }
 
@@ -414,6 +459,9 @@ void CombatCommander::updateDefenseSquadUnits(Squad & defenseSquad, const size_t
 		return;
 	}
 
+	// Add an overlord if we don't have one.
+	// TODO
+	
 	// add flying defenders if we still need them
 	size_t flyingDefendersAdded = 0;
 	while (flyingDefendersNeeded > flyingDefendersInSquad + flyingDefendersAdded)
@@ -453,6 +501,46 @@ void CombatCommander::updateDefenseSquadUnits(Squad & defenseSquad, const size_t
 	}
 }
 
+// Choose a defender to join the base defense squad.
+BWAPI::Unit CombatCommander::findClosestDefender(const Squad & defenseSquad, BWAPI::Position pos, bool flyingDefender)
+{
+	BWAPI::Unit closestDefender = nullptr;
+	double minDistance = std::numeric_limits<double>::max();
+
+	int nLings = numZerglingsInOurBase();
+	bool zerglingRush = nLings > 0 && nLings < 10 && BWAPI::Broodwar->getFrameCount() < 6000;
+	bool pullWorkers = Config::Micro::WorkersDefendRush && (zerglingRush || beingBuildingRushed());
+
+	for (auto & unit : _combatUnits) 
+	{
+		if ((flyingDefender && !UnitUtil::CanAttackAir(unit)) || (!flyingDefender && !UnitUtil::CanAttackGround(unit)))
+        {
+            continue;
+        }
+
+        if (!_squadData.canAssignUnitToSquad(unit, defenseSquad))
+        {
+            continue;
+        }
+
+
+		// Pull workers only a short distance, if at all.
+        if (unit->getType().isWorker() && !pullWorkers)
+        {
+            continue;
+        }
+
+		double dist = unit->getDistance(pos);
+		if (!closestDefender || (dist < minDistance))
+        {
+            closestDefender = unit;
+            minDistance = dist;
+        }
+	}
+
+	return closestDefender;
+}
+
 // If we should, add 1 overlord at the start of the game. Otherwise do nothing.
 void CombatCommander::updateSurveySquad()
 {
@@ -482,43 +570,25 @@ void CombatCommander::updateSurveySquad()
 	}
 }
 
-BWAPI::Unit CombatCommander::findClosestDefender(const Squad & defenseSquad, BWAPI::Position pos, bool flyingDefender)
+// Get our money back for stuff that is about to be destroyed.
+// TODO does this work for protoss buildings?
+void CombatCommander::cancelDyingBuildings()
 {
-	BWAPI::Unit closestDefender = nullptr;
-	double minDistance = std::numeric_limits<double>::max();
-
-    int zerglingsInOurBase = numZerglingsInOurBase();
-    bool zerglingRush = zerglingsInOurBase > 0 && BWAPI::Broodwar->getFrameCount() < 5000;
-
-	for (auto & unit : _combatUnits) 
+	for (auto & unit : BWAPI::Broodwar->self()->getUnits())
 	{
-		if ((flyingDefender && !UnitUtil::CanAttackAir(unit)) || (!flyingDefender && !UnitUtil::CanAttackGround(unit)))
-        {
-            continue;
-        }
-
-        if (!_squadData.canAssignUnitToSquad(unit, defenseSquad))
-        {
-            continue;
-        }
-
-        // add workers to the defense squad if we are being rushed
-        if (!Config::Micro::WorkersDefendRush || (unit->getType().isWorker() && !zerglingRush && !beingBuildingRushed()))
-        {
-            continue;
-        }
-
-		double dist = unit->getDistance(pos);
-		if (!closestDefender || (dist < minDistance))
-        {
-            closestDefender = unit;
-            minDistance = dist;
-        }
+		if (unit->getType().isBuilding() && !unit->isCompleted() && unit->isUnderAttack() && unit->getHitPoints() < 30)
+		{
+			if (unit->isMorphing() && unit->canCancelMorph()) {
+				unit->cancelMorph();
+			}
+			else if (unit->isBeingConstructed() && unit->canCancelConstruction()) {
+				unit->cancelConstruction();
+			}
+		}
 	}
-
-	return closestDefender;
 }
 
+// TODO does this have any failure conditions?
 BWAPI::Position CombatCommander::getDefendLocation()
 {
 	return BWTA::getRegion(BWTA::getStartLocation(BWAPI::Broodwar->self())->getTilePosition())->getCenter();
@@ -531,76 +601,67 @@ void CombatCommander::drawSquadInformation(int x, int y)
 
 BWAPI::Position CombatCommander::getMainAttackLocation()
 {
-    BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getMainBaseLocation(BWAPI::Broodwar->enemy());
+	BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getMainBaseLocation(BWAPI::Broodwar->enemy());
 
-    // First choice: Attack an enemy region if we can see units inside it
-    if (enemyBaseLocation)
-    {
-        BWAPI::Position enemyBasePosition = enemyBaseLocation->getPosition();
+	// First choice: Attack the enemy main unless we think it's empty.
+	if (enemyBaseLocation)
+	{
+		BWAPI::Position enemyBasePosition = enemyBaseLocation->getPosition();
 
-        // get all known enemy units in the area
-        BWAPI::Unitset enemyUnitsInArea;
+		// If the enemy base hasn't been seen yet, go there.
+		if (!BWAPI::Broodwar->isExplored(BWAPI::TilePosition(enemyBasePosition)))
+		{
+			return enemyBasePosition;
+		}
+
+		// get all known enemy units in the area
+		BWAPI::Unitset enemyUnitsInArea;
 		MapGrid::Instance().GetUnits(enemyUnitsInArea, enemyBasePosition, 800, false, true);
 
-        bool onlyOverlords = true;
-        for (auto & unit : enemyUnitsInArea)
-        {
-            if (unit->getType() != BWAPI::UnitTypes::Zerg_Overlord)
-            {
-                onlyOverlords = false;
-            }
-        }
-
-        if (!BWAPI::Broodwar->isExplored(BWAPI::TilePosition(enemyBasePosition)) || !enemyUnitsInArea.empty())
-        {
-            if (!onlyOverlords)
-            {
-                return enemyBaseLocation->getPosition();
-            }
-        }
-    }
-
-    // Second choice: Attack known enemy buildings
-    for (const auto & kv : InformationManager::Instance().getUnitInfo(BWAPI::Broodwar->enemy()))
-    {
-        const UnitInfo & ui = kv.second;
-
-        if (ui.type.isBuilding() && ui.lastPosition != BWAPI::Positions::None)
+		for (auto & unit : enemyUnitsInArea)
 		{
-			return ui.lastPosition;	
+			if (unit->getType() != BWAPI::UnitTypes::Zerg_Overlord)
+			{
+				// Enemy base is not empty: It's not only overlords in the enemy base area.
+				return enemyBasePosition;
+			}
 		}
-    }
+	}
 
-    // Third choice: Attack visible enemy units that aren't overlords
-	// Fourth choice: Attack overlords
-	bool foundAnOverlord = false;
-	BWAPI::Position overlordPosition;
+	// Second choice: Attack known enemy buildings
+	for (const auto & kv : InformationManager::Instance().getUnitInfo(BWAPI::Broodwar->enemy()))
+	{
+		const UnitInfo & ui = kv.second;
+
+		if (ui.type.isBuilding() && ui.lastPosition != BWAPI::Positions::None)
+		{
+			return ui.lastPosition;
+		}
+	}
+
+	// Third choice: Attack visible enemy units that aren't overlords
+	// TODO should distinguish depending on the squad's air and ground weapons
 	for (auto & unit : BWAPI::Broodwar->enemy()->getUnits())
 	{
-        if (unit->getType() == BWAPI::UnitTypes::Zerg_Overlord)
-        {
-			foundAnOverlord = true;
-			overlordPosition = unit->getPosition();
-            continue;
-        }
+		if (unit->getType() == BWAPI::UnitTypes::Zerg_Overlord)
+		{
+			continue;
+		}
 
 		if (UnitUtil::IsValidUnit(unit) && unit->isVisible())
 		{
 			return unit->getPosition();
 		}
 	}
-	if (foundAnOverlord) {
-		return overlordPosition;
-	}
 
-	// Fifth choice: We can't see anything so explore the map attacking along the way
-    return MapGrid::Instance().getLeastExplored();
+	// Fourth choice: We can't see anything so explore the map attacking along the way
+	return MapGrid::Instance().getLeastExplored();
 }
 
 BWAPI::Position CombatCommander::getSurveyLocation()
 {
-	BWTA::BaseLocation * ourBaseLocation = InformationManager::Instance().getMainBaseLocation(BWAPI::Broodwar->self());
-	BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getMainBaseLocation(BWAPI::Broodwar->enemy());
+	BWTA::BaseLocation * ourBaseLocation = InformationManager::Instance().getMyMainBaseLocation();
+	BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getEnemyMainBaseLocation();
 
 	// If it's a 2-player map, or we miraculously know the enemy base location, that's it.
 	if (enemyBaseLocation)
@@ -627,6 +688,7 @@ BWAPI::Position CombatCommander::getSurveyLocation()
 	}
 }
 
+// Choose one worker to pull for scout defense.
 BWAPI::Unit CombatCommander::findClosestWorkerToTarget(BWAPI::Unitset & unitsToAssign, BWAPI::Unit target)
 {
     UAB_ASSERT(target != nullptr, "target was null");
@@ -637,22 +699,16 @@ BWAPI::Unit CombatCommander::findClosestWorkerToTarget(BWAPI::Unitset & unitsToA
     }
 
     BWAPI::Unit closestMineralWorker = nullptr;
-    double closestDist = 100000;
+    double closestDist = 128;    // more distant workers do not get pulled
     
     // for each of our workers
 	for (auto & unit : unitsToAssign)
 	{
-        if (!unit->getType().isWorker())
-        {
-            continue;
-        }
-
-		// if it is a move worker
-        if (WorkerManager::Instance().isFree(unit)) 
+		if (unit->getType().isWorker() && WorkerManager::Instance().isFree(unit))
 		{
 			double dist = unit->getDistance(target);
 
-            if (!closestMineralWorker || dist < closestDist)
+            if (dist < closestDist)
             {
                 closestMineralWorker = unit;
                 dist = closestDist;
@@ -718,13 +774,12 @@ int CombatCommander::numZerglingsInOurBase()
 
 bool CombatCommander::beingBuildingRushed()
 {
-    int concernRadius = 1200;
-    BWAPI::Position ourBasePosition = BWAPI::Position(BWAPI::Broodwar->self()->getStartLocation());
-    
-    // check to see if the enemy has zerglings as the only attackers in our base
+	BWAPI::Position myBasePosition(BWAPI::Broodwar->self()->getStartLocation());
+
+    // check to see if the enemy has buildings near our base
     for (auto & unit : BWAPI::Broodwar->enemy()->getUnits())
     {
-        if (unit->getType().isBuilding())
+        if (unit->getType().isBuilding() && unit->getDistance(myBasePosition) < 1200)
         {
             return true;
         }

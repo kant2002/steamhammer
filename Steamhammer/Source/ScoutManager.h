@@ -12,7 +12,9 @@ class ScoutManager
     std::string                     _scoutStatus;
     std::string                     _gasStealStatus;
 	int				                _numWorkerScouts;
+	bool							_scoutLocationOnly;
 	bool			                _scoutUnderAttack;
+	bool							_tryGasSteal;
     bool                            _didGasSteal;
     bool                            _gasStealFinished;
     int                             _currentRegionVertexIndex;
@@ -27,7 +29,7 @@ class ScoutManager
 	BWAPI::Unit						getEnemyGeyser();
 	BWAPI::Unit						enemyWorkerToHarass();
     void                            followPerimeter();
-	void                            moveScouts();
+	void                            moveScout();
     void                            drawScoutInformation(int x, int y);
     void                            calculateEnemyRegionVertices();
 
@@ -40,13 +42,7 @@ public:
 	void update();
 
     void setWorkerScout(BWAPI::Unit unit);
-
-	void onSendText(std::string text);
-	void onUnitShow(BWAPI::Unit unit);
-	void onUnitHide(BWAPI::Unit unit);
-	void onUnitCreate(BWAPI::Unit unit);
-	void onUnitRenegade(BWAPI::Unit unit);
-	void onUnitDestroy(BWAPI::Unit unit);
-	void onUnitMorph(BWAPI::Unit unit);
+	void setGasSteal();
+	void setScoutLocationOnly();
 };
 }

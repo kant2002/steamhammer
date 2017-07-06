@@ -60,3 +60,6 @@ struct Rect
     int x, y;
     int height, width;
 };
+
+int GetIntFromString(const std::string & s);
+std::string TrimRaceName(const std::string & s);

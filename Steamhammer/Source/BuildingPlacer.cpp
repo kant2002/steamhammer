@@ -134,10 +134,10 @@ bool BuildingPlacer::canBuildHereWithSpace(BWAPI::TilePosition position,const Bu
     int height(b.type.tileHeight());
 
     //make sure we leave space for add-ons. These types of units can have addons:
-    if (b.type==BWAPI::UnitTypes::Terran_Command_Center ||
-        b.type==BWAPI::UnitTypes::Terran_Factory ||
-        b.type==BWAPI::UnitTypes::Terran_Starport ||
-        b.type==BWAPI::UnitTypes::Terran_Science_Facility)
+    if (b.type == BWAPI::UnitTypes::Terran_Command_Center ||
+        b.type == BWAPI::UnitTypes::Terran_Factory ||
+        b.type == BWAPI::UnitTypes::Terran_Starport ||
+        b.type == BWAPI::UnitTypes::Terran_Science_Facility)
     {
         width += 2;
     }
@@ -195,7 +195,9 @@ BWAPI::TilePosition BuildingPlacer::getBuildLocationNear(const Building & b,int 
     SparCraft::Timer t;
     t.start();
 
-    // get the precomputed vector of tile positions which are sorted closest to this location
+	// BWAPI::Broodwar->printf("Building Placer seeks position near %d, %d", b.desiredPosition.x, b.desiredPosition.y);
+
+	// get the precomputed vector of tile positions which are sorted closest to this location
     const std::vector<BWAPI::TilePosition> & closestToBuilding = MapTools::Instance().getClosestTilesTo(BWAPI::Position(b.desiredPosition));
 
     double ms1 = t.getElapsedTimeInMilliSec();
@@ -206,14 +208,15 @@ BWAPI::TilePosition BuildingPlacer::getBuildLocationNear(const Building & b,int 
         if (canBuildHereWithSpace(closestToBuilding[i],b,buildDist,horizontalOnly))
         {
             double ms = t.getElapsedTimeInMilliSec();
-            //BWAPI::Broodwar->printf("Building Placer Took %d iterations, lasting %lf ms @ %lf iterations/ms, %lf setup ms", i, ms, (i / ms), ms1);
+            // BWAPI::Broodwar->printf("Building Placer took %d iterations, lasting %lf ms @ %lf iterations/ms, %lf setup ms", i, ms, (i / ms), ms1);
+			// BWAPI::Broodwar->printf("Building Placer took %d iterations, lasting %lf ms, finding %d, %d", i, ms, closestToBuilding[i].x, closestToBuilding[i].y);
 
             return closestToBuilding[i];
         }
     }
 
     double ms = t.getElapsedTimeInMilliSec();
-    //BWAPI::Broodwar->printf("Building Placer Took %lf ms", ms);
+    // BWAPI::Broodwar->printf("Building Placer took %lf ms, found nothing", ms);
 
     return  BWAPI::TilePositions::None;
 }
@@ -239,7 +242,7 @@ BWAPI::TilePosition BuildingPlacer::getDefenseBuildLocation(const Building & b, 
 
 	double ms1 = t.getElapsedTimeInMilliSec();
 
-	BWAPI::Broodwar->printf("Sunken Placer : %d positions to check", closestToBuilding.size());
+	// BWAPI::Broodwar->printf("Sunken Placer : %d positions to check", closestToBuilding.size());
 	UAB_ASSERT(false, "start");
 
 	int closestDistance = 99999;
@@ -258,7 +261,7 @@ BWAPI::TilePosition BuildingPlacer::getDefenseBuildLocation(const Building & b, 
 			int distance = MapTools::Instance().getGroundDistance(BWAPI::Position(closestToBuilding[i]), choke->getCenter());
 			if (distance < closestDistance) {
 				UAB_ASSERT(false, "closer");
-				BWAPI::Broodwar->printf("Sunken Placer : distance %d", distance);
+				// BWAPI::Broodwar->printf("Sunken Placer : distance %d", distance);
 				closestDistance = distance;
 				closestIndex = i;
 				if (distance <= 6) {
@@ -271,13 +274,13 @@ BWAPI::TilePosition BuildingPlacer::getDefenseBuildLocation(const Building & b, 
 	UAB_ASSERT(false, "after loop");
 	if (closestIndex != -1) {
 		double ms = t.getElapsedTimeInMilliSec();
-		BWAPI::Broodwar->printf("Sunken Placer succeeded, taking %lf ms, %lf setup ms", ms, ms1);
+		// BWAPI::Broodwar->printf("Sunken Placer succeeded, taking %lf ms, %lf setup ms", ms, ms1);
 
 		return closestToBuilding[closestIndex];
 	}
 
 	double ms = t.getElapsedTimeInMilliSec();
-	BWAPI::Broodwar->printf("Sunker Placer failed in %lf ms", ms);
+	// BWAPI::Broodwar->printf("Sunker Placer failed in %lf ms", ms);
 
 	return  BWAPI::TilePositions::None;
 }
@@ -321,30 +324,32 @@ bool BuildingPlacer::tileOverlapsBaseLocation(BWAPI::TilePosition tile, BWAPI::U
 
 bool BuildingPlacer::buildable(const Building & b,int x,int y) const
 {
-    BWAPI::TilePosition tp(x,y);
+	BWAPI::TilePosition tp(x, y);
 
-    //returns true if this tile is currently buildable, takes into account units on tile
-    if (!BWAPI::Broodwar->isBuildable(x,y))
+	if (!tp.isValid())
+	{
+		return false;
+	}
+
+	if (!BWAPI::Broodwar->isBuildable(x, y, true))
+    {
+		// Unbuildable according to the map, or because the location is blocked
+		// by a visible building. Unseen buildings (even if known) are "buildable" on.
+        return false;
+    }
+
+	if ((BWAPI::Broodwar->self()->getRace() == BWAPI::Races::Terran) && tileBlocksAddon(tp))
     {
         return false;
     }
 
-    if ((BWAPI::Broodwar->self()->getRace() == BWAPI::Races::Terran) && tileBlocksAddon(BWAPI::TilePosition(x,y)))
-    {
-        return false;
-    }
-
+	// getUnitsOnTile() only returns visible units, even if they are buildings.
     for (auto & unit : BWAPI::Broodwar->getUnitsOnTile(x,y))
     {
         if ((b.builderUnit != nullptr) && (unit != b.builderUnit))
         {
             return false;
         }
-    }
-
-    if (!tp.isValid())
-    {
-        return false;
     }
 
     return true;
@@ -404,18 +409,21 @@ void BuildingPlacer::freeTiles(BWAPI::TilePosition position, int width, int heig
     }
 }
 
+// TODO iterate through our bases, not our units
 BWAPI::TilePosition BuildingPlacer::getRefineryPosition()
 {
     BWAPI::TilePosition closestGeyser = BWAPI::TilePositions::None;
     double minGeyserDistanceFromHome = std::numeric_limits<double>::max();
     BWAPI::Position homePosition = BWAPI::Position(BWAPI::Broodwar->self()->getStartLocation());
 
-    // for each geyser
     for (auto & geyser : BWAPI::Broodwar->getStaticGeysers())
     {
-        if (geyser->getType() != BWAPI::UnitTypes::Resource_Vespene_Geyser)
+		// TODO Commenting this out is a workaround for a BWAPI bug.
+		//      A geyser on which the extractor trick was done is never a Resource_Vespene_Geyser again.
+		//      But BUG: it causes regular 2nd extractors to fail in a state loop
+		if (geyser->getType() != BWAPI::UnitTypes::Resource_Vespene_Geyser)
         {
-            continue;
+			continue;
         }
 
         BWAPI::Position geyserPos = geyser->getInitialPosition();
@@ -428,6 +436,7 @@ BWAPI::TilePosition BuildingPlacer::getRefineryPosition()
             if (unit->getType().isResourceDepot() && unit->getDistance(geyserPos) < 300)
             {
                 nearDepot = true;
+				break;
             }
         }
 
@@ -440,7 +449,7 @@ BWAPI::TilePosition BuildingPlacer::getRefineryPosition()
                 minGeyserDistanceFromHome = homeDistance;
                 closestGeyser = geyser->getInitialTilePosition();
             }
-        }
+		}
     }
     
     return closestGeyser;

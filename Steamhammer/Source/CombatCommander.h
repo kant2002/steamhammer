@@ -21,6 +21,8 @@ class CombatCommander
 	void            updateIdleSquad();
 	void			updateSurveySquad();
 
+	void			cancelDyingBuildings();
+
 	bool            isSquadUpdateFrame();
 	int             getNumType(BWAPI::Unitset & units, BWAPI::UnitType type);
 

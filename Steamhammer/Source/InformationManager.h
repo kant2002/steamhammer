@@ -9,25 +9,72 @@
 
 namespace UAlbertaBot
 {
-struct BaseInfo;
-typedef std::vector<BaseInfo> BaseInfoVector;
+struct BaseInfo
+{
+	BWTA::BaseLocation *	location;
+	BWAPI::Unit				resourceDepot;
+
+	BaseInfo(BWTA::BaseLocation * loc, BWAPI::Unit depot)
+		: location(loc)
+		, resourceDepot(depot)
+	{
+	}
+};
+
+struct BaseStatus
+{
+public:
+
+	BWAPI::Unit * resourceDepot;		// hatchery, etc.
+	BWAPI::Player owner;				// self, enemy, or neutral
+
+	// The resourceDepot pointer is set for a base if the depot has been seen.
+	// It is possible to infer a base location without seeing the depot.
+
+	BaseStatus()
+		: resourceDepot(nullptr)
+		, owner(BWAPI::Broodwar->neutral())
+	{
+	}
+
+	BaseStatus(BWAPI::Unit * depot, BWAPI::Player player)
+		: resourceDepot(depot)
+		, owner(player)
+	{
+	}
+};
 
 class InformationManager 
 {
-    InformationManager();
-    
-    BWAPI::Player       _self;
-    BWAPI::Player       _enemy;
+	BWAPI::Player _self;
+    BWAPI::Player _enemy;
 
     std::map<BWAPI::Player, UnitData>                   _unitData;
     std::map<BWAPI::Player, BWTA::BaseLocation *>       _mainBaseLocations;
-    std::map<BWAPI::Player, std::set<BWTA::Region *> >  _occupiedRegions;
+	BWTA::BaseLocation *								_myNaturalBaseLocation;  // whether taken yet or not
+	std::map<BWAPI::Player, std::set<BWTA::Region *> >  _occupiedRegions;        // contains any building
+	std::map<BWTA::BaseLocation *, BaseStatus>			_theBases;
 
-    int                     getIndex(BWAPI::Player player) const;
+	bool												_enemyProxy;
+	bool												_enemyHasAirTech;
+	bool												_enemyHasCloakTech;
+	bool												_enemyHasMobileCloakTech;
+	bool												_enemyHasOverlordHunters;
 
-    void                    updateUnit(BWAPI::Unit unit);
-    void                    initializeRegionInformation();
-    void                    initializeBaseInfoVector();
+	InformationManager();
+
+	void                    initializeRegionInformation();
+	void					initializeNaturalBase();
+
+	int                     getIndex(BWAPI::Player player) const;
+
+	void					baseInferred(BWTA::BaseLocation * base);
+	void					baseFound(BWAPI::Unit depot);
+	void					baseLost(BWAPI::TilePosition basePosition);
+	void					maybeAddBase(BWAPI::Unit unit);
+	bool					closeEnough(BWAPI::TilePosition a, BWAPI::TilePosition b);
+
+	void                    updateUnit(BWAPI::Unit unit);
     void                    updateUnitInfo();
     void                    updateBaseLocationInfo();
     void                    updateOccupiedRegions(BWTA::Region * region,BWAPI::Player player);
@@ -35,21 +82,18 @@ class InformationManager
 
 public:
 
-    // yay for singletons!
-    static InformationManager & Instance();
-
     void                    update();
 
     // event driven stuff
-    void					onUnitShow(BWAPI::Unit unit)        { updateUnit(unit); }
+	void					onUnitShow(BWAPI::Unit unit)        { updateUnit(unit); maybeAddBase(unit); }
     void					onUnitHide(BWAPI::Unit unit)        { updateUnit(unit); }
-    void					onUnitCreate(BWAPI::Unit unit)		{ updateUnit(unit); }
+	void					onUnitCreate(BWAPI::Unit unit)		{ updateUnit(unit); maybeAddBase(unit); }
     void					onUnitComplete(BWAPI::Unit unit)    { updateUnit(unit); }
-    void					onUnitMorph(BWAPI::Unit unit)       { updateUnit(unit); }
+	void					onUnitMorph(BWAPI::Unit unit)       { updateUnit(unit); maybeAddBase(unit); }
     void					onUnitRenegade(BWAPI::Unit unit)    { updateUnit(unit); }
     void					onUnitDestroy(BWAPI::Unit unit);
-
-    bool					isEnemyBuildingInRegion(BWTA::Region * region);
+	
+	bool					isEnemyBuildingInRegion(BWTA::Region * region);
     int						getNumUnits(BWAPI::UnitType type,BWAPI::Player player);
     bool					nearbyForceHasCloaked(BWAPI::Position p,BWAPI::Player player,int radius);
     bool					isCombatUnit(BWAPI::UnitType type) const;
@@ -60,13 +104,27 @@ public:
 
     std::set<BWTA::Region *> &  getOccupiedRegions(BWAPI::Player player);
     BWTA::BaseLocation *    getMainBaseLocation(BWAPI::Player player);
+	BWTA::BaseLocation *	getMyMainBaseLocation();
+	BWTA::BaseLocation *	getEnemyMainBaseLocation();
+	BWAPI::Player			getBaseOwner(BWTA::BaseLocation * base);
+	BWTA::BaseLocation *	getMyNaturalLocation();
 
-    bool                    enemyHasCloakedUnits();
+	bool					enemyHasAntiAir();			// TODO
+	bool					enemyHasAirTech();
+	bool                    enemyHasCloakTech();
+	bool                    enemyHasMobileCloakTech();
+	bool					enemyHasOverlordHunters();
+
+	int						nScourgeNeeded();           // zerg specific
 
     void                    drawExtendedInterface();
     void                    drawUnitInformation(int x,int y);
     void                    drawMapInformation();
+	void					drawBaseInformation(int x, int y);
 
     const UnitData &        getUnitData(BWAPI::Player player) const;
+
+	// yay for singletons!
+	static InformationManager & Instance();
 };
 }

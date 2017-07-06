@@ -11,35 +11,40 @@ namespace UAlbertaBot
 {
 typedef unsigned char Action;
 
+enum class ExtractorTrick { None, Start, ExtractorOrdered, DroneOrdered };
+
 class ProductionManager
 {
     ProductionManager();
     
     BuildOrderQueue     _queue;
     BWAPI::TilePosition _predictedTilePosition;
-    bool                _enemyCloakedDetected;
     bool                _assignedWorkerForThisBuilding;
     bool                _haveLocationForThisBuilding;
+	bool				_outOfBook;                      // production queue is beyond the opening book
+	int					_targetGasAmount;                // for "go gas until <n>"; set to 0 if no target
+	ExtractorTrick		_extractorTrickState;
+	Building *			_extractorTrickBuilding;         // set depending on the extractor trick state
     
     BWAPI::Unit         getClosestUnitToPosition(const BWAPI::Unitset & units,BWAPI::Position closestTo);
-    BWAPI::Unit         selectUnitOfType(BWAPI::UnitType type,BWAPI::Position closestTo = BWAPI::Position(0,0));
-
-    bool                hasResources(BWAPI::UnitType type);
-    bool                canMake(BWAPI::UnitType type);
-    bool                hasNumCompletedUnitType(BWAPI::UnitType type,int num);
-    bool                meetsReservedResources(MetaType type);
+	BWAPI::Unit         getClosestLarvaToPosition(BWAPI::Position closestTo);
+	BWAPI::Unit         selectUnitOfType(BWAPI::UnitType type, BWAPI::Position closestTo = BWAPI::Position(0, 0));
+	
+	void				executeCommand(MacroAct act);
+    bool                meetsReservedResources(MacroAct type);
     void                setBuildOrder(const BuildOrder & buildOrder);
     void                create(BWAPI::Unit producer,BuildOrderItem & item);
     void                manageBuildOrderQueue();
-    void                performCommand(BWAPI::UnitCommandType t);
-    bool                canMakeNow(BWAPI::Unit producer,MetaType t);
+    bool                canMakeNow(BWAPI::Unit producer,MacroAct t);
     void                predictWorkerMovement(const Building & b);
 
-    bool                detectBuildOrderDeadlock();
-
-    int                 getFreeMinerals();
-    int                 getFreeGas();
+    int                 getFreeMinerals() const;
+    int                 getFreeGas() const;
     bool                canPlanBuildOrderNow() const;
+
+	void				doExtractorTrick();
+
+	BWAPI::Unit getProducer(MacroAct t, BWAPI::Position closestTo = BWAPI::Positions::None);
 
 public:
 
@@ -51,10 +56,11 @@ public:
     void        onUnitDestroy(BWAPI::Unit unit);
     void        performBuildOrderSearch();
     void        drawProductionInformation(int x,int y);
-    void        setSearchGoal(MetaPairVector & goal);
     void        queueGasSteal();
+	void		startExtractorTrick();
 
-    BWAPI::Unit getProducer(MetaType t,BWAPI::Position closestTo = BWAPI::Positions::None);
+	bool		isOutOfBook() { return _outOfBook; };
+	//int			getGasTarget() { return _targetGasAmount; };
 };
 
 
@@ -73,4 +79,5 @@ public:
         return startedU1 > startedU2;
     }
 };
+
 }

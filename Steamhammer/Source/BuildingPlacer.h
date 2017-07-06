@@ -2,7 +2,7 @@
 
 #include "Common.h"
 #include "BuildingData.h"
-#include "MetaType.h"
+//#include "MacroAct.h"
 #include "InformationManager.h"
 
 namespace UAlbertaBot

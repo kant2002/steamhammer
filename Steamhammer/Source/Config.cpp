@@ -7,18 +7,17 @@ namespace Config
     {
         bool ConfigFileFound                = false;
         bool ConfigFileParsed               = false;
-        std::string ConfigFileLocation      = "bwapi-data/AI/Steamhammer_Config.json";
+        std::string ConfigFileLocation      = "bwapi-data/AI/Steamhammer_1.0.json";
     }
 
     namespace Strategy
     {
         std::string ProtossStrategyName     = "Protoss_DragoonRush";  // default
         std::string TerranStrategyName      = "Terran_TankPush";      // default
-        std::string ZergStrategyName        = "Zerg_3HatchMuta";      // default
-        std::string StrategyName            = "Zerg_3HatchMuta";
+        std::string ZergStrategyName        = "Zerg_9PoolSpeed";      // default
+        std::string StrategyName            = "Zerg_9PoolSpeed";
         std::string ReadDir                 = "bwapi-data/read/";
         std::string WriteDir                = "bwapi-data/write/";
-        bool GasStealWithScout              = false;
         bool ScoutHarassEnemy               = true;
         bool UseEnemySpecificStrategy       = true;
         bool FoundEnemySpecificStrategy     = false;
@@ -31,7 +30,6 @@ namespace Config
         bool UsingScoutManager              = true;
         bool UsingCombatCommander           = true;
         bool UsingBuildOrderSearch          = true;     // toggle use of Build Order Search, currently no backup
-        bool UsingAutoObserver              = false;
         bool UsingStrategyIO                = false;    // toggle the use of file io for strategy
         bool UsingUnitCommandManager        = false;    // handles all unit commands
 		
@@ -62,7 +60,7 @@ namespace Config
     namespace Debug								
     {
         bool DrawGameInfo                   = true;
-        bool DrawUnitHealthBars             = true;
+        bool DrawUnitHealthBars             = false;
         bool DrawProductionInfo             = true;
         bool DrawBuildOrderSearchInfo       = false;
         bool DrawScoutInfo                  = false;
@@ -76,7 +74,8 @@ namespace Config
         bool DrawEnemyUnitInfo              = false;
         bool DrawBWTAInfo                   = false;
         bool DrawMapGrid                    = false;
-        bool DrawUnitTargetInfo             = false;
+		bool DrawBaseInfo					= false;
+		bool DrawUnitTargetInfo				= false;
         bool DrawSquadInfo                  = false;
         bool DrawBOSSStateInfo              = false;
         bool PrintModuleTimeout             = false;	

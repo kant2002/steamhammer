@@ -311,8 +311,8 @@ void GameState::performAction(const Action & move)
 	else if (move.type() == ActionTypes::HEAL)
 	{
 		Unit & ourOtherUnit(getUnit(player,move.index()));
-			
-		// attack the unit
+		
+		// heal the unit
 		ourUnit.heal(move, ourOtherUnit, _currentTime);
 			
 		if (ourOtherUnit.isAlive())

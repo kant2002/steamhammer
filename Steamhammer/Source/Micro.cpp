@@ -210,7 +210,7 @@ void Micro::SmartRepair(BWAPI::Unit unit, BWAPI::Unit target)
         return;
     }
 
-    // if nothing prevents it, attack the target
+    // Nothing prevents it, so attack the target.
     unit->repair(target);
     TotalCommands++;
 
@@ -222,6 +222,33 @@ void Micro::SmartRepair(BWAPI::Unit unit, BWAPI::Unit target)
     }
 }
 
+void Micro::SmartReturnCargo(BWAPI::Unit worker)
+{
+	UAB_ASSERT(worker, "SmartReturnCargo: not a worker");
+
+	// If the worker has no cargo, ignore this command.
+	if (!worker->isCarryingMinerals() && !worker->isCarryingGas())
+	{
+		return;
+	}
+
+	// if we have issued a command to this unit already this frame, ignore this one
+	if (worker->getLastCommandFrame() >= BWAPI::Broodwar->getFrameCount() || worker->isAttackFrame())
+	{
+		return;
+	}
+
+	// If we've already issued this command, don't issue it again.
+	BWAPI::UnitCommand currentCommand(worker->getLastCommand());
+	if (currentCommand.getType() == BWAPI::UnitCommandTypes::Return_Cargo)
+	{
+		return;
+	}
+
+	// Nothing prevents it, so return cargo.
+	worker->returnCargo();
+	TotalCommands++;
+}
 
 void Micro::SmartKiteTarget(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 {

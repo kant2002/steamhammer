@@ -5,7 +5,6 @@ using namespace UAlbertaBot;
 
 MeleeManager::MeleeManager() 
 { 
-
 }
 
 void MeleeManager::executeMicro(const BWAPI::Unitset & targets) 
@@ -22,17 +21,17 @@ void MeleeManager::assignTargetsOld(const BWAPI::Unitset & targets)
 	for (auto & target : targets) 
 	{
 		// conditions for targeting
-		if (!(target->getType().isFlyer()) && 
-			!(target->isLifted()) &&
-			!(target->getType() == BWAPI::UnitTypes::Zerg_Larva) && 
-			!(target->getType() == BWAPI::UnitTypes::Zerg_Egg) &&
-			target->isVisible()) 
+		if (target->isVisible() &&
+			!target->getType().isFlyer() &&
+			!target->isLifted() &&
+			(target->getType() != BWAPI::UnitTypes::Zerg_Larva) && 
+			(target->getType() != BWAPI::UnitTypes::Zerg_Egg) &&
+			!target->isUnderDisruptionWeb())             // melee unit can't attack under dweb
 		{
 			meleeUnitTargets.insert(target);
 		}
 	}
 
-	// for each meleeUnit
 	for (auto & meleeUnit : meleeUnits)
 	{
 		// if the order is to attack or defend
@@ -120,75 +119,108 @@ BWAPI::Unit MeleeManager::getTarget(BWAPI::Unit meleeUnit, const BWAPI::Unitset 
 	return closestTarget;
 }
 
-// get the attack priority of a type in relation to a zergling
+// get the attack priority of a type
 int MeleeManager::getAttackPriority(BWAPI::Unit attacker, BWAPI::Unit unit) 
 {
 	BWAPI::UnitType type = unit->getType();
 
-    if (attacker->getType() == BWAPI::UnitTypes::Protoss_Dark_Templar 
-        && unit->getType() == BWAPI::UnitTypes::Terran_Missile_Turret
-        && (BWAPI::Broodwar->self()->deadUnitCount(BWAPI::UnitTypes::Protoss_Dark_Templar) == 0))
-    {
-        return 100;
-    }
-
-	if (attacker->getType() == BWAPI::UnitTypes::Protoss_Dark_Templar && unit->getType().isWorker())
+	if (attacker->getType() == BWAPI::UnitTypes::Protoss_Dark_Templar)
 	{
-		return 99;
+		if (unit->getType() == BWAPI::UnitTypes::Terran_Vulture_Spider_Mine)
+		{
+			return 100;
+		}
+		if (unit->getType() == BWAPI::UnitTypes::Terran_Missile_Turret
+			&& (BWAPI::Broodwar->self()->deadUnitCount(BWAPI::UnitTypes::Protoss_Dark_Templar) == 0))
+		{
+			return 90;
+		}
+		if (unit->getType().isWorker())
+		{
+			return 80;
+		}
 	}
 
-	// Highest priority is the most dangerous stuff.
-	if ( type == BWAPI::UnitTypes::Terran_Bunker ||                  // doesn't matter if it's finished
+	// Highest priority the most dangerous stuff.
+	if ( type == BWAPI::UnitTypes::Terran_Vulture_Spider_Mine ||
 		 type == BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode ||
 		 type == BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode ||
 		(type == BWAPI::UnitTypes::Protoss_Photon_Cannon && unit->isPowered()) ||
 		 type == BWAPI::UnitTypes::Protoss_High_Templar ||
 		 type == BWAPI::UnitTypes::Protoss_Reaver ||
-		 type == BWAPI::UnitTypes::Zerg_Lurker)
+		 type == BWAPI::UnitTypes::Zerg_Lurker ||
+		 type == BWAPI::UnitTypes::Zerg_Infested_Terran)
 	{
         return 13;
     }
-	// Workers that are doing stuff count for a lot.
-	if (type.isWorker() && (unit->isRepairing() || unit->isConstructing() || unitNearChokepoint(unit)))
-	{
-		return 12;
-	}
 	// Short circuit: Melee combat unit which is outside some range is lower priority than a worker.
 	if (type == BWAPI::UnitTypes::Zerg_Zergling ||
 		type == BWAPI::UnitTypes::Zerg_Ultralisk ||
+		type == BWAPI::UnitTypes::Zerg_Broodling ||
 		type == BWAPI::UnitTypes::Protoss_Zealot ||
 		type == BWAPI::UnitTypes::Protoss_Dark_Templar ||
 		type == BWAPI::UnitTypes::Terran_Firebat)
 	{
-		if (attacker->getDistance(unit) > 96) {
+		if (attacker->getDistance(unit) > 64) {
 			return 8;
 		}
 	}
-	// Medics and lesser combat units.
+	// Short circuit: Ranged unit which is far enough outside its range is lower priority than a worker.
+	if (type.groundWeapon() != BWAPI::WeaponTypes::None)
+	{
+		if (attacker->getDistance(unit) > 64 + type.groundWeapon().maxRange()) {
+			return 8;
+		}
+	}
+	// Medics and ordinary combat units.
 	if (type == BWAPI::UnitTypes::Terran_Medic ||
 		(type.groundWeapon() != BWAPI::WeaponTypes::None && !type.isWorker()))
 	{
+		return 12;
+	}
+	// Units before bunkers!
+	if (type == BWAPI::UnitTypes::Terran_Bunker)
+	{
 		return 10;
-	} 
+	}
+	// Workers that are doing stuff count more.
+	if (type.isWorker() && (unit->isRepairing() || unit->isConstructing() || unitNearChokepoint(unit)))
+	{
+		return 10;
+	}
 	// next priority is bored worker
 	if (type.isWorker()) 
 	{
 		return 9;
 	}
-    // next is special buildings
-	if (type == BWAPI::UnitTypes::Zerg_Spawning_Pool)
+    // Buildings come under attack during free time, so they can be split into more levels.
+	if (type == BWAPI::UnitTypes::Zerg_Spire || type == BWAPI::UnitTypes::Protoss_Templar_Archives)
 	{
-		return 5;
+		return 6;
 	}
-	// next is special buildings
-	if (type == BWAPI::UnitTypes::Protoss_Pylon)
+	if (type == BWAPI::UnitTypes::Zerg_Spawning_Pool || type.isResourceDepot())
 	{
 		return 5;
 	}
 	// Turrets are bad on principle.
-	if (type == BWAPI::UnitTypes::Terran_Missile_Turret)
+	if (type == BWAPI::UnitTypes::Terran_Missile_Turret || BWAPI::UnitTypes::Protoss_Pylon)
 	{
 		return 4;
+	}
+	// Downgrade unfinished/unpowered buildings, with exceptions.
+	if (type.isBuilding() &&
+		(!unit->isCompleted() || !unit->isPowered()) &&
+		!(	type.isResourceDepot() ||
+			type.groundWeapon() != BWAPI::WeaponTypes::None ||
+			type.airWeapon() != BWAPI::WeaponTypes::None ||
+			type == BWAPI::UnitTypes::Terran_Bunker))
+	{
+		return 2;
+	}
+	// Short circuit: Addons other than a completed comsat are worth almost nothing.
+	if (type.isAddon() && !(type == BWAPI::UnitTypes::Terran_Comsat_Station && unit->isCompleted()))
+	{
+		return 1;
 	}
 	// next is buildings that cost gas
 	if (type.gasPrice() > 0)

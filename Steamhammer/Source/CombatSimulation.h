@@ -17,7 +17,7 @@ namespace UAlbertaBot
 {
 class CombatSimulation
 {
-	SparCraft::GameState		state;
+	SparCraft::GameState state;
 
 public:
 

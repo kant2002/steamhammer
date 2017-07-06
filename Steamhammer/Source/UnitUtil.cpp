@@ -2,16 +2,6 @@
 
 using namespace UAlbertaBot;
 
-bool UnitUtil::IsResourceDepotType(BWAPI::UnitType type)
-{
-	return
-		type == BWAPI::UnitTypes::Terran_Command_Center ||
-		type == BWAPI::UnitTypes::Protoss_Nexus ||
-		type == BWAPI::UnitTypes::Zerg_Hatchery ||
-		type == BWAPI::UnitTypes::Zerg_Lair ||
-		type == BWAPI::UnitTypes::Zerg_Hive;
-}
-
 // Building morphed from another, not constructed.
 bool UnitUtil::IsMorphedBuildingType(BWAPI::UnitType type)
 {
@@ -57,8 +47,7 @@ bool UnitUtil::IsValidUnit(BWAPI::Unit unit)
 		&& unit->isCompleted()
         && unit->getHitPoints() > 0 
         && unit->getType() != BWAPI::UnitTypes::Unknown 
-        && unit->getPosition().x != BWAPI::Positions::Unknown.x 
-		&& unit->getPosition().y != BWAPI::Positions::Unknown.y;
+		&& unit->getPosition().isValid();
 }
 
 Rect UnitUtil::GetRect(BWAPI::Unit unit)
@@ -156,6 +145,7 @@ int UnitUtil::GetAttackRange(BWAPI::UnitType attacker, BWAPI::UnitType target)
     return weapon.maxRange();
 }
 
+// All our units, whether completed or not.
 size_t UnitUtil::GetAllUnitCount(BWAPI::UnitType type)
 {
     size_t count = 0;
@@ -188,6 +178,20 @@ size_t UnitUtil::GetAllUnitCount(BWAPI::UnitType type)
     return count;
 }
 
+// Only our completed units.
+size_t UnitUtil::GetCompletedUnitCount(BWAPI::UnitType type)
+{
+	size_t count = 0;
+	for (const auto & unit : BWAPI::Broodwar->self()->getUnits())
+	{
+		if (unit->getType() == type && unit->isCompleted())
+		{
+			count++;
+		}
+	}
+
+	return count;
+}
 
 BWAPI::Unit UnitUtil::GetClosestUnitTypeToTarget(BWAPI::UnitType type, BWAPI::Position target)
 {

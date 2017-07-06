@@ -22,7 +22,6 @@ class Action
 
 public:
 
-
 	Action();
 
     Action( const IDType & unitIndex, const IDType & player, const IDType & type, const IDType & moveIndex, const Position & dest);

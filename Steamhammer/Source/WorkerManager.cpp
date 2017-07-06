@@ -7,6 +7,7 @@ using namespace UAlbertaBot;
 WorkerManager::WorkerManager() 
 {
     previousClosestWorker = nullptr;
+	_collectGas = true;
 }
 
 WorkerManager & WorkerManager::Instance() 
@@ -20,6 +21,7 @@ void WorkerManager::update()
 	updateWorkerStatus();
 	handleGasWorkers();
 	handleIdleWorkers();
+	handleReturnCargoWorkers();
 	handleMoveWorkers();
 	handleCombatWorkers();
 
@@ -41,21 +43,43 @@ void WorkerManager::updateWorkerStatus()
 			continue;
 		}
 
-		// if it's idle
-		if (worker->isIdle() && 
-			(workerData.getWorkerJob(worker) != WorkerData::Build) && 
-			(workerData.getWorkerJob(worker) != WorkerData::Move) &&
-			(workerData.getWorkerJob(worker) != WorkerData::Scout)) 
+		// If it's supposed to be on minerals but is actually collecting gas, fix it.
+		// This can happen when we stop collecting gas; the worker can be mis-assigned.
+		if (workerData.getWorkerJob(worker) == WorkerData::Minerals &&
+			(worker->getOrder() == BWAPI::Orders::MoveToGas ||
+			 worker->getOrder() == BWAPI::Orders::WaitForGas ||
+			 worker->getOrder() == BWAPI::Orders::ReturnGas))
 		{
 			workerData.setWorkerJob(worker, WorkerData::Idle, nullptr);
+			continue;
 		}
 
+		// if it's idle
+		if ((worker->isIdle() || worker->getOrder() == BWAPI::Orders::PlayerGuard) &&
+			(workerData.getWorkerJob(worker) != WorkerData::Build) && 
+			(workerData.getWorkerJob(worker) != WorkerData::Move) &&
+			(workerData.getWorkerJob(worker) != WorkerData::Scout) &&
+			(workerData.getWorkerJob(worker) != WorkerData::ReturnCargo))
+		{
+			workerData.setWorkerJob(worker, WorkerData::Idle, nullptr);
+			continue;
+		}
+		
+		// If it tried to morph into a building and failed, sitting there doing nothing.
+		if (worker->getOrder() == BWAPI::Orders::PlayerGuard &&
+			workerData.getWorkerJob(worker) == WorkerData::Build &&
+			worker->getType() == BWAPI::UnitTypes::Zerg_Drone)
+		{
+			workerData.setWorkerJob(worker, WorkerData::Idle, nullptr);
+			continue;
+		}
+		
 		// if its job is gas
 		if (workerData.getWorkerJob(worker) == WorkerData::Gas)
 		{
 			BWAPI::Unit refinery = workerData.getWorkerResource(worker);
 
-			// if the refinery doesn't exist anymore
+			// and the refinery doesn't exist anymore
 			if (!refinery || !refinery->exists() ||	refinery->getHitPoints() <= 0)
 			{
 				setMineralWorker(worker);
@@ -76,58 +100,70 @@ void WorkerManager::stopRepairing(BWAPI::Unit worker)
 
 void WorkerManager::handleGasWorkers() 
 {
-	// for each unit we have
-	for (auto & unit : BWAPI::Broodwar->self()->getUnits())
+	for (auto unit : BWAPI::Broodwar->self()->getUnits())
 	{
 		// if that unit is a refinery
-		if (unit->getType().isRefinery() && unit->isCompleted() && !isGasStealRefinery(unit))
+		if (unit->getType().isRefinery() && unit->isCompleted())
 		{
-			// get the number of workers currently assigned to it
-			int numAssigned = workerData.getNumAssignedWorkers(unit);
-
-			// if it's less than we want it to be, fill 'er up
-			for (int i=0; i<(Config::Macro::WorkersPerRefinery-numAssigned); ++i)
+			if (_collectGas)
 			{
-				BWAPI::Unit gasWorker = getGasWorker(unit);
-				if (gasWorker)
-				{
-					workerData.setWorkerJob(gasWorker, WorkerData::Gas, unit);
+				// Refinery is isolated; its hatchery was probably killed.
+				if (!refineryHasDepot(unit)) {
+					continue;
 				}
-				else {
-					return;    // won't find any more no matter how often we look
+				// Gather gas: If too few are assigned, add more.
+				int numAssigned = workerData.getNumAssignedWorkers(unit);
+				for (int i = 0; i < (Config::Macro::WorkersPerRefinery - numAssigned); ++i)
+				{
+					BWAPI::Unit gasWorker = getGasWorker(unit);
+					if (gasWorker)
+					{
+						workerData.setWorkerJob(gasWorker, WorkerData::Gas, unit);
+					}
+					else {
+						return;    // won't find any more
+					}
+				}
+			}
+			else {
+				// TODO maybe move this into updateWorkerStatus
+				// Don't gather gas: If any workers are assigned, take them off.
+				std::set<BWAPI::Unit> gasWorkers;
+				workerData.getGasWorkers(gasWorkers);
+				for (auto gasWorker : gasWorkers)
+				{
+					if (gasWorker->getOrder() != BWAPI::Orders::HarvestGas)    // not inside the refinery
+					{
+						workerData.setWorkerJob(gasWorker, WorkerData::Idle, nullptr);
+						// An idle worker carrying gas will become a ReturnCargo worker,
+						// so gas will not be lost needlessly.
+					}
 				}
 			}
 		}
 	}
 }
 
-bool WorkerManager::isGasStealRefinery(BWAPI::Unit unit)
+// Is our refinery near a resource depot that it can deliver gas to?
+bool WorkerManager::refineryHasDepot(BWAPI::Unit refinery)
 {
-    BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getMainBaseLocation(BWAPI::Broodwar->enemy());
-    if (!enemyBaseLocation)
-    {
-        return false;
-    }
-    
-    if (enemyBaseLocation->getGeysers().empty())
-    {
-        return false;
-    }
-    
-	for (auto & u : enemyBaseLocation->getGeysers())
+	// Iterate through units, not bases, because even if the main hatchery is destroyed
+	// (so the base is considered gone), a macro hatchery may be close enough.
+	for (auto unit : BWAPI::Broodwar->self()->getUnits())
 	{
-        if (unit->getTilePosition() == u->getTilePosition())
-        {
-            return true;
-        }
+		if (unit->getType().isResourceDepot() &&
+			(unit->isCompleted() || unit->getType() == BWAPI::UnitTypes::Zerg_Lair || unit->getType() == BWAPI::UnitTypes::Zerg_Hive) &&
+			unit->getDistance(refinery) < 600)
+		{
+			return true;
+		}
 	}
 
-    return false;
+	return false;
 }
 
 void WorkerManager::handleIdleWorkers() 
 {
-	// for each of our workers
 	for (auto & worker : workerData.getWorkers())
 	{
         UAB_ASSERT(worker != nullptr, "Worker was null");
@@ -135,8 +171,33 @@ void WorkerManager::handleIdleWorkers()
 		// if it is idle
 		if (workerData.getWorkerJob(worker) == WorkerData::Idle) 
 		{
-			// send it to the nearest mineral patch
-			setMineralWorker(worker);
+			if (worker->isCarryingMinerals() || worker->isCarryingGas()) {
+				// It's carrying something, set it to hand in its cargo.
+				setReturnCargoWorker(worker);         // only happens if there's a resource depot
+			}
+			else {
+				// Otherwise send it to mine minerals.
+				setMineralWorker(worker);             // only happens if there's a resource depot
+			}
+		}
+	}
+}
+
+void WorkerManager::handleReturnCargoWorkers()
+{
+	for (auto & worker : workerData.getWorkers())
+	{
+		UAB_ASSERT(worker != nullptr, "Worker was null");
+
+		if (workerData.getWorkerJob(worker) == WorkerData::ReturnCargo)
+		{
+			// If it still needs to return cargo, return it; otherwise go idle.
+			if (worker->isCarryingMinerals() || worker->isCarryingGas()) {
+				Micro::SmartReturnCargo(worker);
+			}
+			else {
+				workerData.setWorkerJob(worker, WorkerData::Idle, nullptr);
+			}
 		}
 	}
 }
@@ -168,9 +229,11 @@ void WorkerManager::handleCombatWorkers()
 
 		if (workerData.getWorkerJob(worker) == WorkerData::Combat)
 		{
-			BWAPI::Broodwar->drawCircleMap(worker->getPosition().x, worker->getPosition().y, 4, BWAPI::Colors::Yellow, true);
-			BWAPI::Unit target = getClosestEnemyUnit(worker);
+			if (Config::Debug::DrawWorkerInfo) {
+				BWAPI::Broodwar->drawCircleMap(worker->getPosition().x, worker->getPosition().y, 4, BWAPI::Colors::Yellow, true);
+			}
 
+			BWAPI::Unit target = getClosestEnemyUnit(worker);
 			if (target)
 			{
 				Micro::SmartAttackUnit(worker, target);
@@ -280,7 +343,6 @@ BWAPI::Unit WorkerManager::getWorkerScout()
 
 void WorkerManager::handleMoveWorkers() 
 {
-	// for each of our workers
 	for (auto & worker : workerData.getWorkers())
 	{
         UAB_ASSERT(worker != nullptr, "Worker was null");
@@ -295,23 +357,37 @@ void WorkerManager::handleMoveWorkers()
 	}
 }
 
-// set a worker to mine minerals
+// Send the worker to mine minerals at the closest resource depot, if any.
 void WorkerManager::setMineralWorker(BWAPI::Unit unit)
 {
     UAB_ASSERT(unit != nullptr, "Unit was null");
 
-	// check if there is a mineral available to send the worker to
 	BWAPI::Unit depot = getClosestDepot(unit);
 
-	// if there is a valid mineral
 	if (depot)
 	{
-		// update workerData with the new job
 		workerData.setWorkerJob(unit, WorkerData::Minerals, depot);
 	}
 	else
 	{
 		// BWAPI::Broodwar->printf("No valid depot for mineral worker");
+	}
+}
+
+// Worker is carrying minerals or gas. Tell it to hand them in.
+void WorkerManager::setReturnCargoWorker(BWAPI::Unit unit)
+{
+	UAB_ASSERT(unit != nullptr, "Unit was null");
+
+	BWAPI::Unit depot = getClosestDepot(unit);
+
+	if (depot)
+	{
+		workerData.setWorkerJob(unit, WorkerData::ReturnCargo, depot);
+	}
+	else
+	{
+		// BWAPI::Broodwar->printf("No valid depot to accept return cargo");
 	}
 }
 
@@ -326,7 +402,7 @@ BWAPI::Unit WorkerManager::getClosestDepot(BWAPI::Unit worker)
 	{
         UAB_ASSERT(unit != nullptr, "Unit was null");
 
-		if (unit->getType().isResourceDepot() && (unit->isCompleted() || unit->getType() == BWAPI::UnitTypes::Zerg_Lair) && !workerData.depotIsFull(unit))
+		if (unit->getType().isResourceDepot() && (unit->isCompleted() || unit->getType() == BWAPI::UnitTypes::Zerg_Lair || unit->getType() == BWAPI::UnitTypes::Zerg_Hive) && !workerData.depotIsFull(unit))
 		{
 			double distance = unit->getDistance(worker);
 			if (!closestDepot || distance < closestDistance)
@@ -346,13 +422,14 @@ void WorkerManager::finishedWithWorker(BWAPI::Unit unit)
 {
 	UAB_ASSERT(unit != nullptr, "Unit was null");
 
-	//BWAPI::Broodwar->printf("BuildingManager finished with worker %d", unit->getID());
-	if (workerData.getWorkerJob(unit) != WorkerData::Scout)
-	{
+	//BWAPI::Broodwar->printf("finished with worker %d", unit->getID());
+	//if (workerData.getWorkerJob(unit) != WorkerData::Scout)
+	//{
 		workerData.setWorkerJob(unit, WorkerData::Idle, nullptr);
-	}
+	//}
 }
 
+// Find a worker to be reassigned to gas duty.
 BWAPI::Unit WorkerManager::getGasWorker(BWAPI::Unit refinery)
 {
 	UAB_ASSERT(refinery != nullptr, "Refinery was null");
@@ -362,12 +439,14 @@ BWAPI::Unit WorkerManager::getGasWorker(BWAPI::Unit refinery)
 
 	for (auto & unit : workerData.getWorkers())
 	{
-        UAB_ASSERT(unit != nullptr, "Unit was null");
+		UAB_ASSERT(unit != nullptr, "Unit was null");
 
 		if (workerData.getWorkerJob(unit) == WorkerData::Minerals)
 		{
-			// Don't waste minerals or gas.
-			if (unit->isCarryingMinerals() || unit->isCarryingGas()) {
+			// Don't waste minerals. It's OK (and unlikely) to already be carrying gas.
+			if (unit->isCarryingMinerals() &&                       // doesn't have minerals and
+				unit->getOrder() != BWAPI::Orders::MiningMinerals)  // isn't about to get them
+			{
 				continue;
 			}
 
@@ -383,17 +462,17 @@ BWAPI::Unit WorkerManager::getGasWorker(BWAPI::Unit refinery)
 	return closestWorker;
 }
 
- void WorkerManager::setBuildingWorker(BWAPI::Unit worker, Building & b)
- {
+void WorkerManager::setBuildingWorker(BWAPI::Unit worker, Building & b)
+{
      UAB_ASSERT(worker != nullptr, "Worker was null");
 
      workerData.setWorkerJob(worker, WorkerData::Build, b.type);
- }
+}
 
-// gets a builder for BuildingManager to use
+// Get a builder for BuildingManager.
 // if setJobAsBuilder is true (default), it will be flagged as a builder unit
 // set 'setJobAsBuilder' to false if we just want to see which worker will build a building
-BWAPI::Unit WorkerManager::getBuilder(Building & b, bool setJobAsBuilder)
+BWAPI::Unit WorkerManager::getBuilder(const Building & b, bool setJobAsBuilder)
 {
 	// variables to hold the closest worker of each type to the building
 	BWAPI::Unit closestMovingWorker = nullptr;
@@ -421,10 +500,12 @@ BWAPI::Unit WorkerManager::getBuilder(Building & b, bool setJobAsBuilder)
 		{
 			// if it is a new closest distance, set the pointer
 			double distance = unit->getDistance(BWAPI::Position(b.finalPosition));
-			if (unit->isCarryingMinerals() || unit->isCarryingGas()) {
-				// If it has cargo, pretend it is farther away.
+			if (unit->isCarryingMinerals() || unit->isCarryingGas() ||
+				unit->getOrder() == BWAPI::Orders::MiningMinerals)
+			{
+				// If it has cargo or is busy getting some, pretend it is farther away.
 				// That way we prefer empty workers and lose less cargo.
-				distance += 64;
+				distance += 96;
 			}
 			if (!closestMiningWorker || distance < closestMiningWorkerDistance)
 			{
@@ -438,10 +519,11 @@ BWAPI::Unit WorkerManager::getBuilder(Building & b, bool setJobAsBuilder)
 		{
 			// if it is a new closest distance, set the pointer
 			double distance = unit->getDistance(BWAPI::Position(b.finalPosition));
-			if (unit->isCarryingMinerals() || unit->isCarryingGas()) {
-				// If it has cargo, pretend it is farther away.
+			if (unit->isCarryingMinerals() || unit->isCarryingGas() ||
+				unit->getOrder() == BWAPI::Orders::MiningMinerals) {
+				// If it has cargo or is busy getting some, pretend it is farther away.
 				// That way we prefer empty workers and lose less cargo.
-				distance += 64;
+				distance += 96;
 			}
 			if (!closestMovingWorker || distance < closestMovingWorkerDistance)
 			{
@@ -488,10 +570,11 @@ BWAPI::Unit WorkerManager::getMoveWorker(BWAPI::Position p)
 		{
 			// if it is a new closest distance, set the pointer
 			double distance = unit->getDistance(p);
-			if (unit->isCarryingMinerals() || unit->isCarryingGas()) {
-				// If it has cargo, pretend it is farther away.
+			if (unit->isCarryingMinerals() || unit->isCarryingGas() ||
+				unit->getOrder() == BWAPI::Orders::MiningMinerals) {
+				// If it has cargo or is busy getting some, pretend it is farther away.
 				// That way we prefer empty workers and lose less cargo.
-				distance += 64;
+				distance += 96;
 			}
 			if (!closestWorker || distance < closestDistance)
 			{
@@ -542,7 +625,7 @@ void WorkerManager::setMoveWorker(int mineralsNeeded, int gasNeeded, BWAPI::Posi
 	}
 	else
 	{
-		//BWAPI::Broodwar->printf("Error, no worker found");
+		//BWAPI::Broodwar->printf("no worker found");
 	}
 }
 
@@ -597,7 +680,7 @@ void WorkerManager::onUnitMorph(BWAPI::Unit unit)
 		workerData.addWorker(unit);
 	}
 
-	// if something morphs into a building, it was a worker?
+	// if something morphs into a building, was it a drone?
 	if (unit->getType().isBuilding() && unit->getPlayer() == BWAPI::Broodwar->self() && unit->getPlayer()->getRace() == BWAPI::Races::Zerg)
 	{
 		//BWAPI::Broodwar->printf("A Drone started building");
@@ -622,7 +705,6 @@ void WorkerManager::onUnitShow(BWAPI::Unit unit)
 		workerData.addWorker(unit);
 	}
 }
-
 
 void WorkerManager::rebalanceWorkers()
 {
@@ -685,6 +767,7 @@ void WorkerManager::drawResourceDebugInfo()
 		BWAPI::Position pos = worker->getTargetPosition();
 
 		BWAPI::Broodwar->drawTextMap(worker->getPosition().x, worker->getPosition().y - 5, "\x07%c", job);
+		BWAPI::Broodwar->drawTextMap(worker->getPosition().x, worker->getPosition().y + 5, "\x03%s", worker->getOrder().getName().c_str());
 
 		BWAPI::Broodwar->drawLineMap(worker->getPosition().x, worker->getPosition().y, pos.x, pos.y, BWAPI::Colors::Cyan);
 
@@ -739,17 +822,17 @@ bool WorkerManager::isBuilder(BWAPI::Unit worker)
 	return (workerData.getWorkerJob(worker) == WorkerData::Build);
 }
 
-int WorkerManager::getNumMineralWorkers() 
+int WorkerManager::getNumMineralWorkers() const
 {
 	return workerData.getNumMineralWorkers();	
 }
 
-int WorkerManager::getNumIdleWorkers() 
+int WorkerManager::getNumIdleWorkers() const
 {
 	return workerData.getNumIdleWorkers();	
 }
 
-int WorkerManager::getNumGasWorkers() 
+int WorkerManager::getNumGasWorkers() const
 {
 	return workerData.getNumGasWorkers();
 }

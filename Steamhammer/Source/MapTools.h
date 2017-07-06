@@ -23,10 +23,10 @@ class MapTools
 
     MapTools();
 
-    int                     getIndex(int row,int col);   // return the index of the 1D array from (row,col)
+    int                     getIndex(int row,int col);		// return the index of the 1D array from (row,col)
     bool                    unexplored(DistanceMap & dmap,const int index) const;
-    void                    reset();                           // resets the distance and fringe vectors, call before each search    
-    void                    setBWAPIMapData();                 // reads in the map data from bwapi and stores it in our map format
+    void                    reset();						// resets the distance and fringe vectors, call before each search    
+    void                    setBWAPIMapData();				// reads in the map data from bwapi and stores it in our map format
     void                    resetFringe();
     void                    computeDistance(DistanceMap & dmap,const BWAPI::Position p); // computes walk distance from Position P to all other points on the map
     BWAPI::TilePosition     getTilePosition(int index);
@@ -42,8 +42,7 @@ public:
     int	                    getEnemyBaseDistance(BWAPI::Position p);
     int	                    getMyBaseDistance(BWAPI::Position p);
     BWAPI::Position         getEnemyBaseMoveTo(BWAPI::Position p);
-    BWAPI::TilePosition     getNextExpansion();
-    BWAPI::TilePosition     getNextExpansion(BWAPI::Player player);
+    BWAPI::TilePosition     getNextExpansion(bool hidden = false, bool minOnlyOK = false);
     void                    drawHomeDistanceMap();
 
     const std::vector<BWAPI::TilePosition> & getClosestTilesTo(BWAPI::Position pos);

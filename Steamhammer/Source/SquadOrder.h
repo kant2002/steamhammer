@@ -52,5 +52,21 @@ public:
     {
         return _type;
     }
+
+	const char getCharCode() const
+	{
+		switch (_type)
+		{
+			case SquadOrderTypes::None:    return '-';
+			case SquadOrderTypes::Idle:    return 'I';
+			case SquadOrderTypes::Attack:  return 'A';
+			case SquadOrderTypes::Defend:  return 'D';
+			case SquadOrderTypes::Regroup: return 'G';
+			case SquadOrderTypes::Drop:    return 'T';
+			case SquadOrderTypes::Survey:  return 'S';
+		}
+		return '?';
+	}
+
 };
 }

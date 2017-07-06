@@ -5,10 +5,12 @@ using namespace UAlbertaBot;
 
 ScoutManager::ScoutManager() 
     : _workerScout(nullptr)
-    , _numWorkerScouts(0)
+	, _scoutStatus("None")
+	, _gasStealStatus("None")
+	, _numWorkerScouts(0)
+	, _scoutLocationOnly(false)
     , _scoutUnderAttack(false)
-    , _gasStealStatus("None")
-    , _scoutStatus("None")
+	, _tryGasSteal(false)
     , _didGasSteal(false)
     , _gasStealFinished(false)
     , _currentRegionVertexIndex(-1)
@@ -24,10 +26,26 @@ ScoutManager & ScoutManager::Instance()
 
 void ScoutManager::update()
 {
-    if (!Config::Modules::UsingScoutManager)
-    {
-        return;
-    }
+	// If we're not scouting now, minimum effort.
+	if (!_workerScout)
+	{
+		return;
+	}
+
+	// If the worker scout is gone, admit it.
+	if (!_workerScout->exists() || _workerScout->getHitPoints() <= 0)
+	{
+		_workerScout = nullptr;
+		return;
+	}
+
+	// If we only want to locate the enemy base and we have, release the scout worker.
+	if (_scoutLocationOnly && InformationManager::Instance().getEnemyMainBaseLocation())
+	{
+		WorkerManager::Instance().finishedWithWorker(_workerScout);
+		_workerScout = nullptr;
+		return;
+	}
 
     // calculate enemy region vertices if we haven't yet
     if (_enemyRegionVertices.empty())
@@ -35,7 +53,7 @@ void ScoutManager::update()
         calculateEnemyRegionVertices();
     }
 
-	moveScouts();
+	moveScout();
     drawScoutInformation(200, 320);
 }
 
@@ -49,6 +67,16 @@ void ScoutManager::setWorkerScout(BWAPI::Unit unit)
 
     _workerScout = unit;
     WorkerManager::Instance().setScoutWorker(_workerScout);
+}
+
+void ScoutManager::setGasSteal()
+{
+	_tryGasSteal = true;
+}
+
+void ScoutManager::setScoutLocationOnly()
+{
+	_scoutLocationOnly = true;
 }
 
 void ScoutManager::drawScoutInformation(int x, int y)
@@ -67,20 +95,15 @@ void ScoutManager::drawScoutInformation(int x, int y)
     }
 }
 
-void ScoutManager::moveScouts()
+void ScoutManager::moveScout()
 {
-	if (!_workerScout || !_workerScout->exists() || !(_workerScout->getHitPoints() > 0))
-	{
-		return;
-	}
-
     int scoutHP = _workerScout->getHitPoints() + _workerScout->getShields();
     
     gasSteal();
 
 	// get the enemy base location, if we have one
 	// Note: In case of an enemy proxy or weird map, this might be our own base. Roll with it.
-	BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getMainBaseLocation(BWAPI::Broodwar->enemy());
+	BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getEnemyMainBaseLocation();
 
     int scoutDistanceThreshold = 30;
 
@@ -129,7 +152,7 @@ void ScoutManager::moveScouts()
 				BWAPI::Unit closestWorker = enemyWorkerToHarass();
 
 				// if there is a worker nearby, harass it
-				if (Config::Strategy::ScoutHarassEnemy && (!Config::Strategy::GasStealWithScout || _gasStealFinished) && closestWorker && (_workerScout->getDistance(closestWorker) < 800))
+				if (Config::Strategy::ScoutHarassEnemy && (!_tryGasSteal || _gasStealFinished) && closestWorker && (_workerScout->getDistance(closestWorker) < 800))
 				{
                     _scoutStatus = "Harass enemy worker";
                     _currentRegionVertexIndex = -1;
@@ -201,7 +224,7 @@ void ScoutManager::followPerimeter()
 
 void ScoutManager::gasSteal()
 {
-    if (!Config::Strategy::GasStealWithScout)
+    if (!_tryGasSteal)
     {
         _gasStealStatus = "Not using gas steal";
         return;
@@ -218,7 +241,7 @@ void ScoutManager::gasSteal()
         return;
     }
 
-    BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getMainBaseLocation(BWAPI::Broodwar->enemy());
+    BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getEnemyMainBaseLocation();
     if (!enemyBaseLocation)
     {
         _gasStealStatus = "No enemy base location found";
@@ -228,8 +251,8 @@ void ScoutManager::gasSteal()
     BWAPI::Unit enemyGeyser = getEnemyGeyser();
     if (!enemyGeyser)
     {
-        _gasStealStatus = "No enemy geyser found";
-        false;
+        _gasStealStatus = "Not exactly 1 enemy geyser";
+        return;
     }
 
     if (!_didGasSteal)
@@ -237,7 +260,7 @@ void ScoutManager::gasSteal()
         ProductionManager::Instance().queueGasSteal();
         _didGasSteal = true;
         Micro::SmartMove(_workerScout, enemyGeyser->getPosition());
-        _gasStealStatus = "Did Gas Steal";
+        _gasStealStatus = "Stealing gas";
     }
 }
 
@@ -279,17 +302,19 @@ BWAPI::Unit ScoutManager::enemyWorkerToHarass()
 	return enemyWorker;
 }
 
+// If there is exactly 1 geyser in the enemy base, return it.
+// If there's 0 we can't steal it, and if >1 then it's no use to steal it.
 BWAPI::Unit ScoutManager::getEnemyGeyser()
 {
-	BWAPI::Unit geyser = nullptr;
-	BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getMainBaseLocation(BWAPI::Broodwar->enemy());
+	BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getEnemyMainBaseLocation();
 
-	for (auto & unit : enemyBaseLocation->getGeysers())
+	BWAPI::Unitset geysers = enemyBaseLocation->getGeysers();
+	if (geysers.size() == 1)
 	{
-		geyser = unit;
+		return *(geysers.begin());
 	}
 
-	return geyser;
+	return nullptr;
 }
 
 bool ScoutManager::enemyWorkerInRadius()
@@ -305,6 +330,7 @@ bool ScoutManager::enemyWorkerInRadius()
 	return false;
 }
 
+// Unused.
 bool ScoutManager::immediateThreat()
 {
 	BWAPI::Unitset enemyAttackingWorkers;
@@ -357,7 +383,7 @@ BWAPI::Position ScoutManager::getFleePosition()
 {
     UAB_ASSERT_WARNING(!_enemyRegionVertices.empty(), "We should have an enemy region vertices if we are fleeing");
     
-    BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getMainBaseLocation(BWAPI::Broodwar->enemy());
+    BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getEnemyMainBaseLocation();
 
     // if this is the first flee, we will not have a previous perimeter index
     if (_currentRegionVertexIndex == -1)
@@ -398,7 +424,7 @@ BWAPI::Position ScoutManager::getFleePosition()
 
 void ScoutManager::calculateEnemyRegionVertices()
 {
-    BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getMainBaseLocation(BWAPI::Broodwar->enemy());
+    BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getEnemyMainBaseLocation();
     //UAB_ASSERT_WARNING(enemyBaseLocation, "We should have an enemy base location if we are fleeing");
 
     if (!enemyBaseLocation)

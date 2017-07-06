@@ -35,7 +35,7 @@ class BOSSManager
 
 	void						            loadOpeningBook();
 
-	std::vector<std::vector<MetaType>>      openingBook;
+	std::vector<std::vector<MacroAct>>      openingBook;
     const BOSS::RaceID                      getRace() const;
 
     void                                    logBadSearch();
@@ -59,9 +59,9 @@ public:
 
     
 	static BOSS::BuildOrderSearchGoal       GetGoal(const std::vector<MetaPair> & goalUnits);	
-    static std::vector<MetaType>			GetMetaVector(const BOSS::BuildOrder & buildOrder);
-	static BOSS::ActionType					GetActionType(const MetaType & t);
-	static MetaType					        GetMetaType(const BOSS::ActionType & a);
+    static std::vector<MacroAct>			GetMetaVector(const BOSS::BuildOrder & buildOrder);
+	static BOSS::ActionType					GetActionType(const MacroAct & t);
+	static MacroAct					        GetMacroAct(const BOSS::ActionType & a);
 };
 
 }

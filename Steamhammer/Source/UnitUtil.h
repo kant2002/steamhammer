@@ -7,7 +7,6 @@ namespace UAlbertaBot
 {
 namespace UnitUtil
 {      
-	bool IsResourceDepotType(BWAPI::UnitType unitType);
 	bool IsMorphedBuildingType(BWAPI::UnitType unitType);
 	
 	bool IsCombatUnit(BWAPI::Unit unit);
@@ -25,7 +24,8 @@ namespace UnitUtil
     int GetTransportSize(BWAPI::UnitType type);
 
     size_t GetAllUnitCount(BWAPI::UnitType type);
-
+	size_t GetCompletedUnitCount(BWAPI::UnitType type);
+	
     BWAPI::Unit GetClosestUnitTypeToTarget(BWAPI::UnitType type, BWAPI::Position target);
     BWAPI::WeaponType GetWeapon(BWAPI::Unit attacker, BWAPI::Unit target);
     BWAPI::WeaponType GetWeapon(BWAPI::UnitType attacker, BWAPI::UnitType target);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Common.h"
+#include "MacroAct.h"
 
 namespace UAlbertaBot
 {
@@ -13,27 +14,25 @@ namespace BuildingStatus
 class Building 
 {
 public:
-      
+    
+	MacroLocation			macroLocation;
 	BWAPI::TilePosition     desiredPosition;
 	BWAPI::TilePosition     finalPosition;
-	BWAPI::Position         position;
 	BWAPI::UnitType         type;
 	BWAPI::Unit             buildingUnit;
 	BWAPI::Unit             builderUnit;
     size_t                  status;
-	int                     lastOrderFrame;
     bool                    isGasSteal;
 	bool                    buildCommandGiven;
 	bool                    underConstruction;
 
 	Building() 
-		: desiredPosition   (0,0)
+		: macroLocation		(MacroLocation::Anywhere)
+		, desiredPosition	(0, 0)
         , finalPosition     (BWAPI::TilePositions::None)
-        , position          (0,0)
         , type              (BWAPI::UnitTypes::Unknown)
         , buildingUnit      (nullptr)
         , builderUnit       (nullptr)
-        , lastOrderFrame    (0)
         , status            (BuildingStatus::Unassigned)
         , buildCommandGiven (false)
         , underConstruction (false) 
@@ -42,13 +41,12 @@ public:
 
 	// constructor we use most often
 	Building(BWAPI::UnitType t, BWAPI::TilePosition desired)
-		: desiredPosition   (desired)
-        , finalPosition     (0,0)
-        , position          (0,0)
+		: macroLocation		(MacroLocation::Anywhere)
+		, desiredPosition	(desired)
+		, finalPosition		(0, 0)
         , type              (t)
         , buildingUnit      (nullptr)
         , builderUnit       (nullptr)
-        , lastOrderFrame    (0)
         , status            (BuildingStatus::Unassigned)
         , buildCommandGiven (false)
         , underConstruction (false) 
@@ -65,7 +63,7 @@ public:
 
 class BuildingData 
 {
-    std::vector<Building>                   _buildings;
+    std::vector<Building> _buildings;
 
 public:
 

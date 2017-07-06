@@ -289,14 +289,14 @@ bool BOSSManager::isSearchInProgress()
     return _searchInProgress;
 }
 
-// converts SearchResults.buildOrder vector into vector of MetaType
-std::vector<MetaType> BOSSManager::GetMetaVector(const BOSS::BuildOrder & buildOrder)
+// converts SearchResults.buildOrder vector into vector of MacroAct
+std::vector<MacroAct> BOSSManager::GetMetaVector(const BOSS::BuildOrder & buildOrder)
 {
-	std::vector<MetaType> metaVector;
+	std::vector<MacroAct> metaVector;
     	
 	for (size_t i(0); i<buildOrder.size(); ++i)
 	{
-		metaVector.push_back(GetMetaType(buildOrder[i]));
+		metaVector.push_back(GetMacroAct(buildOrder[i]));
 	}
 
 	return metaVector;
@@ -308,7 +308,7 @@ BuildOrder BOSSManager::getBuildOrder()
     return BuildOrder(BWAPI::Broodwar->self()->getRace(), GetMetaVector(_previousBuildOrder));
 }
 
-BOSS::ActionType BOSSManager::GetActionType(const MetaType & t)
+BOSS::ActionType BOSSManager::GetActionType(const MacroAct & t)
 {
 	// set the appropriate type
 	if (t.isUnit())
@@ -331,25 +331,25 @@ BOSS::ActionType BOSSManager::GetActionType(const MetaType & t)
 	return BOSS::ActionType();
 }
 
-MetaType BOSSManager::GetMetaType(const BOSS::ActionType & a)
+MacroAct BOSSManager::GetMacroAct(const BOSS::ActionType & a)
 {
 	// set the appropriate type
 	if (a.isUnit())
 	{
-		return MetaType(a.getUnitType());
+		return MacroAct(a.getUnitType());
 	}
 	else if (a.isUpgrade())
 	{
-		return MetaType(a.getUpgradeType());
+		return MacroAct(a.getUpgradeType());
 	} 
 	else if (a.isTech())
 	{
-		return MetaType(a.getTechType());
+		return MacroAct(a.getTechType());
 	}
 	else
 	{
 		UAB_ASSERT(false, "Should have found a valid type here");
 	}
 	
-	return MetaType();
+	return MacroAct();
 }
