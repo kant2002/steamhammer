@@ -15,5 +15,6 @@ namespace ParseUtils
     bool GetBoolFromString(const std::string & str);
 	int GetIntByRace(const char * name, const rapidjson::Value & item);
 	double GetDoubleByRace(const char * name, const rapidjson::Value & item);
+	bool GetBoolByRace(const char * name, const rapidjson::Value & item);
 }
 }

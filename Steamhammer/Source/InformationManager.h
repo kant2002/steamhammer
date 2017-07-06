@@ -49,6 +49,7 @@ class InformationManager
 
 	bool			_enemyProxy;
 
+	bool			_weHaveCombatUnits;
 	bool			_enemyHasAntiAir;
 	bool			_enemyHasAirTech;
 	bool			_enemyHasCloakTech;
@@ -123,6 +124,8 @@ public:
 	void					reserveBase(BWTA::BaseLocation * base);
 	void					unreserveBase(BWTA::BaseLocation * base);
 	void					unreserveBase(BWAPI::TilePosition baseTilePosition);
+
+	bool					weHaveCombatUnits();
 
 	bool					enemyHasAntiAir();
 	bool					enemyHasAirTech();

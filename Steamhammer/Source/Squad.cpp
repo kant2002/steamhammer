@@ -396,6 +396,11 @@ BWAPI::Position Squad::calcRegroupPosition()
 
 	int minDist = 100000;
 
+	// Retreat to the location of whatever unit not near the enemy which is
+	// closest to the order's target destination.
+	// NOTE May retreat somewhere silly if the chosen unit was newly produced.
+	//      Zerg sometimes retreats back and forth through the enemy when new
+	//      zerg units are produced in bases on opposite sides.
 	for (auto & unit : _units)
 	{
 		// Don't return the position of an overlord, which may be in a weird place.
@@ -413,15 +418,19 @@ BWAPI::Position Squad::calcRegroupPosition()
 		}
 	}
 
+	// Failing that, retreat to a base we own.
 	if (regroup == BWAPI::Position(0,0))
 	{
-		// If the natural has been taken, retreat there.
-		if (InformationManager::Instance().getMyNaturalLocation())
-		{
-			return BWTA::getRegion(InformationManager::Instance().getMyNaturalLocation()->getTilePosition())->getCenter();
-		}
 		// Retreat to the main base (guaranteed not null, even if the buildings were destroyed).
-		return BWTA::getRegion(InformationManager::Instance().getMyMainBaseLocation()->getTilePosition())->getCenter();
+		BWTA::BaseLocation * base = InformationManager::Instance().getMyMainBaseLocation();
+
+		// If the natural has been taken, retreat there instead.
+		if (InformationManager::Instance().getMyNaturalLocation() &&
+			InformationManager::Instance().getBaseOwner(InformationManager::Instance().getMyNaturalLocation()) == BWAPI::Broodwar->self())
+		{
+			base = InformationManager::Instance().getMyNaturalLocation();
+		}
+		return BWTA::getRegion(base->getTilePosition())->getCenter();
 	}
 	return regroup;
 }

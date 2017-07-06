@@ -83,7 +83,6 @@ namespace Config
 
     namespace Micro
     {
-        extern bool UseSparcraftSimulation;
         extern bool KiteWithRangedUnits;
         extern std::set<BWAPI::UnitType> KiteLongerRangedUnits;
         extern bool WorkersDefendRush;

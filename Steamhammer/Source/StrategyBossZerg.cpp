@@ -165,7 +165,7 @@ void StrategyBossZerg::updateGameState()
 	nBases = InformationManager::Instance().getNumBases(_self);
 	nFreeBases = InformationManager::Instance().getNumFreeLandBases();
 	nMineralPatches = InformationManager::Instance().getMyNumMineralPatches();
-	maxDrones = WorkerManager::Instance().getMaxWorkers();
+	maxDrones = std::min(absoluteMaxDrones, WorkerManager::Instance().getMaxWorkers());
 
 	updateSupply();
 
@@ -252,6 +252,59 @@ bool StrategyBossZerg::nextInQueueIsUseless(BuildOrderQueue & queue) const
 	{
 		return true;
 	}
+
+	if (act.isUpgrade())
+	{
+		const BWAPI::UpgradeType upInQueue = act.getUpgradeType();
+
+		// Already have it or already getting it (due to a race condition).
+		if (_self->getUpgradeLevel(upInQueue) > 0 || _self->isUpgrading(upInQueue))
+		{
+			return true;
+		}
+
+		// Lost the building for it in the meantime.
+		if (upInQueue == BWAPI::UpgradeTypes::Anabolic_Synthesis || upInQueue == BWAPI::UpgradeTypes::Chitinous_Plating)
+		{
+			return !hasUltra;
+		}
+
+		if (upInQueue == BWAPI::UpgradeTypes::Muscular_Augments || upInQueue == BWAPI::UpgradeTypes::Grooved_Spines)
+		{
+			return !hasDen;
+		}
+
+		if (upInQueue == BWAPI::UpgradeTypes::Metabolic_Boost)
+		{
+			return !hasPool && UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Spawning_Pool) == 0;
+		}
+
+		if (upInQueue == BWAPI::UpgradeTypes::Adrenal_Glands)
+		{
+			return !hasPool || !hasHiveTech;
+		}
+
+		// Coordinate these two with the single/double upgrading plan.
+		if (upInQueue == BWAPI::UpgradeTypes::Zerg_Carapace)
+		{
+			return nEvo == 0;
+		}
+		if (upInQueue == BWAPI::UpgradeTypes::Zerg_Melee_Attacks)
+		{
+			return nEvo < 2;     // disallows getting melee attack after finishing carapace
+		}
+
+		return false;
+	}
+
+	/* Not yet needed.
+	if (act.isTech())
+	{
+		const BWAPI::TechType techInQueue = act.getTechType();
+
+		return false;
+	}
+	*/
 
 	// After that, we only care about units.
 	if (!act.isUnit())
@@ -762,7 +815,7 @@ void StrategyBossZerg::checkGroundDefenses(BuildOrderQueue & queue)
 		return;
 	}
 
-	// 2. Count enemy power.
+	// 2. Count enemy ground power.
 	int enemyPower = 0;
 	int enemyPowerNearby = 0;
 	bool enemyHasVultures = false;
@@ -771,7 +824,8 @@ void StrategyBossZerg::checkGroundDefenses(BuildOrderQueue & queue)
 		const UnitInfo & ui(kv.second);
 
 		if (!ui.type.isBuilding() && !ui.type.isWorker() &&
-			ui.type.groundWeapon() != BWAPI::WeaponTypes::None)
+			ui.type.groundWeapon() != BWAPI::WeaponTypes::None &&
+			!ui.type.isFlyer())
 		{
 			enemyPower += ui.type.supplyRequired();
 			if (ui.updateFrame >= _lastUpdateFrame - 30 * 24 &&          // seen in the last 30 seconds
@@ -787,7 +841,7 @@ void StrategyBossZerg::checkGroundDefenses(BuildOrderQueue & queue)
 		}
 	}
 
-	// 3. Count our power.
+	// 3. Count our anti-ground power, including air units.
 	int ourPower = 0;
 	int ourSunkens = 0;
 	for (const BWAPI::Unit u : _self->getUnits())

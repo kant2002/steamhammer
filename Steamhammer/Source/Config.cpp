@@ -7,7 +7,7 @@ namespace Config
     {
         bool ConfigFileFound                = false;
         bool ConfigFileParsed               = false;
-        std::string ConfigFileLocation      = "bwapi-data/AI/Steamhammer_1.2.1.json";
+        std::string ConfigFileLocation      = "bwapi-data/AI/Steamhammer_1.2.2.json";
     }
 
     namespace Strategy
@@ -88,7 +88,6 @@ namespace Config
 
     namespace Micro								
     {
-        bool UseSparcraftSimulation         = true;
         bool KiteWithRangedUnits            = true;
         std::set<BWAPI::UnitType> KiteLongerRangedUnits;
         bool WorkersDefendRush              = false; 

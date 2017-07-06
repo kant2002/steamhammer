@@ -63,10 +63,10 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
     if (doc.HasMember("Micro") && doc["Micro"].IsObject())
     {
         const rapidjson::Value & micro = doc["Micro"];
-        JSONTools::ReadBool("UseSparcraftSimulation", micro, Config::Micro::UseSparcraftSimulation);
-        JSONTools::ReadBool("KiteWithRangedUnits", micro, Config::Micro::KiteWithRangedUnits);
-        JSONTools::ReadBool("WorkersDefendRush", micro, Config::Micro::WorkersDefendRush);
 
+		Config::Micro::KiteWithRangedUnits = GetBoolByRace("KiteWithRangedUnits", micro);
+		Config::Micro::WorkersDefendRush = GetBoolByRace("WorkersDefendRush", micro);
+		
 		Config::Micro::RetreatMeleeUnitShields = GetIntByRace("RetreatMeleeUnitShields", micro);
 		Config::Micro::RetreatMeleeUnitHP = GetIntByRace("RetreatMeleeUnitHP", micro);
 		Config::Micro::CombatRegroupRadius = GetIntByRace("RegroupRadius", micro);
@@ -152,8 +152,8 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
     {
         const rapidjson::Value & strategy = doc["Strategy"];
 
-        // read in the various strategic elements
-        JSONTools::ReadBool("ScoutHarassEnemy", strategy, Config::Strategy::ScoutHarassEnemy);
+		Config::Strategy::ScoutHarassEnemy = GetBoolByRace("ScoutHarassEnemy", strategy);
+
         JSONTools::ReadString("ReadDirectory", strategy, Config::Strategy::ReadDir);
         JSONTools::ReadString("WriteDirectory", strategy, Config::Strategy::WriteDir);
 
@@ -296,7 +296,6 @@ void ParseUtils::ParseTextCommand(const std::string & commandString)
         else if (variableName == "completemapinformation") { Config::BWAPIOptions::EnableCompleteMapInformation = GetBoolFromString(val); if (Config::BWAPIOptions::EnableCompleteMapInformation) BWAPI::Broodwar->enableFlag(BWAPI::Flag::UserInput); }
         
         // Micro Options
-        else if (variableName == "usesparcraftsimulation") { Config::Micro::UseSparcraftSimulation = GetBoolFromString(val); }
         else if (variableName == "workersdefendrush") { Config::Micro::WorkersDefendRush = GetBoolFromString(val); }
         else if (variableName == "regroupradius") { Config::Micro::CombatRegroupRadius = GetIntFromString(val); }
         else if (variableName == "unitnearenemyradius") { Config::Micro::UnitNearEnemyRadius = GetIntFromString(val); }
@@ -508,4 +507,33 @@ double ParseUtils::GetDoubleByRace(const char * name, const rapidjson::Value & i
 	}
 
 	return 0.0;
+}
+
+// Similar to GetIntByRace(). Defaults to false.
+bool ParseUtils::GetBoolByRace(const char * name, const rapidjson::Value & item)
+{
+	if (item.HasMember(name))
+	{
+		// "Item" : true
+		if (item[name].IsBool())
+		{
+			return item[name].GetBool();
+		}
+
+		// "Item" : { "Zerg" : true, "Protoss" : false, "Terran" : false }
+		if (item[name].IsObject())
+		{
+			const std::string raceStr(BWAPI::Broodwar->self()->getRace().getName());
+			if (item[name].HasMember(raceStr.c_str()) && item[name][raceStr.c_str()].IsBool())
+			{
+				return item[name][raceStr.c_str()].GetBool();
+			}
+		}
+	}
+	else
+	{
+		UAB_ASSERT_WARNING(false, "Wrong/missing config entry '%s'", name);
+	}
+
+	return false;
 }

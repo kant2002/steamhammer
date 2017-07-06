@@ -10,6 +10,7 @@ InformationManager::InformationManager()
     , _enemy(BWAPI::Broodwar->enemy())
 	, _enemyProxy(false)
 
+	, _weHaveCombatUnits(false)
 	, _enemyHasAntiAir(false)
 	, _enemyHasAirTech(false)
 	, _enemyHasCloakTech(false)
@@ -383,7 +384,8 @@ BWAPI::Unit InformationManager::getBaseDepot(BWTA::BaseLocation * base)
 	return _theBases[base].resourceDepot;
 }
 
-// May be null.
+// The natural base, whether it is taken or not.
+// May be null on some maps.
 BWTA::BaseLocation * InformationManager::getMyNaturalLocation()
 {
 	return _myNaturalBaseLocation;
@@ -947,6 +949,31 @@ void InformationManager::unreserveBase(BWAPI::TilePosition baseTilePosition)
 	}
 
 	UAB_ASSERT(false,"trying to unreserve a non-base");
+}
+
+// We have complated combat units (excluding workers).
+bool InformationManager::weHaveCombatUnits()
+{
+	// Latch: Once we have combat units, pretend we always have them.
+	if (_weHaveCombatUnits)
+	{
+		return true;
+	}
+
+	for (const auto u : _self->getUnits())
+	{
+		if (!u->getType().isWorker() &&
+			!u->getType().isBuilding() &&
+			u->isCompleted() &&
+			u->getType() != BWAPI::UnitTypes::Zerg_Larva &&
+			u->getType() != BWAPI::UnitTypes::Zerg_Overlord)
+		{
+			_weHaveCombatUnits = true;
+			return true;
+		}
+	}
+
+	return false;
 }
 
 // Enemy has mobile units that can shoot up, or the tech to produce them.

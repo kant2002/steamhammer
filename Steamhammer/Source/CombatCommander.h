@@ -17,7 +17,7 @@ class CombatCommander
 	bool			_goAggressive;
 
     void            updateScoutDefenseSquad();
-	void            updateDefenseSquads();
+	void            updateBaseDefenseSquads();
 	void            updateAttackSquads();
     void            updateDropSquads();
 	void            updateIdleSquad();
@@ -44,7 +44,7 @@ class CombatCommander
     int             getNumGroundDefendersInSquad(Squad & squad);
     int             getNumAirDefendersInSquad(Squad & squad);
 
-    void            updateDefenseSquadUnits(Squad & defenseSquad, const size_t & flyingDefendersNeeded, const size_t & groundDefendersNeeded);
+    void            updateDefenseSquadUnits(Squad & defenseSquad, const size_t & flyingDefendersNeeded, const size_t & groundDefendersNeeded, bool pullWorkers);
 
     int             numZerglingsInOurBase() const;
     bool            buildingRush() const;

@@ -524,16 +524,16 @@ char WorkerData::getJobCode(BWAPI::Unit unit)
 
 	WorkerData::WorkerJob j = getWorkerJob(unit);
 
+	if (j == WorkerData::Minerals) return 'M';
+	if (j == WorkerData::Gas) return 'G';
 	if (j == WorkerData::Build) return 'B';
 	if (j == WorkerData::Combat) return 'C';
-	if (j == WorkerData::Default) return 'D';
-	if (j == WorkerData::Gas) return 'G';
 	if (j == WorkerData::Idle) return 'I';
-	if (j == WorkerData::Minerals) return 'M';
 	if (j == WorkerData::Repair) return 'R';
 	if (j == WorkerData::Move) return '>';
 	if (j == WorkerData::Scout) return 'S';
 	if (j == WorkerData::ReturnCargo) return '$';
+	if (j == WorkerData::Default) return '?';       // e.g. incomplete SCV
 	return 'X';
 }
 

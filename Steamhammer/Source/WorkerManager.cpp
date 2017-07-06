@@ -60,9 +60,10 @@ void WorkerManager::updateWorkerStatus()
 			workerData.setWorkerJob(worker, WorkerData::Idle, nullptr);
 		}
 
-		// Two cases of idleness.
+		// Idleness.
 		// Order can be PlayerGuard for a drone that tries to build and fails.
-		if (worker->isIdle() &&
+		// There are other causes.
+		if ((worker->isIdle() || worker->getOrder() == BWAPI::Orders::PlayerGuard) &&
 			workerData.getWorkerJob(worker) != WorkerData::Minerals &&
 			workerData.getWorkerJob(worker) != WorkerData::Build &&
 			workerData.getWorkerJob(worker) != WorkerData::Move &&
@@ -71,26 +72,22 @@ void WorkerManager::updateWorkerStatus()
 			workerData.setWorkerJob(worker, WorkerData::Idle, nullptr);
 		}
 
-		if (worker->getOrder() == BWAPI::Orders::PlayerGuard)
-		{
-			workerData.setWorkerJob(worker, WorkerData::Idle, nullptr);
-		}
-
-		// If its job is gas and the refinery is gone.
-		// A missing resource depot is dealt with in handleGasWorkers().
 		else if (workerData.getWorkerJob(worker) == WorkerData::Gas)
 		{
 			BWAPI::Unit refinery = workerData.getWorkerResource(worker);
 
-			if (!refinery || !refinery->exists() ||	refinery->getHitPoints() <= 0)
+			// If the refinery is gone.
+			// A missing resource depot is dealt with in handleGasWorkers().
+			if (!refinery || !refinery->exists() || refinery->getHitPoints() <= 0)
 			{
 				workerData.setWorkerJob(worker, WorkerData::Idle, nullptr);
 			}
 			else
 			{
+				// Self-defense.
 				BWAPI::Unit target = getClosestEnemyUnit(worker);
 
-				if (target && target->exists() &&
+				if (target &&
 					(!target->isMoving() || target->isStuck()) &&
 					worker->getDistance(target) <= 64)
 				{
@@ -112,7 +109,7 @@ void WorkerManager::updateWorkerStatus()
 		{
 			BWAPI::Unit target = getClosestEnemyUnit(worker);
 
-			if (target && target->exists() &&
+			if (target &&
 				(!target->isMoving() || target->isStuck()) &&
 				worker->getDistance(target) <= 64)
 			{
@@ -322,6 +319,8 @@ BWAPI::Unit WorkerManager::getBestEnemyTarget(BWAPI::Unit worker)
 	return bestTarget;
 }
 
+// Used for worker self-defense.
+// Only count enemy units that can be targeted by workers.
 BWAPI::Unit WorkerManager::getClosestEnemyUnit(BWAPI::Unit worker)
 {
     UAB_ASSERT(worker != nullptr, "Worker was null");
@@ -331,12 +330,15 @@ BWAPI::Unit WorkerManager::getClosestEnemyUnit(BWAPI::Unit worker)
 
 	for (auto & unit : BWAPI::Broodwar->enemy()->getUnits())
 	{
-		int dist = unit->getDistance(worker);
-
-		if (dist < closestDist)
+		if (unit->isVisible() && unit->isDetected() && !unit->isFlying())
 		{
-			closestUnit = unit;
-			closestDist = dist;
+			int dist = unit->getDistance(worker);
+
+			if (dist < closestDist)
+			{
+				closestUnit = unit;
+				closestDist = dist;
+			}
 		}
 	}
 
