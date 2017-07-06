@@ -19,8 +19,12 @@ void RangedManager::assignTargetsOld(const BWAPI::Unitset & targets)
 	// figure out targets
 	BWAPI::Unitset rangedUnitTargets;
     std::copy_if(targets.begin(), targets.end(), std::inserter(rangedUnitTargets, rangedUnitTargets.end()),
-		[](BWAPI::Unit u){ return u->isVisible() && u->getType() != BWAPI::UnitTypes::Zerg_Larva &&
-		u->getType() != BWAPI::UnitTypes::Zerg_Egg; });
+		[](BWAPI::Unit u) {
+		  return u->isVisible() &&
+			u->getType() != BWAPI::UnitTypes::Zerg_Larva &&
+			u->getType() != BWAPI::UnitTypes::Zerg_Egg &&
+			!u->isStasised();
+	});
 
     for (auto & rangedUnit : rangedUnits)
 	{
@@ -30,42 +34,38 @@ void RangedManager::assignTargetsOld(const BWAPI::Unitset & targets)
 		// if the order is to attack or defend
 		if (order.getType() == SquadOrderTypes::Attack || order.getType() == SquadOrderTypes::Defend) 
         {
-			// if there are targets
-			if (!rangedUnitTargets.empty())
+			// If a target can be found.
+			BWAPI::Unit target = getTarget(rangedUnit, rangedUnitTargets);
+			if (target)
 			{
-				// find the best target for this zealot
-				BWAPI::Unit target = getTarget(rangedUnit, rangedUnitTargets);
-                
-                if (target && Config::Debug::DrawUnitTargetInfo) 
-	            {
-		            BWAPI::Broodwar->drawLineMap(rangedUnit->getPosition(), rangedUnit->getTargetPosition(), BWAPI::Colors::Purple);
-	            }
-
+				if (Config::Debug::DrawUnitTargetInfo)
+				{
+					BWAPI::Broodwar->drawLineMap(rangedUnit->getPosition(), rangedUnit->getTargetPosition(), BWAPI::Colors::Purple);
+				}
 
 				// attack it
-                if (Config::Micro::KiteWithRangedUnits)
-                {
-                    if (rangedUnit->getType() == BWAPI::UnitTypes::Zerg_Mutalisk || rangedUnit->getType() == BWAPI::UnitTypes::Terran_Vulture)
-                    {
-				        Micro::MutaDanceTarget(rangedUnit, target);
-                    }
-                    else
-                    {
-                        Micro::SmartKiteTarget(rangedUnit, target);
-                    }
-                }
-                else
-                {
-                    Micro::SmartAttackUnit(rangedUnit, target);
-                }
+				if (Config::Micro::KiteWithRangedUnits)
+				{
+					if (rangedUnit->getType() == BWAPI::UnitTypes::Zerg_Mutalisk || rangedUnit->getType() == BWAPI::UnitTypes::Terran_Vulture)
+					{
+						Micro::MutaDanceTarget(rangedUnit, target);
+					}
+					else
+					{
+						Micro::SmartKiteTarget(rangedUnit, target);
+					}
+				}
+				else
+				{
+					Micro::SmartAttackUnit(rangedUnit, target);
+				}
 			}
-			// if there are no targets
+			// No target was found.
 			else
 			{
-				// if we're not near the order position
+				// if we're not near the order position, go there
 				if (rangedUnit->getDistance(order.getPosition()) > 100)
 				{
-					// move to it
 					Micro::SmartAttackMove(rangedUnit, order.getPosition());
 				}
 			}
@@ -94,14 +94,8 @@ std::pair<BWAPI::Unit, BWAPI::Unit> RangedManager::findClosestUnitPair(const BWA
     return closestPair;
 }
 
-// get a target to attack
 BWAPI::Unit RangedManager::getTarget(BWAPI::Unit rangedUnit, const BWAPI::Unitset & targets)
 {
-	int bestPriorityDistance = 1000000;
-    int bestPriority = 0;
-    
-    double bestLTD = 0;
-
     int highPriority = 0;
 	double closestDist = std::numeric_limits<double>::infinity();
 	BWAPI::Unit closestTarget = nullptr;
@@ -109,11 +103,9 @@ BWAPI::Unit RangedManager::getTarget(BWAPI::Unit rangedUnit, const BWAPI::Unitse
     for (const auto & target : targets)
     {
         double distance         = rangedUnit->getDistance(target);
-        double LTD              = UnitUtil::CalculateLTD(target, rangedUnit);
         int priority            = getAttackPriority(rangedUnit, target);
-        bool targetIsThreat     = LTD > 0;
-        
-		if (!closestTarget || (priority > highPriority) || (priority == highPriority && distance < closestDist))
+
+		if (!closestTarget || priority > highPriority || (priority == highPriority && distance < closestDist))
 		{
 			closestDist = distance;
 			highPriority = priority;
@@ -132,56 +124,48 @@ int RangedManager::getAttackPriority(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 
 	if (rangedType == BWAPI::UnitTypes::Zerg_Scourge)
     {
-		if (targetType == BWAPI::UnitTypes::Terran_Valkyrie ||
-			targetType == BWAPI::UnitTypes::Terran_Battlecruiser ||
-			targetType == BWAPI::UnitTypes::Terran_Science_Vessel)
+		if (!targetType.isFlyer())
 		{
-			return 100;
+			// Can't target it. Also, ignore lifted buildings.
+			return 0;
 		}
-		if (targetType == BWAPI::UnitTypes::Terran_Wraith)
-		{
-			return 90;
-		}
-		if (targetType == BWAPI::UnitTypes::Terran_Dropship)
-		{
-			return 80;
-		}
-		if (targetType == BWAPI::UnitTypes::Protoss_Carrier)
-        {
-            return 100;
-        }
-		if (targetType == BWAPI::UnitTypes::Protoss_Corsair || targetType == BWAPI::UnitTypes::Protoss_Scout)
-        {
-            return 90;
-        }
-		if (targetType == BWAPI::UnitTypes::Protoss_Shuttle)
-		{
-			return 80;
-		}
-		if (targetType == BWAPI::UnitTypes::Protoss_Observer)
-		{
-			return 60;
-		}
-		if (targetType == BWAPI::UnitTypes::Zerg_Devourer)
-		{
-			return 90;
-		}
-		if (targetType == BWAPI::UnitTypes::Zerg_Mutalisk)
-		{
-			return 80;
-		}
-		if (targetType == BWAPI::UnitTypes::Zerg_Guardian)
-		{
-			return 70;
-		}
-		if (targetType == BWAPI::UnitTypes::Zerg_Overlord || targetType == BWAPI::UnitTypes::Zerg_Scourge)
+		if (targetType == BWAPI::UnitTypes::Zerg_Overlord ||
+			targetType == BWAPI::UnitTypes::Zerg_Scourge ||
+			targetType == BWAPI::UnitTypes::Protoss_Interceptor)
 		{
 			// Usually not worth scourge at all.
 			return 0;
 		}
+		
+		// Everything else is the same. Hit whatever's closest.
+		return 100;
+	}
+
+	if (rangedType == BWAPI::UnitTypes::Zerg_Devourer)
+	{
+		if (!target->isFlying())
+		{
+			// Can't target it.
+			return 0;
+		}
+		if (targetType.isBuilding())
+		{
+			// A lifted building is less important.
+			return 10;
+		}
+
+		// Everything else is the same.
+		return 100;
+	}
+	
+	if (rangedType == BWAPI::UnitTypes::Zerg_Guardian && target->isFlying())
+	{
+		// Can't target it.
+		return 0;
 	}
 
 	// An addon other than a completed comsat is boring.
+	// TODO should also check that it is attached
 	if (targetType.isAddon() && !(targetType == BWAPI::UnitTypes::Terran_Comsat_Station && target->isCompleted()))
 	{
 		return 1;
@@ -194,24 +178,23 @@ int RangedManager::getAttackPriority(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 		{
 			return 101;
 		}
-		if (target->getType().isBuilding() && (target->isCompleted() || target->isBeingConstructed()))
+		if (target->getType().isBuilding())
 		{
 			return 90;
 		}
 	}
     
-	bool isThreat = rangedType.isFlyer() ? targetType.airWeapon() != BWAPI::WeaponTypes::None : targetType.groundWeapon() != BWAPI::WeaponTypes::None;
+	bool isThreat = rangedType.isFlyer() ? targetType.airWeapon() != BWAPI::WeaponTypes::None
+		                                 : targetType.groundWeapon() != BWAPI::WeaponTypes::None;
 	// Exception: Workers are not threats after all.
 	if (target->getType().isWorker())
 	{
 		isThreat = false;
 	}
 
-	// Highest priority is the most dangerous stuff.
 	if (rangedType.isFlyer()) {
-		// Exceptions if we're a flyer.
-		if (targetType == BWAPI::UnitTypes::Protoss_Carrier ||
-			targetType == BWAPI::UnitTypes::Zerg_Scourge)
+		// Exceptions if we're a flyer (other than scourge, which is handled above).
+		if (targetType == BWAPI::UnitTypes::Zerg_Scourge)
 		{
 			return 20;
 		}
@@ -219,16 +202,15 @@ int RangedManager::getAttackPriority(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 	else
 	{
 		// Exceptions if we're a ground unit.
-		if (targetType == BWAPI::UnitTypes::Terran_Vulture_Spider_Mine)
+		if (targetType == BWAPI::UnitTypes::Terran_Vulture_Spider_Mine ||
+			targetType == BWAPI::UnitTypes::Zerg_Infested_Terran)
 		{
 			return 20;
 		}
-		if (targetType == BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode ||
-			targetType == BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode ||
-			targetType == BWAPI::UnitTypes::Protoss_Reaver ||
+		if (targetType == BWAPI::UnitTypes::Protoss_Reaver ||
 			targetType == BWAPI::UnitTypes::Zerg_Lurker)
 		{
-			return 19;
+			return 20;
 		}
 	}
 
@@ -237,26 +219,21 @@ int RangedManager::getAttackPriority(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 		return 20;
 	}
 
-	if (targetType == BWAPI::UnitTypes::Protoss_Photon_Cannon && target->isPowered())
-	{
-		return 19;
-	}
-
-	// Next is droppers. They may be loaded. Also scourge and vessels.
-	if (targetType == BWAPI::UnitTypes::Terran_Dropship ||
-		targetType == BWAPI::UnitTypes::Terran_Science_Vessel ||
-		targetType == BWAPI::UnitTypes::Protoss_Shuttle ||
-		targetType == BWAPI::UnitTypes::Zerg_Scourge)
-	{
-		return 14;
-	}
 	// Next is ordinary dangerous stuff.
 	if (isThreat)
 	{
 		return 11;
 	}
-	// Bunkers next.
-	if (targetType == BWAPI::UnitTypes::Terran_Bunker)
+	// Next is droppers. They may be loaded and are often isolated and safer to attack.
+	if (targetType == BWAPI::UnitTypes::Terran_Dropship ||
+		targetType == BWAPI::UnitTypes::Protoss_Shuttle)
+	{
+		return 10;
+	}
+	// Also bunkers and other dangerous stuff.
+	if (targetType == BWAPI::UnitTypes::Terran_Bunker ||
+		targetType == BWAPI::UnitTypes::Terran_Science_Vessel ||
+		targetType == BWAPI::UnitTypes::Zerg_Scourge)
 	{
 		return 10;
 	}
@@ -275,17 +252,17 @@ int RangedManager::getAttackPriority(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 
   		return 9;
 	}
-	// Carriers don't shoot (by themselves) but are more important than buildings.
-	if (targetType == BWAPI::UnitTypes::Protoss_Carrier)
-	{
-		return 8;
-	}
-	// Turrets should be cleared out on principle.
-	if (targetType == BWAPI::UnitTypes::Terran_Missile_Turret)
+	// Carriers and spell casters are as important as key buildings.
+	// Also remember to target non-threat combat units.
+	if (targetType == BWAPI::UnitTypes::Protoss_Carrier ||
+		targetType.isSpellcaster() ||
+		targetType.groundWeapon() != BWAPI::WeaponTypes::None ||
+		targetType.airWeapon() != BWAPI::WeaponTypes::None
+		)
 	{
 		return 7;
 	}
-	// Ditto for templar tech.
+	// Templar tech and spawning pool are more important.
 	if (targetType == BWAPI::UnitTypes::Protoss_Templar_Archives)
 	{
 		return 7;

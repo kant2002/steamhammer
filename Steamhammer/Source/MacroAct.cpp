@@ -1,4 +1,5 @@
 #include "MacroAct.h"
+
 #include <regex>
 
 using namespace UAlbertaBot;
@@ -53,8 +54,39 @@ MacroAct::MacroAct(const std::string & name)
     std::replace(inputName.begin(), inputName.end(), '_', ' ');
 	std::transform(inputName.begin(), inputName.end(), inputName.begin(), ::tolower);
 
-	MacroLocation specifiedMacroLocation(MacroLocation::Anywhere);
-	
+	// Commands like "go gas until 100". 100 is the amount.
+	if (inputName.substr(0, 3) == std::string("go "))
+	{
+		for (const MacroCommandType t : MacroCommand::allCommandTypes())
+		{
+			std::string commandName = MacroCommand::getName(t);
+			if (MacroCommand::hasArgument(t))
+			{
+				// There's an argument. Match the command name and parse out the argument.
+				std::regex commandWithArgRegex(commandName + " (\\d+)");
+				std::smatch m;
+				if (std::regex_match(inputName, m, commandWithArgRegex)) {
+					int amount = GetIntFromString(m[1].str());
+					if (amount >= 0) {
+						*this = MacroAct(t, amount);
+						return;
+					}
+				}
+			}
+			else
+			{
+				// No argument. Just compare for equality.
+				if (commandName == inputName)
+				{
+					*this = MacroAct(t);
+					return;
+				}
+			}
+		}
+	}
+
+	MacroLocation specifiedMacroLocation(MacroLocation::Anywhere);    // the default
+
 	// Buildings can specify a location, like "hatchery @ expo".
 	// It's meaningless and ignored for anything except a building.
 	// Here we parse out the building and its location.
@@ -113,34 +145,6 @@ MacroAct::MacroAct(const std::string & name)
             return;
         }
     }
-
-	// Commands like "go gas until 100". 100 is the amount.
-	for (const MacroCommandType t : MacroCommand::allCommandTypes())
-	{
-		std::string commandName = MacroCommand::getName(t);
-		if (MacroCommand::hasArgument(t))
-		{
-			// There's an argument. Match the command name and parse out the argument.
-			std::regex commandWithArgRegex(commandName + " (\\d+)");
-			std::smatch m;
-			if (std::regex_match(inputName, m, commandWithArgRegex)) {
-				int amount = GetIntFromString(m[1].str());
-				if (amount >= 0) {
-					*this = MacroAct(t, amount);
-					return;
-				}
-			}
-		}
-		else
-		{
-			// No argument. Just compare for equality.
-			if (commandName == inputName)
-			{
-				*this = MacroAct(t);
-				return;
-			}
-		}
-	}
 
     UAB_ASSERT_WARNING(false, "Could not find MacroAct with name: %s", name.c_str());
 }
@@ -271,7 +275,7 @@ const MacroLocation MacroAct::getMacroLocation() const
 	return _macroLocation;
 }
 
-int MacroAct::supplyRequired()
+int MacroAct::supplyRequired() const
 {
 	if (isUnit())
 	{

@@ -63,3 +63,15 @@ struct Rect
 
 int GetIntFromString(const std::string & s);
 std::string TrimRaceName(const std::string & s);
+std::string UnitTypeName(BWAPI::UnitType type);
+
+// Color codes for drawing text on the screen.
+const char yellow  = '\x03';
+const char white   = '\x04';
+const char darkRed = '\x06';   // dim
+const char green   = '\x07';
+const char red     = '\x08';
+const char purple  = '\x10';   // dim
+const char orange  = '\x11';
+const char gray    = '\x1E';   // dim
+const char cyan    = '\x1F';

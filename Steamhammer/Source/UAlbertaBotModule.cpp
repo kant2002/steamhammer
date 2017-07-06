@@ -45,25 +45,19 @@ void UAlbertaBotModule::onStart()
     }
 
     // Call BWTA to read and analyze the current map
-    if (Config::Modules::UsingGameCommander)
-	{
-		BWTA::readMap();
-		BWTA::analyze();
+	BWTA::readMap();
+	BWTA::analyze();
 
-        if (Config::Modules::UsingStrategyIO)
-        {
-            StrategyManager::Instance().readResults();
-            StrategyManager::Instance().setLearnedStrategy();
-        }
-	}
+    if (Config::Modules::UsingStrategyIO)
+    {
+        StrategyManager::Instance().readResults();
+        StrategyManager::Instance().setLearnedStrategy();
+    }
 }
 
 void UAlbertaBotModule::onEnd(bool isWinner) 
 {
-	if (Config::Modules::UsingGameCommander)
-	{
-		StrategyManager::Instance().onEnd(isWinner);
-	}	
+	StrategyManager::Instance().onEnd(isWinner);
 }
 
 void UAlbertaBotModule::onFrame()

@@ -11,6 +11,7 @@ struct UnitInfo
     // can't reference it from the unit pointer
 
     int             unitID;
+	int				updateFrame;
     int             lastHealth;
     int             lastShields;
     BWAPI::Player   player;
@@ -21,14 +22,15 @@ struct UnitInfo
 
     UnitInfo()
         : unitID(0)
-        , lastHealth(0)
-        , player(nullptr)
+		, updateFrame(0)
+		, lastHealth(0)
+		, lastShields(0)
+		, player(nullptr)
         , unit(nullptr)
         , lastPosition(BWAPI::Positions::None)
         , type(BWAPI::UnitTypes::None)
         , completed(false)
-    {
-
+	{
     }
 
     const bool operator == (BWAPI::Unit unit) const

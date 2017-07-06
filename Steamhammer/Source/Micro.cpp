@@ -9,18 +9,22 @@ const int dotRadius = 2;
 
 void Micro::drawAPM(int x, int y)
 {
-    int bwapiAPM = BWAPI::Broodwar->getAPM();
-    int myAPM = (int)(TotalCommands / ((double)BWAPI::Broodwar->getFrameCount() / (24*60)));
-    BWAPI::Broodwar->drawTextScreen(x, y, "%d %d", bwapiAPM, myAPM);
+	// Don't divide by zero, even theoretically.
+	if (BWAPI::Broodwar->getFrameCount() > 0)
+	{
+		int bwapiAPM = BWAPI::Broodwar->getAPM();
+		int myAPM = 0;
+		myAPM = int(TotalCommands / (double(BWAPI::Broodwar->getFrameCount()) / (24 * 60)));
+		BWAPI::Broodwar->drawTextScreen(x, y, "%d %d", bwapiAPM, myAPM);
+	}
 }
 
 void Micro::SmartAttackUnit(BWAPI::Unit attacker, BWAPI::Unit target)
 {
-    UAB_ASSERT(attacker, "SmartAttackUnit: Attacker not valid");
-    UAB_ASSERT(target, "SmartAttackUnit: Target not valid");
-
-    if (!attacker || !target)
+	if (!attacker || !attacker->exists() || attacker->getPlayer() != BWAPI::Broodwar->self() ||
+		!target || !target->exists())
     {
+		UAB_ASSERT(false,"bad arg");
         return;
     }
 
@@ -53,12 +57,10 @@ void Micro::SmartAttackUnit(BWAPI::Unit attacker, BWAPI::Unit target)
 
 void Micro::SmartAttackMove(BWAPI::Unit attacker, const BWAPI::Position & targetPosition)
 {
-    //UAB_ASSERT(attacker, "SmartAttackMove: Attacker not valid");
-    //UAB_ASSERT(targetPosition.isValid(), "SmartAttackMove: targetPosition not valid");
-
-    if (!attacker || !targetPosition.isValid())
+	if (!attacker || !attacker->exists() || attacker->getPlayer() != BWAPI::Broodwar->self() || !targetPosition.isValid())
     {
-        return;
+		UAB_ASSERT(false, "bad arg");
+		return;
     }
 
     // if we have issued a command to this unit already this frame, ignore this one
@@ -90,13 +92,32 @@ void Micro::SmartAttackMove(BWAPI::Unit attacker, const BWAPI::Position & target
 
 void Micro::SmartMove(BWAPI::Unit attacker, const BWAPI::Position & targetPosition)
 {
-    //UAB_ASSERT(attacker, "SmartAttackMove: Attacker not valid");
-    //UAB_ASSERT(targetPosition.isValid(), "SmartAttackMove: targetPosition not valid");
+	// -- -- TODO temporary extra debugging to solve a problem
+	/*
+	if (!attacker->exists())
+	{
+		UAB_ASSERT(false, "SmartMove: nonexistent");
+		BWAPI::Broodwar->printf("SM: non-exist %s @ %d, %d", attacker->getType().getName().c_str(), targetPosition.x, targetPosition.y);
+		return;
+	}
+	if (attacker->getPlayer() != BWAPI::Broodwar->self())
+	{
+		UAB_ASSERT(false, "SmartMove: not my unit");
+		return;
+	}
+	if (!targetPosition.isValid())
+	{
+		UAB_ASSERT(false, "SmartMove: bad position");
+		return;
+	}
+	// -- -- TODO end
+	*/
 
-    if (!attacker || !targetPosition.isValid())
-    {
-        return;
-    }
+	if (!attacker || !attacker->exists() || attacker->getPlayer() != BWAPI::Broodwar->self() || !targetPosition.isValid())
+	{
+		// UAB_ASSERT(false, "bad arg");  // TODO restore this after the bug is solved; can make too many beeps
+		return;
+	}
 
     // if we have issued a command to this unit already this frame, ignore this one
     if (attacker->getLastCommandFrame() >= BWAPI::Broodwar->getFrameCount() || attacker->isAttackFrame())
@@ -104,7 +125,6 @@ void Micro::SmartMove(BWAPI::Unit attacker, const BWAPI::Position & targetPositi
         return;
     }
 
-    // get the unit's current command
     BWAPI::UnitCommand currentCommand(attacker->getLastCommand());
 
     // if we've already told this unit to move to this position, ignore this command
@@ -113,7 +133,7 @@ void Micro::SmartMove(BWAPI::Unit attacker, const BWAPI::Position & targetPositi
         return;
     }
 
-    // if nothing prevents it, attack the target
+    // if nothing prevents it, move the target position
     attacker->move(targetPosition);
     TotalCommands++;
 
@@ -127,13 +147,13 @@ void Micro::SmartMove(BWAPI::Unit attacker, const BWAPI::Position & targetPositi
 
 void Micro::SmartRightClick(BWAPI::Unit unit, BWAPI::Unit target)
 {
-    UAB_ASSERT(unit, "SmartRightClick: Unit not valid");
-    UAB_ASSERT(target, "SmartRightClick: Target not valid");
+	if (!unit || !unit->exists() || unit->getPlayer() != BWAPI::Broodwar->self() ||
+		!target || !target->exists())
+	{
+		UAB_ASSERT(false, "bad arg");
+		return;
+	}
 
-    if (!unit || !target)
-    {
-        return;
-    }
 
     // if we have issued a command to this unit already this frame, ignore this one
     if (unit->getLastCommandFrame() >= BWAPI::Broodwar->getFrameCount() || unit->isAttackFrame())
@@ -164,10 +184,11 @@ void Micro::SmartRightClick(BWAPI::Unit unit, BWAPI::Unit target)
 
 void Micro::SmartLaySpiderMine(BWAPI::Unit unit, BWAPI::Position pos)
 {
-    if (!unit)
-    {
-        return;
-    }
+	if (!unit || !unit->exists() || unit->getPlayer() != BWAPI::Broodwar->self() || !pos.isValid())
+	{
+		UAB_ASSERT(false, "bad arg");
+		return;
+	}
 
     if (!unit->canUseTech(BWAPI::TechTypes::Spider_Mines, pos))
     {
@@ -187,13 +208,12 @@ void Micro::SmartLaySpiderMine(BWAPI::Unit unit, BWAPI::Position pos)
 
 void Micro::SmartRepair(BWAPI::Unit unit, BWAPI::Unit target)
 {
-    UAB_ASSERT(unit, "SmartRightClick: Unit not valid");
-    UAB_ASSERT(target, "SmartRightClick: Target not valid");
-
-    if (!unit || !target)
-    {
-        return;
-    }
+	if (!unit || !unit->exists() || unit->getPlayer() != BWAPI::Broodwar->self() ||
+		!target || !target->exists())
+	{
+		UAB_ASSERT(false, "bad arg");
+		return;
+	}
 
     // if we have issued a command to this unit already this frame, ignore this one
     if (unit->getLastCommandFrame() >= BWAPI::Broodwar->getFrameCount() || unit->isAttackFrame())
@@ -224,7 +244,12 @@ void Micro::SmartRepair(BWAPI::Unit unit, BWAPI::Unit target)
 
 void Micro::SmartReturnCargo(BWAPI::Unit worker)
 {
-	UAB_ASSERT(worker, "SmartReturnCargo: not a worker");
+	if (!worker || !worker->exists() || worker->getPlayer() != BWAPI::Broodwar->self() ||
+		!worker->getType().isWorker())
+	{
+		UAB_ASSERT(false, "bad arg");
+		return;
+	}
 
 	// If the worker has no cargo, ignore this command.
 	if (!worker->isCarryingMinerals() && !worker->isCarryingGas())
@@ -252,79 +277,85 @@ void Micro::SmartReturnCargo(BWAPI::Unit worker)
 
 void Micro::SmartKiteTarget(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 {
-    UAB_ASSERT(rangedUnit, "SmartKiteTarget: Unit not valid");
-    UAB_ASSERT(target, "SmartKiteTarget: Target not valid");
-
-    if (!rangedUnit || !target)
-    {
-        return;
-    }
+	if (!rangedUnit || !rangedUnit->exists() || rangedUnit->getPlayer() != BWAPI::Broodwar->self() ||
+		!target || !target->exists())
+	{
+		UAB_ASSERT(false, "bad arg");
+		return;
+	}
 
 	double range(rangedUnit->getType().groundWeapon().maxRange());
 	if (rangedUnit->getType() == BWAPI::UnitTypes::Protoss_Dragoon && BWAPI::Broodwar->self()->getUpgradeLevel(BWAPI::UpgradeTypes::Singularity_Charge))
 	{
-		range = 6*32;
+		range = 6 * 32;
+	}
+	else if (rangedUnit->getType() == BWAPI::UnitTypes::Zerg_Hydralisk && BWAPI::Broodwar->self()->getUpgradeLevel(BWAPI::UpgradeTypes::Grooved_Spines))
+	{
+		range = 5 * 32;
 	}
 
-	// determine whether the target can be kited
+	bool kite(true);
+
+	// Kite if configured as a "KiteLonger" unit, or if the enemy's range is shorter than ours.
+	// Note: Assumes that the enemy does not have range upgrades.
     bool kiteLonger = Config::Micro::KiteLongerRangedUnits.find(rangedUnit->getType()) != Config::Micro::KiteLongerRangedUnits.end();
 	if (!kiteLonger && (range <= target->getType().groundWeapon().maxRange()))
 	{
-		// if we can't kite it, there's no point
-		Micro::SmartAttackUnit(rangedUnit, target);
-		return;
+		kite = false;
 	}
 
-	bool    kite(true);
-	double  dist(rangedUnit->getDistance(target));
-	double  speed(rangedUnit->getType().topSpeed());
-
-    
     // if the unit can't attack back don't kite
-    if ((rangedUnit->isFlying() && !UnitUtil::CanAttackAir(target)) || (!rangedUnit->isFlying() && !UnitUtil::CanAttackGround(target)))
-    {
-        //kite = false;
-    }
+	// Disabled: we care about the entire context.
+    //if ((rangedUnit->isFlying() && !UnitUtil::CanAttackAir(target)) || (!rangedUnit->isFlying() && !UnitUtil::CanAttackGround(target)))
+    //{
+    //	kite = false;
+    //}
 
-	double timeToEnter = std::max(0.0,(dist - range) / speed);
-	if ((timeToEnter >= rangedUnit->getGroundWeaponCooldown()))
+	// Kite if we're not ready yet: Wait for the weapon.
+	double dist(rangedUnit->getDistance(target));
+	double speed(rangedUnit->getType().topSpeed());
+	double timeToEnter = 0.0;                      // time to reach firing range
+	if (speed > .00001)                            // don't even visit the same city as division by zero
+	{
+		timeToEnter = std::max(0.0, dist - range) / speed;
+	}
+	if (timeToEnter >= rangedUnit->getGroundWeaponCooldown() ||
+		target->getType().isBuilding())
 	{
 		kite = false;
 	}
 
-	if (target->getType().isBuilding())
-	{
-		kite = false;
-	}
-
-	// if we can't shoot, run away
 	if (kite)
 	{
+		// Run away.
 		BWAPI::Position fleePosition(rangedUnit->getPosition() - target->getPosition() + rangedUnit->getPosition());
-		//BWAPI::Broodwar->drawLineMap(rangedUnit->getPosition(), fleePosition, BWAPI::Colors::Cyan);
+		if (Config::Debug::DrawUnitTargetInfo)
+		{
+			BWAPI::Broodwar->drawLineMap(rangedUnit->getPosition(), fleePosition, BWAPI::Colors::Cyan);
+		}
 		Micro::SmartMove(rangedUnit, fleePosition);
 	}
-	// otherwise shoot
 	else
 	{
+		// Shoot.
 		Micro::SmartAttackUnit(rangedUnit, target);
 	}
 }
 
-
+// Used for both mutalisks and vultures--fast units with short range.
 void Micro::MutaDanceTarget(BWAPI::Unit muta, BWAPI::Unit target)
 {
-    UAB_ASSERT(muta, "MutaDanceTarget: Muta not valid");
-    UAB_ASSERT(target, "MutaDanceTarget: Target not valid");
-
-    if (!muta || !target)
-    {
-        return;
-    }
+	if (!muta || !muta->exists() || muta->getPlayer() != BWAPI::Broodwar->self() ||
+		(muta->getType() != BWAPI::UnitTypes::Zerg_Mutalisk && muta->getType() != BWAPI::UnitTypes::Terran_Vulture) ||
+		!target || !target->exists())
+	{
+		UAB_ASSERT(false, "bad arg");
+		return;
+	}
 
     const int cooldown                  = muta->getType().groundWeapon().damageCooldown();
     const int latency                   = BWAPI::Broodwar->getLatency();
-    const double speed                  = muta->getType().topSpeed();
+    const double speed                  = muta->getType().topSpeed();   // known to be non-zero :-)
     const double range                  = muta->getType().groundWeapon().maxRange();
     const double distanceToTarget       = muta->getDistance(target);
 	const double distanceToFiringRange  = std::max(distanceToTarget - range,0.0);
@@ -334,9 +365,6 @@ void Micro::MutaDanceTarget(BWAPI::Unit muta, BWAPI::Unit target)
 	// How many frames are left before we can attack?
 	const int currentCooldown = muta->isStartingAttack() ? cooldown : muta->getGroundWeaponCooldown();
 
-	BWAPI::Position fleeVector = GetKiteVector(target, muta);
-	BWAPI::Position moveToPosition(muta->getPosition() + fleeVector);
-
 	// If we can attack by the time we reach our firing range
 	if(currentCooldown <= framesToAttack)
 	{
@@ -345,9 +373,9 @@ void Micro::MutaDanceTarget(BWAPI::Unit muta, BWAPI::Unit target)
 	}
 	else // Otherwise we cannot attack and should temporarily back off
 	{
-		// Determine direction to flee
-		// Determine point to flee to
-		if (moveToPosition.isValid()) 
+		BWAPI::Position fleeVector = GetKiteVector(target, muta);
+		BWAPI::Position moveToPosition(muta->getPosition() + fleeVector);
+		if (moveToPosition.isValid())
 		{
 			muta->rightClick(moveToPosition);
 		}
@@ -361,6 +389,8 @@ BWAPI::Position Micro::GetKiteVector(BWAPI::Unit unit, BWAPI::Unit target)
     fleeVec = BWAPI::Position(static_cast<int>(64 * cos(fleeAngle)), static_cast<int>(64 * sin(fleeAngle)));
     return fleeVec;
 }
+
+// TODO "Common.h" has double2 with rotate and normalize
 
 const double PI = 3.14159265;
 void Micro::Rotate(double &x, double &y, double angle)

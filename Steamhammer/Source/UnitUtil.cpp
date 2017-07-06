@@ -35,84 +35,150 @@ bool UnitUtil::IsCombatUnit(BWAPI::Unit unit)
         unit->isFlying() && unit->getType().spaceProvided() > 0)
     {
         return true;
-    }
-		
-    return false;
+	}
+
+	return false;
 }
 
 bool UnitUtil::IsValidUnit(BWAPI::Unit unit)
 {
-    return unit
+	return unit
 		&& unit->exists()
 		&& unit->isCompleted()
-        && unit->getHitPoints() > 0 
-        && unit->getType() != BWAPI::UnitTypes::Unknown 
+		&& unit->getHitPoints() > 0
+		&& unit->getType() != BWAPI::UnitTypes::Unknown
 		&& unit->getPosition().isValid();
 }
 
 Rect UnitUtil::GetRect(BWAPI::Unit unit)
 {
-    Rect r;
+	Rect r;
 
-    r.x = unit->getLeft();
-    r.y = unit->getTop();
-    r.height = unit->getBottom() - unit->getTop();
-    r.width = unit->getLeft() - unit->getRight();
+	r.x = unit->getLeft();
+	r.y = unit->getTop();
+	r.height = unit->getBottom() - unit->getTop();
+	r.width = unit->getLeft() - unit->getRight();
 
-    return r;
+	return r;
 }
 
 double UnitUtil::GetDistanceBetweenTwoRectangles(Rect & rect1, Rect & rect2)
 {
-    Rect & mostLeft = rect1.x < rect2.x ? rect1 : rect2;
-    Rect & mostRight = rect2.x < rect1.x ? rect1 : rect2;
-    Rect & upper = rect1.y < rect2.y ? rect1 : rect2;
-    Rect & lower = rect2.y < rect1.y ? rect1 : rect2;
+	Rect & mostLeft = rect1.x < rect2.x ? rect1 : rect2;
+	Rect & mostRight = rect2.x < rect1.x ? rect1 : rect2;
+	Rect & upper = rect1.y < rect2.y ? rect1 : rect2;
+	Rect & lower = rect2.y < rect1.y ? rect1 : rect2;
 
-    int diffX = std::max(0, mostLeft.x == mostRight.x ? 0 : mostRight.x - (mostLeft.x + mostLeft.width));
-    int diffY = std::max(0, upper.y == lower.y ? 0 : lower.y - (upper.y + upper.height));
-    
-    return std::sqrtf(static_cast<float>(diffX*diffX + diffY*diffY));
+	int diffX = std::max(0, mostLeft.x == mostRight.x ? 0 : mostRight.x - (mostLeft.x + mostLeft.width));
+	int diffY = std::max(0, upper.y == lower.y ? 0 : lower.y - (upper.y + upper.height));
+
+	return std::sqrtf(static_cast<float>(diffX*diffX + diffY*diffY));
 }
 
 bool UnitUtil::CanAttack(BWAPI::Unit attacker, BWAPI::Unit target)
 {
-    return GetWeapon(attacker, target) != BWAPI::UnitTypes::None;
+	return GetWeapon(attacker, target) != BWAPI::UnitTypes::None;
 }
 
 bool UnitUtil::CanAttackAir(BWAPI::Unit unit)
 {
-    return unit->getType().airWeapon() != BWAPI::WeaponTypes::None;
+	return unit->getType().airWeapon() != BWAPI::WeaponTypes::None;
 }
 
 bool UnitUtil::CanAttackGround(BWAPI::Unit unit)
 {
-    return unit->getType().groundWeapon() != BWAPI::WeaponTypes::None;
+	return unit->getType().groundWeapon() != BWAPI::WeaponTypes::None;
 }
 
 double UnitUtil::CalculateLTD(BWAPI::Unit attacker, BWAPI::Unit target)
 {
-    BWAPI::WeaponType weapon = GetWeapon(attacker, target);
+	BWAPI::WeaponType weapon = GetWeapon(attacker, target);
 
-    if (weapon == BWAPI::WeaponTypes::None)
-    {
-        return 0;
-    }
+	if (weapon == BWAPI::WeaponTypes::None || weapon.damageCooldown() <= 0)
+	{
+		return 0;
+	}
 
-    return static_cast<double>(weapon.damageAmount()) / weapon.damageCooldown();
+	return double(weapon.damageAmount()) / weapon.damageCooldown();
 }
 
 BWAPI::WeaponType UnitUtil::GetWeapon(BWAPI::Unit attacker, BWAPI::Unit target)
 {
-    return target->isFlying() ? attacker->getType().airWeapon() : attacker->getType().groundWeapon();
+	return target->isFlying() ? attacker->getType().airWeapon() : attacker->getType().groundWeapon();
 }
 
 BWAPI::WeaponType UnitUtil::GetWeapon(BWAPI::UnitType attacker, BWAPI::UnitType target)
 {
-    return target.isFlyer() ? attacker.airWeapon() : attacker.groundWeapon();
+	return target.isFlyer() ? attacker.airWeapon() : attacker.groundWeapon();
 }
 
+// Tries to take possible range upgrades into account (not quite perfectly).
+// Unused.
 int UnitUtil::GetAttackRange(BWAPI::Unit attacker, BWAPI::Unit target)
+{
+	BWAPI::WeaponType weapon = GetWeapon(attacker, target);
+
+	if (weapon == BWAPI::WeaponTypes::None)
+	{
+		return 0;
+	}
+
+	int range = weapon.maxRange();
+
+	// Count range upgrades,
+	// for ourselves if we have researched it,
+	// for the enemy always (by pessimistic assumption).
+	// TODO can we find out the enemy upgrades?
+	if (attacker->getType() == BWAPI::UnitTypes::Protoss_Dragoon)
+	{
+		if (attacker->getPlayer() == BWAPI::Broodwar->enemy() ||
+			BWAPI::Broodwar->self()->getUpgradeLevel(BWAPI::UpgradeTypes::Singularity_Charge))
+		{
+			range = 6 * 32;
+		}
+	}
+	else if (attacker->getType() == BWAPI::UnitTypes::Terran_Marine)
+	{
+		if (attacker->getPlayer() == BWAPI::Broodwar->enemy() ||
+			BWAPI::Broodwar->self()->getUpgradeLevel(BWAPI::UpgradeTypes::U_238_Shells))
+		{
+			range = 5 * 32;
+		}
+	}
+	else if (attacker->getType() == BWAPI::UnitTypes::Terran_Bunker)
+	{
+		if (attacker->getPlayer() == BWAPI::Broodwar->enemy() ||
+			BWAPI::Broodwar->self()->getUpgradeLevel(BWAPI::UpgradeTypes::U_238_Shells))
+		{
+			range = 6 * 32;
+		}
+		else
+		{
+			range = 5 * 32;
+		}
+	}
+	else if (attacker->getType() == BWAPI::UnitTypes::Terran_Goliath && target->isFlying())
+	{
+		if (attacker->getPlayer() == BWAPI::Broodwar->enemy() ||
+			BWAPI::Broodwar->self()->getUpgradeLevel(BWAPI::UpgradeTypes::Charon_Boosters))
+		{
+			range = 8 * 32;
+		}
+	}
+	else if (attacker->getType() == BWAPI::UnitTypes::Zerg_Hydralisk)
+	{
+		if (attacker->getPlayer() == BWAPI::Broodwar->enemy() ||
+			BWAPI::Broodwar->self()->getUpgradeLevel(BWAPI::UpgradeTypes::Grooved_Spines))
+		{
+			range = 5 * 32;
+		}
+	}
+
+    return range;
+}
+
+// NOTE: Unlike GetAttackRange with units, this ignores possible range upgrades.
+int UnitUtil::GetAttackRangeAssumingUpgrades(BWAPI::UnitType attacker, BWAPI::UnitType target)
 {
     BWAPI::WeaponType weapon = GetWeapon(attacker, target);
 
@@ -123,26 +189,29 @@ int UnitUtil::GetAttackRange(BWAPI::Unit attacker, BWAPI::Unit target)
 
     int range = weapon.maxRange();
 
-    if ((attacker->getType() == BWAPI::UnitTypes::Protoss_Dragoon) 
-        && (attacker->getPlayer() == BWAPI::Broodwar->self())
-        && BWAPI::Broodwar->self()->getUpgradeLevel(BWAPI::UpgradeTypes::Singularity_Charge))
+	// Assume that any upgrades are researched.
+	if (attacker == BWAPI::UnitTypes::Protoss_Dragoon)
 	{
 		range = 6 * 32;
 	}
+	else if (attacker == BWAPI::UnitTypes::Terran_Marine)
+	{
+		range = 5 * 32;
+	}
+	else if (attacker == BWAPI::UnitTypes::Terran_Bunker)
+	{
+		range = 6 * 32;
+	}
+	else if (attacker == BWAPI::UnitTypes::Terran_Goliath && target.isFlyer())
+	{
+		range = 8 * 32;
+	}
+	else if (attacker == BWAPI::UnitTypes::Zerg_Hydralisk)
+	{
+		range = 5 * 32;
+	}
 
-    return range;
-}
-
-int UnitUtil::GetAttackRange(BWAPI::UnitType attacker, BWAPI::UnitType target)
-{
-    BWAPI::WeaponType weapon = GetWeapon(attacker, target);
-
-    if (weapon == BWAPI::WeaponTypes::None)
-    {
-        return 0;
-    }
-
-    return weapon.maxRange();
+	return range;
 }
 
 // All our units, whether completed or not.

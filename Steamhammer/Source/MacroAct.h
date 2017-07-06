@@ -63,9 +63,9 @@ public:
 	const MacroCommand getCommandType() const;
 	const MacroLocation getMacroLocation() const;
 
-	int supplyRequired();
-	int mineralPrice()  const;
-	int gasPrice()      const;
+	int supplyRequired() const;
+	int mineralPrice()   const;
+	int gasPrice()       const;
 
 	BWAPI::UnitType whatBuilds() const;
 	std::string getName() const;

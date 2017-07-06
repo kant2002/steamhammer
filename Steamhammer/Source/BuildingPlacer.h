@@ -40,9 +40,6 @@ public:
     // returns a build location near a building's desired location
     BWAPI::TilePosition		getBuildLocationNear(const Building & b,int buildDist,bool horizontalOnly = false) const;
 
-	// returns a build location near the closest chokepoint
-	BWAPI::TilePosition		getDefenseBuildLocation(const Building & b, int buildDist) const;
-
 	void					reserveTiles(BWAPI::TilePosition position, int width, int height);
     void					freeTiles(BWAPI::TilePosition position,int width,int height);
 

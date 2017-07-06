@@ -70,7 +70,6 @@ bool BuildingPlacer::canBuildHere(BWAPI::TilePosition position,const Building & 
     return false;
     }*/
 
-    //returns true if we can build this type of unit here. Takes into account reserved tiles.
     if (!BWAPI::Broodwar->canBuildHere(position,b.type,b.builderUnit))
     {
         return false;
@@ -117,8 +116,8 @@ bool BuildingPlacer::tileBlocksAddon(BWAPI::TilePosition position) const
     return false;
 }
 
-//returns true if we can build this type of unit here with the specified amount of space.
-//space value is stored in this->buildDistance.
+// Can we build this building here with the specified amount of space?
+// space value is stored in this->buildDistance.
 bool BuildingPlacer::canBuildHereWithSpace(BWAPI::TilePosition position,const Building & b,int buildDist,bool horizontalOnly) const
 {
     BWAPI::UnitType type = b.type;
@@ -219,70 +218,6 @@ BWAPI::TilePosition BuildingPlacer::getBuildLocationNear(const Building & b,int 
     // BWAPI::Broodwar->printf("Building Placer took %lf ms, found nothing", ms);
 
     return  BWAPI::TilePositions::None;
-}
-
-// For cannons and sunkens. Probably good for bunkers too (fix the assert below).
-// STATUS works but WAY too slow
-BWAPI::TilePosition BuildingPlacer::getDefenseBuildLocation(const Building & b, int buildDist) const
-{
-	if (   b.type != BWAPI::UnitTypes::Protoss_Photon_Cannon
-		&& b.type != BWAPI::UnitTypes::Zerg_Creep_Colony)
-	{
-		UAB_ASSERT(false, "non-defense building");
-		return BWAPI::TilePositions::None;
-	}
-
-	SparCraft::Timer t;
-	t.start();
-
-	BWTA::Chokepoint * choke = BWTA::getNearestChokepoint(b.desiredPosition);
-
-	// get the precomputed vector of tile positions which are sorted closest to this location
-	const std::vector<BWAPI::TilePosition> & closestToBuilding = MapTools::Instance().getClosestTilesTo(BWAPI::Position(b.desiredPosition));
-
-	double ms1 = t.getElapsedTimeInMilliSec();
-
-	// BWAPI::Broodwar->printf("Sunken Placer : %d positions to check", closestToBuilding.size());
-	UAB_ASSERT(false, "start");
-
-	int closestDistance = 99999;
-	int closestIndex = -1;
-
-	// iterate through the list to find the closest location
-	for (size_t i(0); i < std::min(closestToBuilding.size(), (size_t) 200); ++i)
-	//for (size_t i(0); i < closestToBuilding.size(); ++i)
-	{
-		//if (!BWAPI::Broodwar->hasCreep(closestToBuilding[i])) {
-		//	continue;
-		//}
-		if (canBuildHereWithSpace(closestToBuilding[i], b, buildDist))
-		{
-			UAB_ASSERT(false, "can build");
-			int distance = MapTools::Instance().getGroundDistance(BWAPI::Position(closestToBuilding[i]), choke->getCenter());
-			if (distance < closestDistance) {
-				UAB_ASSERT(false, "closer");
-				// BWAPI::Broodwar->printf("Sunken Placer : distance %d", distance);
-				closestDistance = distance;
-				closestIndex = i;
-				if (distance <= 6) {
-					// Good enough.
-					break;
-				}
-			}
-		}
-	}
-	UAB_ASSERT(false, "after loop");
-	if (closestIndex != -1) {
-		double ms = t.getElapsedTimeInMilliSec();
-		// BWAPI::Broodwar->printf("Sunken Placer succeeded, taking %lf ms, %lf setup ms", ms, ms1);
-
-		return closestToBuilding[closestIndex];
-	}
-
-	double ms = t.getElapsedTimeInMilliSec();
-	// BWAPI::Broodwar->printf("Sunker Placer failed in %lf ms", ms);
-
-	return  BWAPI::TilePositions::None;
 }
 
 bool BuildingPlacer::tileOverlapsBaseLocation(BWAPI::TilePosition tile, BWAPI::UnitType type) const
@@ -409,31 +344,32 @@ void BuildingPlacer::freeTiles(BWAPI::TilePosition position, int width, int heig
     }
 }
 
-// TODO iterate through our bases, not our units
 BWAPI::TilePosition BuildingPlacer::getRefineryPosition()
 {
     BWAPI::TilePosition closestGeyser = BWAPI::TilePositions::None;
-    double minGeyserDistanceFromHome = std::numeric_limits<double>::max();
-    BWAPI::Position homePosition = BWAPI::Position(BWAPI::Broodwar->self()->getStartLocation());
+    int minGeyserDistanceFromHome = 100000;
+	BWAPI::Position homePosition = InformationManager::Instance().getMyMainBaseLocation()->getPosition();
 
-    for (auto & geyser : BWAPI::Broodwar->getStaticGeysers())
-    {
-		// TODO Commenting this out is a workaround for a BWAPI bug.
-		//      A geyser on which the extractor trick was done is never a Resource_Vespene_Geyser again.
-		//      But BUG: it causes regular 2nd extractors to fail in a state loop
-		if (geyser->getType() != BWAPI::UnitTypes::Resource_Vespene_Geyser)
-        {
-			continue;
-        }
+	// NOTE In BWAPI 4.2.1 getStaticGeysers() has a bug affecting geysers whose refineries
+	// have been canceled or destroyed: They become inaccessible. https://github.com/bwapi/bwapi/issues/697
+	// TODO still trying to work around the bug
+	// TODO could rewrite this to use BWTA instead of BWAPI; would not need the slow nested loop
+	//      loop through our bases (from InfoMan), then pick a geyser at that base
+	// for (auto & geyser : BWAPI::Broodwar->getStaticGeysers())
+	// for (auto & geyser : BWAPI::Broodwar->getAllUnits())
+	for (auto & geyser : BWAPI::Broodwar->getGeysers())
+	{
+		//if (geyser->getType() != BWAPI::UnitTypes::Resource_Vespene_Geyser)
+        //{
+		//	continue;
+        //}
+		//BWAPI::Broodwar->printf("geyser (type %d) @ %d, %d", BWAPI::UnitTypes::Resource_Vespene_Geyser, geyser->getInitialTilePosition().x, geyser->getInitialTilePosition().y);
 
-        BWAPI::Position geyserPos = geyser->getInitialPosition();
-        BWAPI::TilePosition geyserTilePos = geyser->getInitialTilePosition();
-
-        // check to see if it's next to one of our depots
+        // check to see if it's near one of our depots
         bool nearDepot = false;
         for (auto & unit : BWAPI::Broodwar->self()->getUnits())
         {
-            if (unit->getType().isResourceDepot() && unit->getDistance(geyserPos) < 300)
+            if (unit->getType().isResourceDepot() && unit->getDistance(geyser) < 300)
             {
                 nearDepot = true;
 				break;
@@ -442,7 +378,8 @@ BWAPI::TilePosition BuildingPlacer::getRefineryPosition()
 
         if (nearDepot)
         {
-            double homeDistance = geyser->getDistance(homePosition);
+            int homeDistance = geyser->getDistance(homePosition);
+			//BWAPI::Broodwar->printf("our geyser @ %d, %d, dist %d", geyser->getInitialTilePosition().x, geyser->getInitialTilePosition().y, homeDistance);
 
             if (homeDistance < minGeyserDistanceFromHome)
             {

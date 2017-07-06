@@ -9,7 +9,6 @@
 
 namespace UAlbertaBot
 {
-typedef unsigned char Action;
 
 enum class ExtractorTrick { None, Start, ExtractorOrdered, DroneOrdered };
 
@@ -27,12 +26,12 @@ class ProductionManager
 	Building *			_extractorTrickBuilding;         // set depending on the extractor trick state
     
     BWAPI::Unit         getClosestUnitToPosition(const BWAPI::Unitset & units,BWAPI::Position closestTo);
+	BWAPI::Unit         getFarthestUnitFromPosition(const BWAPI::Unitset & units, BWAPI::Position farthest);
 	BWAPI::Unit         getClosestLarvaToPosition(BWAPI::Position closestTo);
 	BWAPI::Unit         selectUnitOfType(BWAPI::UnitType type, BWAPI::Position closestTo = BWAPI::Position(0, 0));
 	
 	void				executeCommand(MacroAct act);
     bool                meetsReservedResources(MacroAct type);
-    void                setBuildOrder(const BuildOrder & buildOrder);
     void                create(BWAPI::Unit producer,BuildOrderItem & item);
     void                manageBuildOrderQueue();
     bool                canMakeNow(BWAPI::Unit producer,MacroAct t);
@@ -40,7 +39,6 @@ class ProductionManager
 
     int                 getFreeMinerals() const;
     int                 getFreeGas() const;
-    bool                canPlanBuildOrderNow() const;
 
 	void				doExtractorTrick();
 
@@ -50,17 +48,17 @@ public:
 
     static ProductionManager &	Instance();
 
-    void        drawQueueInformation(std::map<BWAPI::UnitType,int> & numUnits,int x,int y,int index);
-    void        update();
-    void        onUnitMorph(BWAPI::Unit unit);
-    void        onUnitDestroy(BWAPI::Unit unit);
-    void        performBuildOrderSearch();
-    void        drawProductionInformation(int x,int y);
-    void        queueGasSteal();
-	void		startExtractorTrick();
+    void	drawQueueInformation(std::map<BWAPI::UnitType,int> & numUnits,int x,int y,int index);
+	void	setBuildOrder(const BuildOrder & buildOrder);
+	void	update();
+	void	onUnitMorph(BWAPI::Unit unit);
+	void	onUnitDestroy(BWAPI::Unit unit);
+	void	drawProductionInformation(int x, int y);
+	void	queueGasSteal();
+	void	startExtractorTrick();
 
-	bool		isOutOfBook() { return _outOfBook; };
-	//int			getGasTarget() { return _targetGasAmount; };
+	void	goOutOfBook();
+	bool	isOutOfBook() const { return _outOfBook; };
 };
 
 

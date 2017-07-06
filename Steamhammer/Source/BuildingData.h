@@ -19,8 +19,8 @@ public:
 	BWAPI::TilePosition     desiredPosition;
 	BWAPI::TilePosition     finalPosition;
 	BWAPI::UnitType         type;
-	BWAPI::Unit             buildingUnit;
-	BWAPI::Unit             builderUnit;
+	BWAPI::Unit             buildingUnit;      // building after construction starts
+	BWAPI::Unit             builderUnit;       // unit to create the building
     size_t                  status;
     bool                    isGasSteal;
 	bool                    buildCommandGiven;

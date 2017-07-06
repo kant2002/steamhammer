@@ -14,7 +14,7 @@ enum class MacroCommandType
 	, StopGas
 	, GasUntil
 	, StealGas
-	, ExtractorTrick
+	, ExtractorTrick    // NOTE implemented, but tickles a bug in BWAPI; don't use it
 	};
 
 class MacroCommand

@@ -25,7 +25,6 @@ struct Strategy
         , _wins(0)
         , _losses(0)
     {
-    
     }
 
     Strategy(const std::string & name, const BWAPI::Race & race, const BuildOrder & buildOrder)
@@ -35,7 +34,6 @@ struct Strategy
         , _losses(0)
         , _buildOrder(buildOrder)
     {
-    
     }
 };
 
@@ -57,11 +55,16 @@ class StrategyManager
 	const	MetaPairVector		    getTerranBuildOrderGoal() const;
 	const	MetaPairVector		    getZergBuildOrderGoal() const;
 
+	bool							detectSupplyBlock(BuildOrderQueue & queue);
+	bool							canPlanBuildOrderNow() const;
+	void							performBuildOrderSearch();
+
 public:
     
 	static	StrategyManager &	    Instance();
 
 			void				    onEnd(const bool isWinner);
+
             void                    addStrategy(const std::string & name, Strategy & strategy);
             void                    setLearnedStrategy();
             void	                readResults();
@@ -69,7 +72,7 @@ public:
 	const	BuildOrder &            getOpeningBookBuildOrder() const;
 
 			void					handleUrgentProductionIssues(BuildOrderQueue & queue);
-			bool					detectSupplyBlock(BuildOrderQueue & queue);
+			void					freshProductionPlan();
 };
 
 }

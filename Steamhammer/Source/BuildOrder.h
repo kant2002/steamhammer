@@ -14,10 +14,12 @@ class BuildOrder
 public:
 
     BuildOrder();
-    BuildOrder(const BWAPI::Race & race);
-    BuildOrder(const BWAPI::Race & race, const std::vector<MacroAct> & metaVector);
+    BuildOrder(const BWAPI::Race race);
+    BuildOrder(const BWAPI::Race race, const std::vector<MacroAct> & metaVector);
 
-    void add(const MacroAct & t);
+	void clearAll() { _buildOrder.clear(); };
+
+    void add(const MacroAct & act);
 
     const size_t size() const;
     const BWAPI::Race & getRace() const;

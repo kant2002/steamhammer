@@ -15,6 +15,8 @@ MapTools::MapTools()
     : _rows(BWAPI::Broodwar->mapHeight())
     , _cols(BWAPI::Broodwar->mapWidth())
 {
+	UAB_ASSERT(_rows > 0 && _cols > 0, "empty map");
+
     _map    = std::vector<bool>(_rows*_cols,false);
     _units  = std::vector<bool>(_rows*_cols,false);
     _fringe = std::vector<int>(_rows*_cols,0);
@@ -228,7 +230,7 @@ void MapTools::drawHomeDistanceMap()
     }
 }
 
-BWAPI::TilePosition MapTools::getNextExpansion(bool hidden, bool minOnlyOK)
+BWTA::BaseLocation * MapTools::nextExpansion(bool hidden, bool minOnlyOK)
 {
 	// Abbreviations.
 	BWAPI::Player player = BWAPI::Broodwar->self();
@@ -258,7 +260,13 @@ BWAPI::TilePosition MapTools::getNextExpansion(bool hidden, bool minOnlyOK)
 			continue;
 		}
         
-        BWAPI::TilePosition tile = base->getTilePosition();
+		// Don't expand to a base already reserved for another expansion.
+		if (InformationManager::Instance().isBaseReserved(base))
+		{
+			continue;
+		}
+
+		BWAPI::TilePosition tile = base->getTilePosition();
         bool buildingInTheWay = false;
 
         for (int x = 0; x < player->getRace().getCenter().tileWidth(); ++x)
@@ -334,12 +342,35 @@ BWAPI::TilePosition MapTools::getNextExpansion(bool hidden, bool minOnlyOK)
 
     if (bestBase)
     {
-        return bestBase->getTilePosition();
+        return bestBase;
 	}
 	if (!minOnlyOK)
 	{
 		// We wanted a gas base and there isn't one. Try for a mineral-only base.
-		return getNextExpansion(hidden, true);
+		return nextExpansion(hidden, true);
+	}
+	return nullptr;
+}
+
+BWAPI::TilePosition MapTools::getNextExpansion(bool hidden, bool minOnlyOK)
+{
+	BWTA::BaseLocation * base = nextExpansion(hidden, minOnlyOK);
+	if (base)
+	{
+		// BWAPI::Broodwar->printf("foresee base @ %d, %d", base->getTilePosition().x, base->getTilePosition().y);
+		return base->getTilePosition();
+	}
+	return BWAPI::TilePositions::None;
+}
+
+BWAPI::TilePosition MapTools::reserveNextExpansion(bool hidden, bool minOnlyOK)
+{
+	BWTA::BaseLocation * base = nextExpansion(hidden, minOnlyOK);
+	if (base)
+	{
+		// BWAPI::Broodwar->printf("reserve base @ %d, %d", base->getTilePosition().x, base->getTilePosition().y);
+		InformationManager::Instance().reserveBase(base);
+		return base->getTilePosition();
 	}
 	return BWAPI::TilePositions::None;
 }

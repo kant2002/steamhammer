@@ -11,7 +11,6 @@ class ScoutManager
 	BWAPI::Unit						_workerScout;
     std::string                     _scoutStatus;
     std::string                     _gasStealStatus;
-	int				                _numWorkerScouts;
 	bool							_scoutLocationOnly;
 	bool			                _scoutUnderAttack;
 	bool							_tryGasSteal;
@@ -42,6 +41,7 @@ public:
 	void update();
 
     void setWorkerScout(BWAPI::Unit unit);
+	void releaseWorkerScout();
 	void setGasSteal();
 	void setScoutLocationOnly();
 };

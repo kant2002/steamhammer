@@ -27,3 +27,13 @@ std::string TrimRaceName(const std::string & s)
 	// There is no race prefix. Return it unchanged.
 	return s;
 }
+
+// Safely return the name of a unit type.
+// Note: Can fail for some non-unit unit types which Steamhammer does not use.
+std::string UnitTypeName(BWAPI::UnitType type)
+{
+	if (type == BWAPI::UnitTypes::None   ) return "None";
+	if (type == BWAPI::UnitTypes::Unknown) return "Unknown";
+
+	return TrimRaceName(type.getName());
+}

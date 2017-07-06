@@ -219,32 +219,32 @@ void TransportManager::followPerimeter(BWAPI::Position to, BWAPI::Position from)
 		//compute waypoints
 		std::pair<int, int> wpIDX = findSafePath(to, from);
 		bool valid = (wpIDX.first > -1 && wpIDX.second > -1);
-		UAB_ASSERT_WARNING(valid, "waypoints not valid! (transport mgr)");
+		UAB_ASSERT(valid, "waypoints not valid");
 		_waypoints.push_back(_mapEdgeVertices[wpIDX.first]);
 		_waypoints.push_back(_mapEdgeVertices[wpIDX.second]);
 
-		BWAPI::Broodwar->printf("WAYPOINTS: [%d] - [%d]", wpIDX.first, wpIDX.second);
+		// BWAPI::Broodwar->printf("WAYPOINTS: [%d] - [%d]", wpIDX.first, wpIDX.second);
 
 		Micro::SmartMove(_transportShip, _waypoints[0]);
 	}
 	else if (_waypoints.size() > 1 && _transportShip->getDistance(_waypoints[0]) < 100)
 	{
-		BWAPI::Broodwar->printf("FOLLOW PERIMETER TO SECOND WAYPOINT!");
+		// BWAPI::Broodwar->printf("FOLLOW PERIMETER TO SECOND WAYPOINT!");
 		//follow perimeter to second waypoint! 
 		//clockwise or counterclockwise? 
 		int closestPolygonIndex = getClosestVertexIndex(_transportShip);
-		UAB_ASSERT_WARNING(closestPolygonIndex != -1, "Couldn't find a closest vertex");
+		UAB_ASSERT(closestPolygonIndex != -1, "Couldn't find a closest vertex");  // ensures map edge exists
 
 		if (_mapEdgeVertices[(closestPolygonIndex + 1) % _mapEdgeVertices.size()].getApproxDistance(_waypoints[1]) <
 			_mapEdgeVertices[(closestPolygonIndex - 1) % _mapEdgeVertices.size()].getApproxDistance(_waypoints[1]))
 		{
-			BWAPI::Broodwar->printf("FOLLOW clockwise");
+			// BWAPI::Broodwar->printf("FOLLOW clockwise");
 			following = 1;
 			followPerimeter(following);
 		}
 		else
 		{
-			BWAPI::Broodwar->printf("FOLLOW counter clockwise");
+			// BWAPI::Broodwar->printf("FOLLOW counter clockwise");
 			following = -1;
 			followPerimeter(following);
 		}
@@ -256,9 +256,7 @@ void TransportManager::followPerimeter(BWAPI::Position to, BWAPI::Position from)
 		following = 0;
 		Micro::SmartMove(_transportShip, to);
 	}
-
 }
-
 
 int TransportManager::getClosestVertexIndex(BWAPI::UnitInterface * unit)
 {
@@ -299,8 +297,8 @@ int TransportManager::getClosestVertexIndex(BWAPI::Position p)
 
 std::pair<int,int> TransportManager::findSafePath(BWAPI::Position to, BWAPI::Position from)
 {
-	BWAPI::Broodwar->printf("FROM: [%d,%d]",from.x, from.y);
-	BWAPI::Broodwar->printf("TO: [%d,%d]", to.x, to.y);
+	// BWAPI::Broodwar->printf("FROM: [%d,%d]",from.x, from.y);
+	// BWAPI::Broodwar->printf("TO: [%d,%d]", to.x, to.y);
 
 
 	//closest map edge point to destination

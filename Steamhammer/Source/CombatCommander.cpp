@@ -32,8 +32,11 @@ void CombatCommander::initializeSquads()
 	BWAPI::Position ourBasePosition = BWAPI::Position(BWAPI::Broodwar->self()->getStartLocation());
 
     // the scout defense squad will handle chasing the enemy worker scout
-    SquadOrder enemyScoutDefense(SquadOrderTypes::Defend, ourBasePosition, 900, "Get the scout");
-    _squadData.addSquad("ScoutDefense", Squad("ScoutDefense", enemyScoutDefense, ScoutDefensePriority));
+	if (Config::Micro::ScoutDefenseRadius > 0)
+	{
+		SquadOrder enemyScoutDefense(SquadOrderTypes::Defend, ourBasePosition, Config::Micro::ScoutDefenseRadius, "Get the scout");
+		_squadData.addSquad("ScoutDefense", Squad("ScoutDefense", enemyScoutDefense, ScoutDefensePriority));
+	}
 
 	// add a drop squad if we are using a drop strategy
     if (Config::Strategy::StrategyName == "Protoss_Drop")
@@ -61,11 +64,6 @@ bool CombatCommander::isSquadUpdateFrame()
 
 void CombatCommander::update(const BWAPI::Unitset & combatUnits)
 {
-    if (!Config::Modules::UsingCombatCommander)
-    {
-        return;
-    }
-
     if (!_initialized)
     {
         initializeSquads();
@@ -238,7 +236,7 @@ void CombatCommander::updateDropSquads()
 
 void CombatCommander::updateScoutDefenseSquad() 
 {
-    if (_combatUnits.empty()) 
+	if (Config::Micro::ScoutDefenseRadius == 0 || _combatUnits.empty())
     { 
         return; 
     }
@@ -390,33 +388,27 @@ void CombatCommander::updateDefenseSquads()
         }
 
         // assign units to the squad
-        if (_squadData.squadExists(squadName.str()))
-        {
-            Squad & defenseSquad = _squadData.getSquad(squadName.str());
+		UAB_ASSERT(_squadData.squadExists(squadName.str()), "Squad should exist: %s", squadName.str().c_str());
+        Squad & defenseSquad = _squadData.getSquad(squadName.str());
 
-            // figure out how many units we need on defense
-	        int flyingDefendersNeeded = numDefendersPerEnemyUnit * numEnemyFlyingInRegion;
-	        int groundDefendersNeeded = numDefendersPerEnemyUnit * numEnemyGroundInRegion;
+        // figure out how many units we need on defense
+	    int flyingDefendersNeeded = numDefendersPerEnemyUnit * numEnemyFlyingInRegion;
+	    int groundDefendersNeeded = numDefendersPerEnemyUnit * numEnemyGroundInRegion;
 
-			// Count static defense as ground defenders.
-			for (auto & unit : BWAPI::Broodwar->self()->getUnits()) {
-				if ((unit->getType() == BWAPI::UnitTypes::Protoss_Photon_Cannon ||
-					unit->getType() == BWAPI::UnitTypes::Zerg_Sunken_Colony) &&
-					unit->isCompleted() && unit->isPowered() &&
-					BWTA::getRegion(BWAPI::TilePosition(unit->getPosition())) == myRegion)
-				{
-					groundDefendersNeeded -= 4;   // pretend a sunken can hold 2 zerglings
-				}
+		// Count static defense as ground defenders.
+		for (auto & unit : BWAPI::Broodwar->self()->getUnits()) {
+			if ((unit->getType() == BWAPI::UnitTypes::Protoss_Photon_Cannon ||
+				unit->getType() == BWAPI::UnitTypes::Zerg_Sunken_Colony) &&
+				unit->isCompleted() && unit->isPowered() &&
+				BWTA::getRegion(BWAPI::TilePosition(unit->getPosition())) == myRegion)
+			{
+				groundDefendersNeeded -= 4;   // pretend a sunken can hold 2 zerglings
 			}
-			groundDefendersNeeded = std::max(groundDefendersNeeded, 0);
+		}
+		groundDefendersNeeded = std::max(groundDefendersNeeded, 0);
 
-			updateDefenseSquadUnits(defenseSquad, flyingDefendersNeeded, groundDefendersNeeded);
-        }
-        else
-        {
-            UAB_ASSERT_WARNING(false, "Squad should have existed: %s", squadName.str().c_str());
-        }
-	}
+		updateDefenseSquadUnits(defenseSquad, flyingDefendersNeeded, groundDefendersNeeded);
+    }
 
     // for each of our defense squads, if there aren't any enemy units near the position, remove the squad
 	for (const auto & kv : _squadData.getSquads())
@@ -459,8 +451,8 @@ void CombatCommander::updateDefenseSquadUnits(Squad & defenseSquad, const size_t
 		return;
 	}
 
-	// Add an overlord if we don't have one.
 	// TODO
+	// Add an overlord if we don't have one.
 	
 	// add flying defenders if we still need them
 	size_t flyingDefendersAdded = 0;
@@ -508,12 +500,13 @@ BWAPI::Unit CombatCommander::findClosestDefender(const Squad & defenseSquad, BWA
 	double minDistance = std::numeric_limits<double>::max();
 
 	int nLings = numZerglingsInOurBase();
-	bool zerglingRush = nLings > 0 && nLings < 10 && BWAPI::Broodwar->getFrameCount() < 6000;
+	bool zerglingRush = nLings >= 2 && nLings < 10 && BWAPI::Broodwar->getFrameCount() < 5000;
 	bool pullWorkers = Config::Micro::WorkersDefendRush && (zerglingRush || beingBuildingRushed());
 
 	for (auto & unit : _combatUnits) 
 	{
-		if ((flyingDefender && !UnitUtil::CanAttackAir(unit)) || (!flyingDefender && !UnitUtil::CanAttackGround(unit)))
+		if ((flyingDefender && !UnitUtil::CanAttackAir(unit)) ||
+			(!flyingDefender && !UnitUtil::CanAttackGround(unit)))
         {
             continue;
         }
@@ -523,8 +516,6 @@ BWAPI::Unit CombatCommander::findClosestDefender(const Squad & defenseSquad, BWA
             continue;
         }
 
-
-		// Pull workers only a short distance, if at all.
         if (unit->getType().isWorker() && !pullWorkers)
         {
             continue;
@@ -620,9 +611,10 @@ BWAPI::Position CombatCommander::getMainAttackLocation()
 
 		for (auto & unit : enemyUnitsInArea)
 		{
-			if (unit->getType() != BWAPI::UnitTypes::Zerg_Overlord)
+			if (unit->getType() != BWAPI::UnitTypes::Zerg_Overlord &&
+				unit->getType() != BWAPI::UnitTypes::Zerg_Larva)
 			{
-				// Enemy base is not empty: It's not only overlords in the enemy base area.
+				// Enemy base is not empty: Nothing interesting is in the enemy base area.
 				return enemyBasePosition;
 			}
 		}
@@ -641,9 +633,11 @@ BWAPI::Position CombatCommander::getMainAttackLocation()
 
 	// Third choice: Attack visible enemy units that aren't overlords
 	// TODO should distinguish depending on the squad's air and ground weapons
+	//       don't send zerglings after air units, etc.
 	for (auto & unit : BWAPI::Broodwar->enemy()->getUnits())
 	{
-		if (unit->getType() == BWAPI::UnitTypes::Zerg_Overlord)
+		if (unit->getType() == BWAPI::UnitTypes::Zerg_Overlord ||
+			unit->getType() == BWAPI::UnitTypes::Zerg_Larva)
 		{
 			continue;
 		}

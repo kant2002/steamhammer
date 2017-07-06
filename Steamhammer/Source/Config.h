@@ -14,11 +14,6 @@ namespace Config
 
     namespace Modules
     {
-        extern bool UsingGameCommander;			
-        extern bool UsingScoutManager;
-        extern bool UsingCombatCommander;
-        extern bool UsingUnitCommandManager;
-        extern bool UsingBuildOrderSearch;  
         extern bool UsingStrategyIO;			
     }
     
@@ -55,7 +50,8 @@ namespace Config
     namespace Debug
     {
         extern bool DrawGameInfo;
-        extern bool DrawBuildOrderSearchInfo;
+		extern bool DrawStrategySketch;
+		extern bool DrawBuildOrderSearchInfo;
         extern bool DrawUnitHealthBars;
         extern bool DrawResourceInfo;
         extern bool DrawProductionInfo;
@@ -70,10 +66,10 @@ namespace Config
         extern bool DrawBWTAInfo;
         extern bool DrawMapGrid;
 		extern bool DrawBaseInfo;
+		extern bool DrawStrategyBossInfo;
 		extern bool DrawUnitTargetInfo;
         extern bool DrawSquadInfo;
         extern bool DrawBOSSStateInfo;
-        extern bool PrintModuleTimeout;	
 
         extern std::string ErrorLogFilename;
         extern bool LogAssertToErrorFile;
@@ -92,11 +88,11 @@ namespace Config
         extern bool WorkersDefendRush;
         extern int RetreatMeleeUnitShields;
         extern int RetreatMeleeUnitHP;
-        extern int CombatRadius;                
         extern int CombatRegroupRadius;         
         extern int UnitNearEnemyRadius;         
-    }
-
+		extern int ScoutDefenseRadius;
+	}
+    
     namespace Macro
     {
         extern int BOSSFrameLimit;

@@ -3,20 +3,12 @@
 using namespace UAlbertaBot;
 
 BuildOrderQueue::BuildOrderQueue() 
-	: highestPriority(0), 
-	  lowestPriority(0),
-	  defaultPrioritySpacing(10)
 {
 }
 
 void BuildOrderQueue::clearAll() 
 {
-	// clear the queue
 	queue.clear();
-
-	// reset the priorities
-	highestPriority = 0;
-	lowestPriority = 0;
 }
 
 BuildOrderItem & BuildOrderQueue::getHighestPriorityItem()
@@ -27,63 +19,55 @@ BuildOrderItem & BuildOrderQueue::getHighestPriorityItem()
 	return queue.back();
 }
 
-void BuildOrderQueue::queueItem(BuildOrderItem b) 
+// Return the next unit type in the queue, or None, skipping over commands.
+BWAPI::UnitType BuildOrderQueue::getNextUnit()
 {
-	// if the queue is empty, set the highest and lowest priorities
-	if (queue.empty()) 
+	for (int i = queue.size() - 1; i >= 0; --i)
 	{
-		highestPriority = b.priority;
-		lowestPriority = b.priority;
+		MacroAct & act = queue[i].macroAct;
+		if (act.isUnit())
+		{
+			return act.getUnitType();
+		}
+		else if (!act.isCommand())
+		{
+			return BWAPI::UnitTypes::None;
+		}
 	}
 
-	// push the item into the queue
-	if (b.priority <= lowestPriority) 
-	{
-		queue.push_front(b);
-	}
-	else
-	{
-		queue.push_back(b);
-	}
-
-	// if the item is somewhere in the middle, we have to sort again
-	if ((queue.size() > 1) && (b.priority < highestPriority) && (b.priority > lowestPriority)) 
-	{
-		// sort the list in ascending order, putting highest priority at the top
-		std::sort(queue.begin(), queue.end());
-	}
-
-	// update the highest or lowest if it is beaten
-	highestPriority = (b.priority > highestPriority) ? b.priority : highestPriority;
-	lowestPriority  = (b.priority < lowestPriority)  ? b.priority : lowestPriority;
+	return BWAPI::UnitTypes::None;
 }
 
-void BuildOrderQueue::queueAsHighestPriority(MacroAct m, bool gasSteal) 
+// Return the gas cost of the next item in the queue that has a nonzero gas cost.
+int BuildOrderQueue::getNextGasCost(int n)
 {
-	// the new priority will be higher
-	int newPriority = highestPriority + defaultPrioritySpacing;
+	for (int i = queue.size() - 1; i >= std::max(0, int(queue.size()) - n); --i)
+	{
+		MacroAct & act = queue[i].macroAct;
+		int price = act.gasPrice();
+		if (price > 0)
+		{
+			return price;
+		}
+	}
 
-	// queue the item
-	queueItem(BuildOrderItem(m, newPriority, gasSteal));
+	return 0;
+}
+
+void BuildOrderQueue::queueAsHighestPriority(MacroAct m, bool gasSteal)
+{
+	queue.push_back(BuildOrderItem(m, gasSteal));
 }
 
 void BuildOrderQueue::queueAsLowestPriority(MacroAct m) 
 {
-	// the new priority will be higher
-	int newPriority = lowestPriority - defaultPrioritySpacing;
-
-	// queue the item
-	queueItem(BuildOrderItem(m, newPriority));
+	queue.push_front(BuildOrderItem(m));
 }
 
 void BuildOrderQueue::removeHighestPriorityItem() 
 {
 	// remove the back element of the vector
 	queue.pop_back();
-
-	// if the list is not empty, set the highest accordingly
-	highestPriority = queue.empty() ? 0 : queue.back().priority;
-	lowestPriority  = queue.empty() ? 0 : lowestPriority;
 }
 
 size_t BuildOrderQueue::size() const
@@ -151,7 +135,7 @@ void BuildOrderQueue::drawQueueInformation(int x, int y, bool outOfBook)
         return;
     }
 	
-	std::string prefix = "\x04";
+	char prefix = white;
 
 	size_t reps = std::min(size_t(12), queue.size());
 	int remaining = queue.size() - reps;
@@ -159,7 +143,7 @@ void BuildOrderQueue::drawQueueInformation(int x, int y, bool outOfBook)
 	// for each item in the queue
 	for (size_t i(0); i<reps; i++) {
 
-		prefix = "\x04";
+		prefix = white;
 
 		const BuildOrderItem & item = queue[queue.size() - 1 - i];
         const MacroAct & act = item.macroAct;
@@ -168,31 +152,31 @@ void BuildOrderQueue::drawQueueInformation(int x, int y, bool outOfBook)
         {
             if (act.getUnitType().isWorker())
             {
-                prefix = "\x1F";
+                prefix = cyan;
             }
             else if (act.getUnitType().supplyProvided() > 0)
             {
-                prefix = "\x03";
+                prefix = yellow;
             }
             else if (act.getUnitType().isRefinery())
             {
-                prefix = "\x1E";
+                prefix = gray;
             }
             else if (act.isBuilding())
             {
-                prefix = "\x11";
+                prefix = orange;
             }
             else if (act.getUnitType().groundWeapon() != BWAPI::WeaponTypes::None || act.getUnitType().airWeapon() != BWAPI::WeaponTypes::None)
             {
-                prefix = "\x06";
+                prefix = red;
             }
         }
 		else if (act.isCommand())
 		{
-			prefix = "\x04";
+			prefix = white;
 		}
 
-		BWAPI::Broodwar->drawTextScreen(x, y, " %s%s", prefix.c_str(), TrimRaceName(act.getName()).c_str());
+		BWAPI::Broodwar->drawTextScreen(x, y, " %c%s", prefix, TrimRaceName(act.getName()).c_str());
 		y += 10;
 	}
 
@@ -207,7 +191,7 @@ void BuildOrderQueue::drawQueueInformation(int x, int y, bool outOfBook)
 	}
 	if (!endMark.str().empty())
 	{
-		BWAPI::Broodwar->drawTextScreen(x, y, " %s%s", "\x04", endMark.str().c_str());
+		BWAPI::Broodwar->drawTextScreen(x, y, " %c%s", white, endMark.str().c_str());
 	}
 }
 

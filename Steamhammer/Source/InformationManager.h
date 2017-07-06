@@ -9,24 +9,13 @@
 
 namespace UAlbertaBot
 {
-struct BaseInfo
-{
-	BWTA::BaseLocation *	location;
-	BWAPI::Unit				resourceDepot;
-
-	BaseInfo(BWTA::BaseLocation * loc, BWAPI::Unit depot)
-		: location(loc)
-		, resourceDepot(depot)
-	{
-	}
-};
 
 struct BaseStatus
 {
 public:
-
-	BWAPI::Unit * resourceDepot;		// hatchery, etc.
-	BWAPI::Player owner;				// self, enemy, or neutral
+	BWAPI::Unit  	resourceDepot;		// hatchery, etc.; valid iff depotSeen
+	BWAPI::Player	owner;              // self, enemy, neutral
+	bool			reserved;			// if this is our planned expansion
 
 	// The resourceDepot pointer is set for a base if the depot has been seen.
 	// It is possible to infer a base location without seeing the depot.
@@ -34,12 +23,21 @@ public:
 	BaseStatus()
 		: resourceDepot(nullptr)
 		, owner(BWAPI::Broodwar->neutral())
+		, reserved(false)
 	{
 	}
 
-	BaseStatus(BWAPI::Unit * depot, BWAPI::Player player)
+	BaseStatus(BWAPI::Unit depot, BWAPI::Player player)
 		: resourceDepot(depot)
 		, owner(player)
+		, reserved(false)
+	{
+	}
+
+	BaseStatus(BWAPI::Unit depot, BWAPI::Player player, bool res)
+		: resourceDepot(depot)
+		, owner(player)
+		, reserved(res)
 	{
 	}
 };
@@ -55,11 +53,13 @@ class InformationManager
 	std::map<BWAPI::Player, std::set<BWTA::Region *> >  _occupiedRegions;        // contains any building
 	std::map<BWTA::BaseLocation *, BaseStatus>			_theBases;
 
-	bool												_enemyProxy;
-	bool												_enemyHasAirTech;
-	bool												_enemyHasCloakTech;
-	bool												_enemyHasMobileCloakTech;
-	bool												_enemyHasOverlordHunters;
+	bool					_enemyProxy;
+
+	bool					_enemyHasAntiAir;
+	bool					_enemyHasAirTech;
+	bool					_enemyHasCloakTech;
+	bool					_enemyHasMobileCloakTech;
+	bool					_enemyHasOverlordHunters;
 
 	InformationManager();
 
@@ -73,6 +73,7 @@ class InformationManager
 	void					baseLost(BWAPI::TilePosition basePosition);
 	void					maybeAddBase(BWAPI::Unit unit);
 	bool					closeEnough(BWAPI::TilePosition a, BWAPI::TilePosition b);
+	void					chooseNewMainBase();
 
 	void                    updateUnit(BWAPI::Unit unit);
     void                    updateUnitInfo();
@@ -92,7 +93,7 @@ public:
 	void					onUnitMorph(BWAPI::Unit unit)       { updateUnit(unit); maybeAddBase(unit); }
     void					onUnitRenegade(BWAPI::Unit unit)    { updateUnit(unit); }
     void					onUnitDestroy(BWAPI::Unit unit);
-	
+
 	bool					isEnemyBuildingInRegion(BWTA::Region * region);
     int						getNumUnits(BWAPI::UnitType type,BWAPI::Player player);
     bool					nearbyForceHasCloaked(BWAPI::Position p,BWAPI::Player player,int radius);
@@ -107,9 +108,21 @@ public:
 	BWTA::BaseLocation *	getMyMainBaseLocation();
 	BWTA::BaseLocation *	getEnemyMainBaseLocation();
 	BWAPI::Player			getBaseOwner(BWTA::BaseLocation * base);
+	BWAPI::Unit 			getBaseDepot(BWTA::BaseLocation * base);
 	BWTA::BaseLocation *	getMyNaturalLocation();
+	int						getTotalNumBases() const;
+	int						getNumBases(BWAPI::Player player);
+	int						getNumFreeLandBases();
+	int						getMyNumMineralPatches();
+	int						getMyNumGeysers();
+	int						getAir2GroundSupply(BWAPI::Player player) const;
 
-	bool					enemyHasAntiAir();			// TODO
+	bool					isBaseReserved(BWTA::BaseLocation * base);
+	void					reserveBase(BWTA::BaseLocation * base);
+	void					unreserveBase(BWTA::BaseLocation * base);
+	void					unreserveBase(BWAPI::TilePosition baseTilePosition);
+
+	bool					enemyHasAntiAir();
 	bool					enemyHasAirTech();
 	bool                    enemyHasCloakTech();
 	bool                    enemyHasMobileCloakTech();

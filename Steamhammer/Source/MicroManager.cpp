@@ -17,7 +17,7 @@ BWAPI::Position MicroManager::calcCenter() const
     {
         if (Config::Debug::DrawSquadInfo)
         {
-            BWAPI::Broodwar->printf("Squad::calcCenter() called on empty squad");
+            BWAPI::Broodwar->printf("calcCenter() called on empty squad");
         }
         return BWAPI::Position(0,0);
     }
@@ -89,8 +89,12 @@ void MicroManager::execute(const SquadOrder & inputOrder)
 
                 for (auto & enemyUnit : nearbyEnemies) 
 		        {
-                    // if its not a worker, or if it is but it's building something, add it to the targets
-			        if (!enemyUnit->getType().isWorker() || enemyUnit->isConstructing())
+                    // if it's not a worker, or if it is but we don't like it, add it to the targets
+			        if (!enemyUnit->getType().isWorker() ||
+						enemyUnit->isConstructing() ||
+						enemyUnit->isRepairing() ||
+						enemyUnit->isAttacking() ||
+						!enemyUnit->isMoving())
                     {
                         workersRemoved.insert(enemyUnit);
                     }
@@ -103,6 +107,7 @@ void MicroManager::execute(const SquadOrder & inputOrder)
                             if (BWTA::getRegion(BWAPI::TilePosition(enemyUnit->getPosition())) == enemyRegion)
                             {
                                 workersRemoved.insert(enemyUnit);
+								break;
                             }
                         }
                     }
@@ -135,7 +140,7 @@ void MicroManager::regroup(const BWAPI::Position & regroupPosition) const
         {
             Micro::SmartMove(unit, ourBasePosition);
         }
-		else if (unit->getDistance(regroupPosition) > 100)
+		else if (unit->getDistance(regroupPosition) > 96)
 		{
 			// regroup it
 			Micro::SmartMove(unit, regroupPosition);
@@ -214,8 +219,11 @@ bool MicroManager::unitNearChokepoint(BWAPI::Unit unit) const
 
 void MicroManager::drawOrderText() 
 {
-	for (auto & unit : _units) 
+	if (Config::Debug::DrawUnitTargetInfo)
     {
-		if (Config::Debug::DrawUnitTargetInfo) BWAPI::Broodwar->drawTextMap(unit->getPosition().x, unit->getPosition().y, "%s", order.getStatus().c_str());
+		for (auto & unit : _units)
+		{
+			BWAPI::Broodwar->drawTextMap(unit->getPosition().x, unit->getPosition().y, "%s", order.getStatus().c_str());
+		}
 	}
 }

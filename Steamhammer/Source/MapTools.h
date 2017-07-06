@@ -31,6 +31,8 @@ class MapTools
     void                    computeDistance(DistanceMap & dmap,const BWAPI::Position p); // computes walk distance from Position P to all other points on the map
     BWAPI::TilePosition     getTilePosition(int index);
 
+	BWTA::BaseLocation *    nextExpansion(bool hidden, bool minOnlyOK);
+
 public:
 
     static MapTools &       Instance();
@@ -42,8 +44,9 @@ public:
     int	                    getEnemyBaseDistance(BWAPI::Position p);
     int	                    getMyBaseDistance(BWAPI::Position p);
     BWAPI::Position         getEnemyBaseMoveTo(BWAPI::Position p);
-    BWAPI::TilePosition     getNextExpansion(bool hidden = false, bool minOnlyOK = false);
-    void                    drawHomeDistanceMap();
+	BWAPI::TilePosition     getNextExpansion(bool hidden = false, bool minOnlyOK = false);
+	BWAPI::TilePosition     reserveNextExpansion(bool hidden = false, bool minOnlyOK = false);
+	void                    drawHomeDistanceMap();
 
     const std::vector<BWAPI::TilePosition> & getClosestTilesTo(BWAPI::Position pos);
 

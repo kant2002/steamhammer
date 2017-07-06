@@ -45,10 +45,13 @@ public:
 
     int         getNumMineralWorkers() const;
     int         getNumGasWorkers() const;
-    int         getNumIdleWorkers() const;
+	int         getNumReturnCargoWorkers() const;
+	int			getNumCombatWorkers() const;
+	int         getNumIdleWorkers() const;
 
     void        setScoutWorker(BWAPI::Unit worker);
 
+	// Note: _collectGas == false allows that a little more gas may still be collected.
 	bool		isCollectingGas()              { return _collectGas; };
 	void		setCollectGas(bool collectGas) { _collectGas = collectGas; };
 

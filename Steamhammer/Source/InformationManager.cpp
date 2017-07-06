@@ -1,6 +1,7 @@
 #include "Common.h"
 #include "InformationManager.h"
 #include "MapTools.h"
+#include "UnitUtil.h"
 
 using namespace UAlbertaBot;
 
@@ -8,6 +9,7 @@ InformationManager::InformationManager()
     : _self(BWAPI::Broodwar->self())
     , _enemy(BWAPI::Broodwar->enemy())
 	, _enemyProxy(false)
+	, _enemyHasAntiAir(false)
 	, _enemyHasAirTech(false)
 	, _enemyHasCloakTech(false)
 	, _enemyHasMobileCloakTech(false)
@@ -80,20 +82,22 @@ void InformationManager::initializeNaturalBase()
 
 // A base is inferred to exist at the given position, without having been seen.
 // Only enemy bases can be inferred; we see our own.
-// Adjust its BaseStatus to match, unless we already know about the base.
+// Adjust its BaseStatus to match. It is not reserved.
 void InformationManager::baseInferred(BWTA::BaseLocation * base)
 {
-	if (_theBases[base].owner == BWAPI::Broodwar->neutral())
+	if (_theBases[base].owner != _self)
 	{
-		_theBases[base] = BaseStatus(nullptr, _enemy);
+		_theBases[base] = BaseStatus(nullptr, _enemy, false);
 	}
 }
 
 // The given resource depot has been created or discovered.
-// Adjust its BaseStatus to match.
+// Adjust its BaseStatus to match. It is not reserved.
 // This accounts for the theoretical case that it might be neutral.
 void InformationManager::baseFound(BWAPI::Unit depot)
 {
+	UAB_ASSERT(depot->getType().isResourceDepot(), "non-depot base");
+
 	BWAPI::Player owner = BWAPI::Broodwar->neutral();
 
 	if (depot->getPlayer() == _self || depot->getPlayer() == _enemy)
@@ -105,14 +109,14 @@ void InformationManager::baseFound(BWAPI::Unit depot)
 	{
 		if (closeEnough(base->getTilePosition(), depot->getTilePosition()))
 		{
-			_theBases[base] = BaseStatus(&depot, owner);
+			_theBases[base] = BaseStatus(depot, owner, false);
 			return;
 		}
 	}
 }
 
-// This base was just destroyed.
-// Update its BaseStatus to match.
+// Something that may be a base was just destroyed.
+// If it is, update the BaseStatus to match.
 void InformationManager::baseLost(BWAPI::TilePosition basePosition)
 {
 	for (BWTA::BaseLocation * base : BWTA::getBaseLocations())
@@ -120,8 +124,43 @@ void InformationManager::baseLost(BWAPI::TilePosition basePosition)
 		if (closeEnough(base->getTilePosition(), basePosition))
 		{
 			_theBases[base] = BaseStatus();
+			if (base == getMyMainBaseLocation())
+			{
+				chooseNewMainBase();        // in case our main was destroyed
+			}
 			return;
 		}
+	}
+}
+
+// Our main base has been destroyed. Choose a new one.
+// Otherwise we'll keep trying to build in the old one, where the enemy may still be.
+void InformationManager::chooseNewMainBase()
+{
+	BWTA::BaseLocation * oldMain = getMyMainBaseLocation();
+
+	// Choose a base we own which is as far away from the old main as possible.
+	// Maybe that will be safer.
+	double newMainDist = 0.0;
+	BWTA::BaseLocation * newMain = nullptr;
+
+	for (BWTA::BaseLocation * base : BWTA::getBaseLocations())
+	{
+		if (_theBases[base].owner == _self)
+		{
+			double dist = base->getAirDistance(oldMain);
+			if (dist > newMainDist)
+			{
+				newMainDist = dist;
+				newMain = base;
+			}
+		}
+	}
+
+	// If we didn't find a new main base, we're in deep trouble. We may as well keep the old one.
+	if (newMain)
+	{
+		_mainBaseLocations[_self] = newMain;
 	}
 }
 
@@ -311,7 +350,7 @@ std::set<BWTA::Region *> & InformationManager::getOccupiedRegions(BWAPI::Player 
 	return _occupiedRegions[player];
 }
 
-BWTA::BaseLocation * InformationManager::getMainBaseLocation(BWAPI::Player player) 
+BWTA::BaseLocation * InformationManager::getMainBaseLocation(BWAPI::Player player)
 {
 	return _mainBaseLocations[player];
 }
@@ -331,9 +370,109 @@ BWAPI::Player InformationManager::getBaseOwner(BWTA::BaseLocation * base)
 	return _theBases[base].owner;
 }
 
+BWAPI::Unit InformationManager::getBaseDepot(BWTA::BaseLocation * base)
+{
+	return _theBases[base].resourceDepot;        // may be null
+}
+
 BWTA::BaseLocation * InformationManager::getMyNaturalLocation()
 {
 	return _myNaturalBaseLocation;
+}
+
+// The number of bases on the map.
+// TODO not used (yet)
+//int InformationManager::getTotalNumBases() const
+//{
+//	return _theBases.size();
+//}
+
+// The number of bases believed owned by the given player,
+// self, enemy, or neutral.
+int InformationManager::getNumBases(BWAPI::Player player)
+{
+	int count = 0;
+
+	for (BWTA::BaseLocation * base : BWTA::getBaseLocations())
+	{
+		if (_theBases[base].owner == player)
+		{
+			++count;
+		}
+	}
+
+	return count;
+}
+
+// The number of non-island expansions that are not yet believed taken.
+int InformationManager::getNumFreeLandBases()
+{
+	int count = 0;
+
+	for (BWTA::BaseLocation * base : BWTA::getBaseLocations())
+	{
+		if (_theBases[base].owner == BWAPI::Broodwar->neutral() && !base->isIsland())
+		{
+			++count;
+		}
+	}
+
+	return count;
+}
+
+// Current number of mineral patches at all of my bases.
+// Does this decrease as patches mine out, or do the patches just change to mineral content 0?
+int InformationManager::getMyNumMineralPatches()
+{
+	int count = 0;
+
+	for (BWTA::BaseLocation * base : BWTA::getBaseLocations())
+	{
+		if (_theBases[base].owner == _self)
+		{
+			count += base->getMinerals().size();
+		}
+	}
+
+	return count;
+}
+
+// Current number of geysers at all my completed bases, whether taken or not.
+// Skip bases where the resource depot is not finished.
+int InformationManager::getMyNumGeysers()
+{
+	int count = 0;
+
+	for (BWTA::BaseLocation * base : BWTA::getBaseLocations())
+	{
+		BWAPI::Unit depot = _theBases[base].resourceDepot;
+
+		if (_theBases[base].owner == _self &&
+			depot &&                // should never be null, but we check anyway
+			(depot->isCompleted() || UnitUtil::IsMorphedBuildingType(depot->getType())))
+		{
+			count += base->getGeysers().size();
+		}
+	}
+
+	return count;
+}
+
+int InformationManager::getAir2GroundSupply(BWAPI::Player player) const
+{
+	int supply = 0;
+
+	for (const auto & kv : getUnitData(player).getUnits())
+	{
+		const UnitInfo & ui(kv.second);
+
+		if (ui.type.isFlyer() && ui.type.groundWeapon() != BWAPI::WeaponTypes::None)
+		{
+			supply += ui.type.supplyRequired();
+		}
+	}
+
+	return supply;
 }
 
 void InformationManager::drawExtendedInterface()
@@ -504,7 +643,7 @@ void InformationManager::drawUnitInformation(int x, int y)
         return;
     }
 
-	std::string prefix = "\x04";
+	char color = white;
 
 	BWAPI::Broodwar->drawTextScreen(x, y-10, "\x03 Self Loss:\x04 Minerals: \x1f%d \x04Gas: \x07%d", _unitData[_self].getMineralsLost(), _unitData[_self].getGasLost());
     BWAPI::Broodwar->drawTextScreen(x, y, "\x03 Enemy Loss:\x04 Minerals: \x1f%d \x04Gas: \x07%d", _unitData[_enemy].getMineralsLost(), _unitData[_enemy].getGasLost());
@@ -521,17 +660,16 @@ void InformationManager::drawUnitInformation(int x, int y)
 		int numUnits = _unitData[_enemy].getNumUnits(t);
 		int numDeadUnits = _unitData[_enemy].getNumDeadUnits(t);
 
-		// if there exist units in the vector
 		if (numUnits > 0) 
 		{
-			if (t.isDetector())			{ prefix = "\x10"; }		
-			else if (t.canAttack())		{ prefix = "\x08"; }		
-			else if (t.isBuilding())	{ prefix = "\x03"; }
-			else						{ prefix = "\x04"; }
+			if (t.isDetector())			{ color = purple; }		
+			else if (t.canAttack())		{ color = red; }		
+			else if (t.isBuilding())	{ color = yellow; }
+			else						{ color = white; }
 
-			BWAPI::Broodwar->drawTextScreen(x, y+40+((yspace)*10), " %s%s", prefix.c_str(), t.getName().c_str());
-			BWAPI::Broodwar->drawTextScreen(x+140, y+40+((yspace)*10), "%s%d", prefix.c_str(), numUnits);
-			BWAPI::Broodwar->drawTextScreen(x+160, y+40+((yspace++)*10), "%s%d", prefix.c_str(), numDeadUnits);
+			BWAPI::Broodwar->drawTextScreen(x, y+40+((yspace)*10), " %c%s", color, t.getName().c_str());
+			BWAPI::Broodwar->drawTextScreen(x+140, y+40+((yspace)*10), "%c%d", color, numUnits);
+			BWAPI::Broodwar->drawTextScreen(x+160, y+40+((yspace++)*10), "%c%d", color, numDeadUnits);
 		}
 	}
 }
@@ -604,30 +742,32 @@ void InformationManager::drawBaseInformation(int x, int y)
 
 	int yy = y;
 
-	BWAPI::Broodwar->drawTextScreen(x, yy, "%sBases", std::string("\x04").c_str());
+	BWAPI::Broodwar->drawTextScreen(x, yy, "%cBases", white);
 
 	for (auto * base : BWTA::getBaseLocations())
 	{
 		yy += 10;
 
-		std::string prefix("\x1E");
-		char inferred = ' ';
+		char color = gray;
 
-		auto itr = _theBases.find(base);
-		if (itr != _theBases.end())
+		char reservedChar = ' ';
+		if (_theBases[base].reserved)
 		{
-			BWAPI::Player player = itr->second.owner;
-			if (player == BWAPI::Broodwar->self())
+			reservedChar = '*';
+		}
+
+		char inferredChar = ' ';
+		BWAPI::Player player = _theBases[base].owner;
+		if (player == BWAPI::Broodwar->self())
+		{
+			color = green;
+		}
+		else if (player == BWAPI::Broodwar->enemy())
+		{
+			color = orange;
+			if (_theBases[base].resourceDepot == nullptr)
 			{
-				prefix = "\x07";
-			}
-			else if (player == BWAPI::Broodwar->enemy())
-			{
-				prefix = "\x11";
-				if (itr->second.resourceDepot == nullptr)
-				{
-					inferred = '?';
-				}
+				inferredChar = '?';
 			}
 		}
 
@@ -642,25 +782,24 @@ void InformationManager::drawBaseInformation(int x, int y)
 		}
 
 		BWAPI::TilePosition pos = base->getTilePosition();
-		BWAPI::Broodwar->drawTextScreen(x, yy, "%s%d, %d%c%c", prefix.c_str(), pos.x, pos.y, inferred, baseCode);
+		BWAPI::Broodwar->drawTextScreen(x-8, yy, "%c%c", white, reservedChar);
+		BWAPI::Broodwar->drawTextScreen(x, yy, "%c%d, %d%c%c", color, pos.x, pos.y, inferredChar, baseCode);
 	}
 }
 
 void InformationManager::updateUnit(BWAPI::Unit unit)
 {
-    if (!(unit->getPlayer() == _self || unit->getPlayer() == _enemy))
+    if (unit->getPlayer() == _self || unit->getPlayer() == _enemy)
     {
-        return;
-    }
-
-    _unitData[unit->getPlayer()].updateUnit(unit);
+		_unitData[unit->getPlayer()].updateUnit(unit);
+	}
 }
 
 // is the unit valid?
 bool InformationManager::isValidUnit(BWAPI::Unit unit) 
 {
 	// we only care about our units and enemy units
-	if (unit->getPlayer() != BWAPI::Broodwar->self() && unit->getPlayer() != BWAPI::Broodwar->enemy()) 
+	if (unit->getPlayer() != _self && unit->getPlayer() != _enemy) 
 	{
 		return false;
 	}
@@ -678,40 +817,34 @@ bool InformationManager::isValidUnit(BWAPI::Unit unit)
 		return false;	
 	}
 
-	// s'all good baby baby
 	return true;
 }
 
 void InformationManager::onUnitDestroy(BWAPI::Unit unit) 
 { 
-    if (unit->getType().isNeutral())
-    {
-        return;
-    }
-
-    _unitData[unit->getPlayer()].removeUnit(unit);
-
-	// If it is one of our bases, remove that base.
-	if (unit->getType().isResourceDepot())
+	if (unit->getPlayer() == _self || unit->getPlayer() == _enemy)
 	{
-		baseLost(unit->getTilePosition());
+		_unitData[unit->getPlayer()].removeUnit(unit);
+
+		// If it may be a base, remove that base.
+		if (unit->getType().isResourceDepot())
+		{
+			baseLost(unit->getTilePosition());
+		}
 	}
 }
 
 bool InformationManager::isCombatUnit(BWAPI::UnitType type) const
 {
 	return
-		type.canAttack() ||
+		type.canAttack() ||         // NOTE: excludes spellcasters
 		type == BWAPI::UnitTypes::Terran_Medic ||
 		type == BWAPI::UnitTypes::Terran_Bunker ||
-		type == BWAPI::UnitTypes::Protoss_Observer ||
-		type == BWAPI::UnitTypes::Zerg_Overlord;
+		type.isDetector();
 }
 
 void InformationManager::getNearbyForce(std::vector<UnitInfo> & unitInfo, BWAPI::Position p, BWAPI::Player player, int radius) 
 {
-	// bool hasBunker = false;    // unused
-
 	// for each unit we know about for that player
 	for (const auto & kv : getUnitData(player).getUnits())
 	{
@@ -719,15 +852,17 @@ void InformationManager::getNearbyForce(std::vector<UnitInfo> & unitInfo, BWAPI:
 
 		// if it's a combat unit we care about
 		// and it's finished! 
-		// TODO include sunkens but w/o fudge factor
 		if (isCombatUnit(ui.type) && ui.completed)
 		{
-			// determine its attack range, with fudge factor (to account for movement?)
+			// Determine its attack range, plus a small fudge factor.
+			// TODO find range using the same method as UnitUtil
 			int range = 0;
 			if (ui.type.groundWeapon() != BWAPI::WeaponTypes::None)
 			{
 				range = ui.type.groundWeapon().maxRange() + 40;
 			}
+			// NOTE Ignores air weapon! Units with air attack only must be inside the radius to be
+			// included (except turrets and spores, because they are also detectors).
 
 			// if it can attack into the radius we care about
 			if (ui.lastPosition.getDistance(p) <= (radius + range))
@@ -738,7 +873,6 @@ void InformationManager::getNearbyForce(std::vector<UnitInfo> & unitInfo, BWAPI:
 		}
 		else if (ui.type.isDetector() && ui.lastPosition.getDistance(p) <= (radius + 250))
         {
-			// add it to the vector
 			unitInfo.push_back(ui);
         }
 	}
@@ -752,6 +886,82 @@ int InformationManager::getNumUnits(BWAPI::UnitType t, BWAPI::Player player)
 const UnitData & InformationManager::getUnitData(BWAPI::Player player) const
 {
     return _unitData.find(player)->second;
+}
+
+bool InformationManager::isBaseReserved(BWTA::BaseLocation * base)
+{
+	return _theBases[base].reserved;
+}
+
+void InformationManager::reserveBase(BWTA::BaseLocation * base)
+{
+	_theBases[base].reserved = true;
+}
+
+void InformationManager::unreserveBase(BWTA::BaseLocation * base)
+{
+	_theBases[base].reserved = false;
+}
+
+void InformationManager::unreserveBase(BWAPI::TilePosition baseTilePosition)
+{
+	for (BWTA::BaseLocation * base : BWTA::getBaseLocations())
+	{
+		if (closeEnough(base->getTilePosition(), baseTilePosition))
+		{
+			_theBases[base].reserved = false;
+			return;
+		}
+	}
+
+	UAB_ASSERT(false,"trying to unreserve a non-base");
+}
+
+// Enemy has mobile units that can shoot up, or the tech to produce them.
+bool InformationManager::enemyHasAntiAir()
+{
+	// Latch: Once they're known to have the tech, they always have it.
+	if (_enemyHasAntiAir)
+	{
+		return true;
+	}
+
+	for (const auto & kv : getUnitData(_enemy).getUnits())
+	{
+		const UnitInfo & ui(kv.second);
+
+		if (
+			// For terran, anything other than SCV, command center, depot is a hit.
+			// Surely nobody makes ebay before barracks!
+			(_enemy->getRace() == BWAPI::Races::Terran &&
+			ui.type != BWAPI::UnitTypes::Terran_SCV &&
+			ui.type != BWAPI::UnitTypes::Terran_Command_Center &&
+			ui.type != BWAPI::UnitTypes::Terran_Supply_Depot)
+
+			||
+
+			// Otherwise, any mobile unit that has an air weapon.
+			(!ui.type.isBuilding() && ui.type.airWeapon() != BWAPI::WeaponTypes::None)
+
+			||
+
+			// Or a building for making such a unit.
+			ui.type == BWAPI::UnitTypes::Protoss_Cybernetics_Core ||
+			ui.type == BWAPI::UnitTypes::Protoss_Stargate ||
+			ui.type == BWAPI::UnitTypes::Protoss_Fleet_Beacon ||
+			ui.type == BWAPI::UnitTypes::Protoss_Arbiter_Tribunal ||
+			ui.type == BWAPI::UnitTypes::Zerg_Hydralisk_Den ||
+			ui.type == BWAPI::UnitTypes::Zerg_Spire ||
+			ui.type == BWAPI::UnitTypes::Zerg_Greater_Spire
+
+			)
+		{
+			_enemyHasAntiAir = true;
+			return true;
+		}
+	}
+
+	return false;
 }
 
 // Enemy has air units or air-producing tech.
@@ -878,7 +1088,8 @@ bool InformationManager::enemyHasOverlordHunters()
 			ui.type == BWAPI::UnitTypes::Protoss_Stargate ||
 			ui.type == BWAPI::UnitTypes::Zerg_Spire ||
 			ui.type == BWAPI::UnitTypes::Zerg_Greater_Spire ||
-			ui.type == BWAPI::UnitTypes::Zerg_Mutalisk)
+			ui.type == BWAPI::UnitTypes::Zerg_Mutalisk ||
+			ui.type == BWAPI::UnitTypes::Zerg_Scourge)
 		{
 			_enemyHasOverlordHunters = true;
 			return true;
@@ -889,10 +1100,10 @@ bool InformationManager::enemyHasOverlordHunters()
 }
 
 // Zerg specific calculation: How many scourge hits are needed
-// to kill the enemy's known current air fleet?
+// to kill the enemy's known air fleet?
 // This counts individual units--you get 2 scourge per egg.
 // One scourge does 110 normal damage.
-// NOTE: Ignores air armor, which might make a difference on rare occasions.
+// NOTE: This ignores air armor, which might make a difference in rare cases.
 int InformationManager::nScourgeNeeded()
 {
 	int count = 0;
@@ -901,7 +1112,11 @@ int InformationManager::nScourgeNeeded()
 	{
 		const UnitInfo & ui(kv.second);
 
-		if (ui.type.isFlyer())
+		// A few unit types should not usually be scourged. Skip them.
+		if (ui.type.isFlyer() &&
+			ui.type != BWAPI::UnitTypes::Zerg_Overlord &&
+			ui.type != BWAPI::UnitTypes::Zerg_Scourge &&
+			ui.type != BWAPI::UnitTypes::Protoss_Interceptor)
 		{
 			int hp = ui.type.maxHitPoints() + ui.type.maxShields();      // assume the worst
 			count += (hp + 109) / 110;

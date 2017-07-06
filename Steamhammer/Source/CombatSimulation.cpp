@@ -12,7 +12,11 @@ void CombatSimulation::setCombatUnits(const BWAPI::Position & center, const int 
 {
 	SparCraft::GameState s;
 
-	BWAPI::Broodwar->drawCircleMap(center.x, center.y, 10, BWAPI::Colors::Red, true);
+	if (Config::Debug::DrawCombatSimulationInfo)
+	{
+		BWAPI::Broodwar->drawCircleMap(center.x, center.y, 6, BWAPI::Colors::Red, true);
+		BWAPI::Broodwar->drawCircleMap(center.x, center.y, radius, BWAPI::Colors::Red);
+	}
 
 	BWAPI::Unitset ourCombatUnits;
 	std::vector<UnitInfo> enemyCombatUnits;
@@ -49,7 +53,7 @@ void CombatSimulation::setCombatUnits(const BWAPI::Position & center, const int 
             continue;
         }
 
-		// Pretend that a bunker is actually 5 marines with prorated hit points.
+		// Pretend that a bunker is 5 marines with prorated hit points.
 		// TODO account for repair--we can pretend that the pretend marines have more hit points
         if (ui.type == BWAPI::UnitTypes::Terran_Bunker)
         {
@@ -72,7 +76,32 @@ void CombatSimulation::setCombatUnits(const BWAPI::Position & center, const int 
             continue;
         }
 
-		// TODO why does it exclude air units? SparCraft claims to support mutas, wraiths, BCs, scouts
+		// Pretend that a spore colony is 2 stacked turrets with prorated hit points.
+		/* doesn't help at all
+		if (ui.type == BWAPI::UnitTypes::Zerg_Spore_Colony)
+		{
+			double hpRatio = static_cast<double>(ui.lastHealth) / ui.type.maxHitPoints();
+
+			SparCraft::Unit turret(BWAPI::UnitTypes::Terran_Missile_Turret,
+				SparCraft::Position(ui.lastPosition),
+				ui.unitID,
+				getSparCraftPlayerID(ui.player),
+				static_cast<int>(BWAPI::UnitTypes::Terran_Missile_Turret.maxHitPoints() * hpRatio),
+				0,
+				BWAPI::Broodwar->getFrameCount(),
+				BWAPI::Broodwar->getFrameCount());
+
+			BWAPI::Broodwar->printf("adding turret");
+			s.addUnit(turret);
+			s.addUnit(turret);
+
+			continue;
+		}
+		*/
+
+		// I think it excludes enemy air units so they don't scare our zerglings away--
+		// only a good idea in certain circumstances.
+		// SparCraft claims to support mutas, wraiths, BCs, scouts.
         if (!ui.type.isFlyer() && SparCraft::System::isSupportedUnitType(ui.type) && ui.completed)
 		{
             try

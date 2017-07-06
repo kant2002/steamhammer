@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Common.h>
 #include "WorkerManager.h"
 #include "BuildingPlacer.h"
 #include "InformationManager.h"
@@ -20,6 +19,7 @@ class BuildingManager
     int             _reservedGas;					// gas reserved for planned buildings
 
     bool            isBuildingPositionExplored(const Building & b) const;
+	void			undoBuildings(const std::vector<Building> & toRemove);
     void            removeBuildings(const std::vector<Building> & toRemove);
 
     void            validateWorkersAndBuildings();		    // STEP 1
@@ -49,8 +49,10 @@ public:
     bool                isBeingBuilt(BWAPI::UnitType type);
 
     std::vector<BWAPI::UnitType> buildingsQueued();
-	
+
 	void                cancelBuilding(Building & b);
+	void				cancelQueuedBuildings();
+	void				cancelBuildingType(BWAPI::UnitType t);
 };
 
 }

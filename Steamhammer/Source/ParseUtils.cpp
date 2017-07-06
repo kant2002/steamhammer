@@ -4,6 +4,7 @@
 #include "StrategyManager.h"
 
 #include <random>
+#include <regex>
 
 using namespace UAlbertaBot;
 
@@ -67,9 +68,9 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
         JSONTools::ReadBool("WorkersDefendRush", micro, Config::Micro::WorkersDefendRush);
         JSONTools::ReadInt("RetreatMeleeUnitShields", micro, Config::Micro::RetreatMeleeUnitShields);
         JSONTools::ReadInt("RetreatMeleeUnitHP", micro, Config::Micro::RetreatMeleeUnitHP);
-        JSONTools::ReadInt("InCombatRadius", micro, Config::Micro::CombatRadius);
         JSONTools::ReadInt("RegroupRadius", micro, Config::Micro::CombatRegroupRadius);
         JSONTools::ReadInt("UnitNearEnemyRadius", micro, Config::Micro::UnitNearEnemyRadius);
+		JSONTools::ReadInt("ScoutDefenseRadius", micro, Config::Micro::ScoutDefenseRadius);
 
         if (micro.HasMember("KiteLongerRangedUnits") && micro["KiteLongerRangedUnits"].IsArray())
         {
@@ -104,7 +105,8 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
         JSONTools::ReadString("ErrorLogFilename", debug, Config::Debug::ErrorLogFilename);
         JSONTools::ReadBool("LogAssertToErrorFile", debug, Config::Debug::LogAssertToErrorFile);
         JSONTools::ReadBool("DrawGameInfo", debug, Config::Debug::DrawGameInfo);
-        JSONTools::ReadBool("DrawBuildOrderSearchInfo", debug, Config::Debug::DrawBuildOrderSearchInfo);
+		JSONTools::ReadBool("DrawStrategySketch", debug, Config::Debug::DrawStrategySketch);
+		JSONTools::ReadBool("DrawBuildOrderSearchInfo", debug, Config::Debug::DrawBuildOrderSearchInfo);
         JSONTools::ReadBool("DrawUnitHealthBars", debug, Config::Debug::DrawUnitHealthBars);
         JSONTools::ReadBool("DrawResourceInfo", debug, Config::Debug::DrawResourceInfo);
         JSONTools::ReadBool("DrawWorkerInfo", debug, Config::Debug::DrawWorkerInfo);
@@ -119,10 +121,10 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
         JSONTools::ReadBool("DrawBWTAInfo", debug, Config::Debug::DrawBWTAInfo);
         JSONTools::ReadBool("DrawMapGrid", debug, Config::Debug::DrawMapGrid);
 		JSONTools::ReadBool("DrawBaseInfo", debug, Config::Debug::DrawBaseInfo);
+		JSONTools::ReadBool("DrawStrategyBossInfo", debug, Config::Debug::DrawStrategyBossInfo);
 		JSONTools::ReadBool("DrawUnitTargetInfo", debug, Config::Debug::DrawUnitTargetInfo);
         JSONTools::ReadBool("DrawReservedBuildingTiles", debug, Config::Debug::DrawReservedBuildingTiles);
         JSONTools::ReadBool("DrawBOSSStateInfo", debug, Config::Debug::DrawBOSSStateInfo); 
-        JSONTools::ReadBool("PrintModuleTimeout", debug, Config::Debug::PrintModuleTimeout);
     }
 
     // Parse the Module Options
@@ -130,12 +132,7 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
     {
         const rapidjson::Value & module = doc["Modules"];
 
-        JSONTools::ReadBool("UseGameCommander", module, Config::Modules::UsingGameCommander);
-        JSONTools::ReadBool("UseScoutManager", module, Config::Modules::UsingScoutManager);
-        JSONTools::ReadBool("UseCombatCommander", module, Config::Modules::UsingCombatCommander);
-        JSONTools::ReadBool("UseBuildOrderSearch", module, Config::Modules::UsingBuildOrderSearch);
         JSONTools::ReadBool("UseStrategyIO", module, Config::Modules::UsingStrategyIO);
-        JSONTools::ReadBool("UseUnitCommandManager", module, Config::Modules::UsingUnitCommandManager);
     }
 
     // Parse the Tool Options
@@ -224,11 +221,27 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
                     {
                         if (build[b].IsString())
                         {
-                            MacroAct act(build[b].GetString());
+							std::string itemName = build[b].GetString();
+
+							int unitCount = 1;    // the default count
+
+							// You can specify a count, like "6 x mutalisk". The spaces are required.
+							// Mostly useful for units!
+							std::regex countRegex("([0-9]+)\\s+x\\s+([a-zA-Z_]+)");
+							std::smatch m;
+							if (std::regex_match(itemName, m, countRegex)) {
+								unitCount = GetIntFromString(m[1].str());
+								itemName = m[2].str();
+							}
+
+							MacroAct act(itemName);
 
 							if (act.getRace() != BWAPI::Races::None || act.isCommand())
                             {
-								buildOrder.add(act);
+								for (int i = 0; i < unitCount; ++i)
+								{
+									buildOrder.add(act);
+								}
                             }
                         }
                         else
@@ -275,7 +288,6 @@ void ParseUtils::ParseTextCommand(const std::string & commandString)
         // Micro Options
         else if (variableName == "usesparcraftsimulation") { Config::Micro::UseSparcraftSimulation = GetBoolFromString(val); }
         else if (variableName == "workersdefendrush") { Config::Micro::WorkersDefendRush = GetBoolFromString(val); }
-        else if (variableName == "incombatradius") { Config::Micro::CombatRadius = GetIntFromString(val); }
         else if (variableName == "regroupradius") { Config::Micro::CombatRegroupRadius = GetIntFromString(val); }
         else if (variableName == "unitnearenemyradius") { Config::Micro::UnitNearEnemyRadius = GetIntFromString(val); }
 
@@ -285,7 +297,6 @@ void ParseUtils::ParseTextCommand(const std::string & commandString)
 
         // Debug Options
         else if (variableName == "errorlogfilename") { Config::Debug::ErrorLogFilename = val; }
-        else if (variableName == "printmoduletimeout") { Config::Debug::PrintModuleTimeout = GetBoolFromString(val); }
         else if (variableName == "drawbuildordersearchinfo") { Config::Debug::DrawBuildOrderSearchInfo = GetBoolFromString(val); }
         else if (variableName == "drawunithealthbars") { Config::Debug::DrawUnitHealthBars = GetBoolFromString(val); }
         else if (variableName == "drawproductioninfo") { Config::Debug::DrawProductionInfo = GetBoolFromString(val); }
@@ -303,12 +314,7 @@ void ParseUtils::ParseTextCommand(const std::string & commandString)
         else if (variableName == "drawreservedbuildingtiles") { Config::Debug::DrawReservedBuildingTiles = GetBoolFromString(val); }
 
         // Module Options
-        else if (variableName == "usegamecommander") { Config::Modules::UsingGameCommander = GetBoolFromString(val); }
-        else if (variableName == "usescoutmanager") { Config::Modules::UsingScoutManager = GetBoolFromString(val); }
-        else if (variableName == "usecombatcommander") { Config::Modules::UsingCombatCommander = GetBoolFromString(val); }
-        else if (variableName == "usebuildordersearch") { Config::Modules::UsingBuildOrderSearch = GetBoolFromString(val); }
         else if (variableName == "usestrategyio") { Config::Modules::UsingStrategyIO = GetBoolFromString(val); }
-        else if (variableName == "useunitcommandmanager") { Config::Modules::UsingUnitCommandManager = GetBoolFromString(val); }
 
         else { UAB_ASSERT_WARNING(false, "Unknown variable name for /set: %s", variableName.c_str()); }
     }

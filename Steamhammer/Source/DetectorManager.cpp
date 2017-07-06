@@ -40,7 +40,6 @@ void DetectorManager::executeMicro(const BWAPI::Unitset & targets)
 
 	bool detectorUnitInBattle = false;
 
-	// for each detectorUnit
 	for (auto & detectorUnit : detectorUnits)
 	{
 		// if we need to regroup, move the detectorUnit to that location

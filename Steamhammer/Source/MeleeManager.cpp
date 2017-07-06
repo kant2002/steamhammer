@@ -3,6 +3,8 @@
 
 using namespace UAlbertaBot;
 
+// Note: Melee units are ground units only. Scourge is a "ranged" unit.
+
 MeleeManager::MeleeManager() 
 { 
 }
@@ -22,10 +24,10 @@ void MeleeManager::assignTargetsOld(const BWAPI::Unitset & targets)
 	{
 		// conditions for targeting
 		if (target->isVisible() &&
-			!target->getType().isFlyer() &&
-			!target->isLifted() &&
+			!target->isFlying() &&
 			(target->getType() != BWAPI::UnitTypes::Zerg_Larva) && 
 			(target->getType() != BWAPI::UnitTypes::Zerg_Egg) &&
+			!target->isStasised() &&
 			!target->isUnderDisruptionWeb())             // melee unit can't attack under dweb
 		{
 			meleeUnitTargets.insert(target);
@@ -37,38 +39,35 @@ void MeleeManager::assignTargetsOld(const BWAPI::Unitset & targets)
 		// if the order is to attack or defend
 		if (order.getType() == SquadOrderTypes::Attack || order.getType() == SquadOrderTypes::Defend) 
         {
-            // run away if we meet the retreat critereon
+            // run away if we meet the retreat criterion
             if (meleeUnitShouldRetreat(meleeUnit, targets))
             {
-                BWAPI::Position fleeTo(BWAPI::Broodwar->self()->getStartLocation());
-
+				// UAB_ASSERT(meleeUnit->exists(), "bad worker");  // TODO temporary debugging - see Micro::SmartMove
+				BWAPI::Position fleeTo(BWAPI::Broodwar->self()->getStartLocation());
                 Micro::SmartMove(meleeUnit, fleeTo);
             }
-			// if there are targets
-			else if (!meleeUnitTargets.empty())
+			else if (meleeUnitTargets.empty())
 			{
-				// find the best target for this meleeUnit
-				BWAPI::Unit target = getTarget(meleeUnit, meleeUnitTargets);
-
-				// attack it
-				Micro::SmartAttackUnit(meleeUnit, target);
-			}
-			// if there are no targets
-			else
-			{
-				// if we're not near the order position
-				if (meleeUnit->getDistance(order.getPosition()) > 100)
+				// There are no targets. Move to the order position if not already close.
+				if (meleeUnit->getDistance(order.getPosition()) > 96)
 				{
-					// move to it
+					// UAB_ASSERT(meleeUnit->exists(), "bad worker");  // TODO temporary debugging - see Micro::SmartMove
 					Micro::SmartMove(meleeUnit, order.getPosition());
 				}
+			}
+			else
+			{
+				// There are targets. Pick the best one and attack it.
+				BWAPI::Unit target = getTarget(meleeUnit, meleeUnitTargets);
+				Micro::SmartAttackUnit(meleeUnit, target);
 			}
 		}
 
 		if (Config::Debug::DrawUnitTargetInfo)
 		{
 			BWAPI::Broodwar->drawLineMap(meleeUnit->getPosition().x, meleeUnit->getPosition().y, 
-			meleeUnit->getTargetPosition().x, meleeUnit->getTargetPosition().y, Config::Debug::ColorLineTarget);
+				meleeUnit->getTargetPosition().x, meleeUnit->getTargetPosition().y,
+				Config::Debug::ColorLineTarget);
 		}
 	}
 }
@@ -124,6 +123,7 @@ int MeleeManager::getAttackPriority(BWAPI::Unit attacker, BWAPI::Unit unit)
 {
 	BWAPI::UnitType type = unit->getType();
 
+	// Exceptions for dark templar.
 	if (attacker->getType() == BWAPI::UnitTypes::Protoss_Dark_Templar)
 	{
 		if (unit->getType() == BWAPI::UnitTypes::Terran_Vulture_Spider_Mine)
@@ -141,18 +141,6 @@ int MeleeManager::getAttackPriority(BWAPI::Unit attacker, BWAPI::Unit unit)
 		}
 	}
 
-	// Highest priority the most dangerous stuff.
-	if ( type == BWAPI::UnitTypes::Terran_Vulture_Spider_Mine ||
-		 type == BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode ||
-		 type == BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode ||
-		(type == BWAPI::UnitTypes::Protoss_Photon_Cannon && unit->isPowered()) ||
-		 type == BWAPI::UnitTypes::Protoss_High_Templar ||
-		 type == BWAPI::UnitTypes::Protoss_Reaver ||
-		 type == BWAPI::UnitTypes::Zerg_Lurker ||
-		 type == BWAPI::UnitTypes::Zerg_Infested_Terran)
-	{
-        return 13;
-    }
 	// Short circuit: Melee combat unit which is outside some range is lower priority than a worker.
 	if (type == BWAPI::UnitTypes::Zerg_Zergling ||
 		type == BWAPI::UnitTypes::Zerg_Ultralisk ||
@@ -161,32 +149,34 @@ int MeleeManager::getAttackPriority(BWAPI::Unit attacker, BWAPI::Unit unit)
 		type == BWAPI::UnitTypes::Protoss_Dark_Templar ||
 		type == BWAPI::UnitTypes::Terran_Firebat)
 	{
-		if (attacker->getDistance(unit) > 64) {
+		if (attacker->getDistance(unit) > 48) {
 			return 8;
 		}
 	}
 	// Short circuit: Ranged unit which is far enough outside its range is lower priority than a worker.
-	if (type.groundWeapon() != BWAPI::WeaponTypes::None)
+	if (type.groundWeapon() != BWAPI::WeaponTypes::None &&
+		!type.isWorker() &&
+		attacker->getDistance(unit) > 64 + type.groundWeapon().maxRange())
 	{
-		if (attacker->getDistance(unit) > 64 + type.groundWeapon().maxRange()) {
-			return 8;
-		}
+		return 8;
 	}
-	// Medics and ordinary combat units.
-	if (type == BWAPI::UnitTypes::Terran_Medic ||
-		(type.groundWeapon() != BWAPI::WeaponTypes::None && !type.isWorker()))
-	{
-		return 12;
-	}
-	// Units before bunkers!
+	// Short circuit: Units before bunkers!
 	if (type == BWAPI::UnitTypes::Terran_Bunker)
 	{
 		return 10;
 	}
-	// Workers that are doing stuff count more.
+	// Medics and ordinary combat units. Include workers that are doing stuff.
+	if (type == BWAPI::UnitTypes::Terran_Medic || type == BWAPI::UnitTypes::Protoss_High_Templar)
+	{
+		return 12;
+	}
+	if (type.groundWeapon() != BWAPI::WeaponTypes::None && !type.isWorker())
+	{
+		return 12;
+	}
 	if (type.isWorker() && (unit->isRepairing() || unit->isConstructing() || unitNearChokepoint(unit)))
 	{
-		return 10;
+		return 12;
 	}
 	// next priority is bored worker
 	if (type.isWorker()) 
@@ -194,42 +184,27 @@ int MeleeManager::getAttackPriority(BWAPI::Unit attacker, BWAPI::Unit unit)
 		return 9;
 	}
     // Buildings come under attack during free time, so they can be split into more levels.
-	if (type == BWAPI::UnitTypes::Zerg_Spire || type == BWAPI::UnitTypes::Protoss_Templar_Archives)
+	if (type == BWAPI::UnitTypes::Zerg_Spire)
 	{
 		return 6;
 	}
-	if (type == BWAPI::UnitTypes::Zerg_Spawning_Pool || type.isResourceDepot())
+	if (type == BWAPI::UnitTypes::Zerg_Spawning_Pool ||
+		type.isResourceDepot() ||
+		type == BWAPI::UnitTypes::Protoss_Templar_Archives ||
+		type.isSpellcaster())
 	{
 		return 5;
 	}
-	// Turrets are bad on principle.
-	if (type == BWAPI::UnitTypes::Terran_Missile_Turret || BWAPI::UnitTypes::Protoss_Pylon)
-	{
-		return 4;
-	}
-	// Downgrade unfinished/unpowered buildings, with exceptions.
-	if (type.isBuilding() &&
-		(!unit->isCompleted() || !unit->isPowered()) &&
-		!(	type.isResourceDepot() ||
-			type.groundWeapon() != BWAPI::WeaponTypes::None ||
-			type.airWeapon() != BWAPI::WeaponTypes::None ||
-			type == BWAPI::UnitTypes::Terran_Bunker))
-	{
-		return 2;
-	}
 	// Short circuit: Addons other than a completed comsat are worth almost nothing.
+	// TODO should also check that it is attached
 	if (type.isAddon() && !(type == BWAPI::UnitTypes::Terran_Comsat_Station && unit->isCompleted()))
 	{
 		return 1;
 	}
-	// next is buildings that cost gas
-	if (type.gasPrice() > 0)
+	// anything with a cost
+	if (type.gasPrice() > 0 || type.mineralPrice() > 0)
 	{
 		return 3;
-	}
-	if (type.mineralPrice() > 0)
-	{
-		return 2;
 	}
 	
 	// then everything else
@@ -256,7 +231,7 @@ BWAPI::Unit MeleeManager::closestMeleeUnit(BWAPI::Unit target, const BWAPI::Unit
 
 bool MeleeManager::meleeUnitShouldRetreat(BWAPI::Unit meleeUnit, const BWAPI::Unitset & targets)
 {
-    // terran don't regen so it doesn't make any sense to retreat
+    // terran don't regen so it doesn't make sense to retreat
     if (meleeUnit->getType().getRace() == BWAPI::Races::Terran)
     {
         return false;

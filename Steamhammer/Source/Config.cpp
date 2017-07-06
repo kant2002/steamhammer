@@ -7,15 +7,15 @@ namespace Config
     {
         bool ConfigFileFound                = false;
         bool ConfigFileParsed               = false;
-        std::string ConfigFileLocation      = "bwapi-data/AI/Steamhammer_1.0.json";
+        std::string ConfigFileLocation      = "bwapi-data/AI/Steamhammer_1.1.1.json";
     }
 
     namespace Strategy
     {
         std::string ProtossStrategyName     = "Protoss_DragoonRush";  // default
         std::string TerranStrategyName      = "Terran_TankPush";      // default
-        std::string ZergStrategyName        = "Zerg_9PoolSpeed";      // default
-        std::string StrategyName            = "Zerg_9PoolSpeed";
+        std::string ZergStrategyName        = "9PoolSpeed";	          // default
+        std::string StrategyName            = "9PoolSpeed";
         std::string ReadDir                 = "bwapi-data/read/";
         std::string WriteDir                = "bwapi-data/write/";
         bool ScoutHarassEnemy               = true;
@@ -26,12 +26,7 @@ namespace Config
     namespace Modules							    
     {
         // the default tournament bot modules
-        bool UsingGameCommander             = true;     // toggle GameCommander, effectively UAlbertaBot
-        bool UsingScoutManager              = true;
-        bool UsingCombatCommander           = true;
-        bool UsingBuildOrderSearch          = true;     // toggle use of Build Order Search, currently no backup
         bool UsingStrategyIO                = false;    // toggle the use of file io for strategy
-        bool UsingUnitCommandManager        = false;    // handles all unit commands
 		
         // extra things, don't enable unless you know what they are
         bool UsingBuildOrderDemo            = false;
@@ -60,6 +55,7 @@ namespace Config
     namespace Debug								
     {
         bool DrawGameInfo                   = true;
+        bool DrawStrategySketch             = false;
         bool DrawUnitHealthBars             = false;
         bool DrawProductionInfo             = true;
         bool DrawBuildOrderSearchInfo       = false;
@@ -75,10 +71,10 @@ namespace Config
         bool DrawBWTAInfo                   = false;
         bool DrawMapGrid                    = false;
 		bool DrawBaseInfo					= false;
+		bool DrawStrategyBossInfo			= false;
 		bool DrawUnitTargetInfo				= false;
         bool DrawSquadInfo                  = false;
         bool DrawBOSSStateInfo              = false;
-        bool PrintModuleTimeout             = false;	
 
         std::string ErrorLogFilename        = "Steamhammer_ErrorLog.txt";
         bool LogAssertToErrorFile           = false;
@@ -97,9 +93,9 @@ namespace Config
         bool WorkersDefendRush              = false; 
 		int RetreatMeleeUnitShields         = 0;
         int RetreatMeleeUnitHP              = 0;
-        int CombatRadius                    = 1000;     // radius of combat to consider units for Micro Search
-        int CombatRegroupRadius             = 300;      // radius of units around frontmost unit we consider in regroup calculation
+        int CombatRegroupRadius             = 300;      // radius of units around frontmost unit for combat sim
         int UnitNearEnemyRadius             = 600;      // radius to consider a unit 'near' to an enemy unit
+		int ScoutDefenseRadius				= 600;		// radius to chase enemy scout worker
     }
 
     namespace Macro

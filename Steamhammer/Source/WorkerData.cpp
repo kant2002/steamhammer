@@ -24,7 +24,7 @@ void WorkerData::workerDestroyed(BWAPI::Unit unit)
 
 void WorkerData::addWorker(BWAPI::Unit unit)
 {
-	if (!unit) { return; }
+	if (!unit || !unit->exists()) { return; }
 
 	workers.insert(unit);
 	workerJobMap[unit] = Default;
@@ -32,7 +32,7 @@ void WorkerData::addWorker(BWAPI::Unit unit)
 
 void WorkerData::addWorker(BWAPI::Unit unit, WorkerJob job, BWAPI::Unit jobUnit)
 {
-	if (!unit || !jobUnit) { return; }
+	if (!unit || !unit->exists() || !jobUnit || !jobUnit->exists()) { return; }
 
 	assert(workers.find(unit) == workers.end());
 
@@ -42,7 +42,7 @@ void WorkerData::addWorker(BWAPI::Unit unit, WorkerJob job, BWAPI::Unit jobUnit)
 
 void WorkerData::addWorker(BWAPI::Unit unit, WorkerJob job, BWAPI::UnitType jobUnitType)
 {
-	if (!unit) { return; }
+	if (!unit || !unit->exists()) { return; }
 
 	assert(workers.find(unit) == workers.end());
 	workers.insert(unit);
@@ -51,7 +51,7 @@ void WorkerData::addWorker(BWAPI::Unit unit, WorkerJob job, BWAPI::UnitType jobU
 
 void WorkerData::addDepot(BWAPI::Unit unit)
 {
-	if (!unit) { return; }
+	if (!unit || !unit->exists()) { return; }
 
 	assert(depots.find(unit) == depots.end());
 	depots.insert(unit);
@@ -90,7 +90,7 @@ void WorkerData::addToMineralPatch(BWAPI::Unit unit, int num)
 
 void WorkerData::setWorkerJob(BWAPI::Unit unit, WorkerJob job, BWAPI::Unit jobUnit)
 {
-	if (!unit) { return; }
+	if (!unit || !unit->exists()) { return; }
 
 	clearPreviousJob(unit);
 	workerJobMap[unit] = job;
@@ -244,6 +244,32 @@ int WorkerData::getNumGasWorkers() const
 	for (auto & unit : workers)
 	{
 		if (workerJobMap.at(unit) == WorkerData::Gas)
+		{
+			num++;
+		}
+	}
+	return num;
+}
+
+int WorkerData::getNumReturnCargoWorkers() const
+{
+	size_t num = 0;
+	for (auto & unit : workers)
+	{
+		if (workerJobMap.at(unit) == WorkerData::ReturnCargo)
+		{
+			num++;
+		}
+	}
+	return num;
+}
+
+int WorkerData::getNumCombatWorkers() const
+{
+	size_t num = 0;
+	for (auto & unit : workers)
+	{
+		if (workerJobMap.at(unit) == WorkerData::Combat)
 		{
 			num++;
 		}

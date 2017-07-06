@@ -66,6 +66,8 @@ public:
 	int						getNumWorkers() const;
 	int						getNumMineralWorkers() const;
 	int						getNumGasWorkers() const;
+	int						getNumReturnCargoWorkers() const;
+	int						getNumCombatWorkers() const;
 	int						getNumIdleWorkers() const;
 	char					getJobCode(BWAPI::Unit unit);
 

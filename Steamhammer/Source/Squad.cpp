@@ -9,7 +9,7 @@ Squad::Squad()
     , _priority(0)
     , _name("Default")
 {
-    int a = 10;
+    int a = 10;   // only you can prevent linker errors
 }
 
 Squad::Squad(const std::string & name, SquadOrder order, size_t priority) 
@@ -31,6 +31,7 @@ void Squad::update()
 	// update all necessary unit information within this squad
 	updateUnits();
 
+	// TODO This is a crude temporary stand-in for a real survey squad controller.
 	if (_order.getType() == SquadOrderTypes::Survey && BWAPI::Broodwar->getFrameCount() < 24)
 	{
 		if (_units.empty())
@@ -39,7 +40,10 @@ void Squad::update()
 		}
 
 		BWAPI::Unit surveyor = *(_units.begin());
-		Micro::SmartMove(surveyor, _order.getPosition());
+		if (surveyor && surveyor->exists())
+		{
+			Micro::SmartMove(surveyor, _order.getPosition());
+		}
 		return;
 	}
 
@@ -49,7 +53,7 @@ void Squad::update()
 	// draw some debug info
 	if (Config::Debug::DrawSquadInfo && _order.getType() == SquadOrderTypes::Attack) 
 	{
-		BWAPI::Broodwar->drawTextScreen(200, 350, "%s", _regroupStatus.c_str());
+		BWAPI::Broodwar->drawTextScreen(200, 350, "%c%s", white, _regroupStatus.c_str());
 	}
 
 	// if we do need to regroup, do it
@@ -72,6 +76,7 @@ void Squad::update()
 		_lurkerManager.regroup(regroupPosition);
         _tankManager.regroup(regroupPosition);
         _medicManager.regroup(regroupPosition);
+		// Note: Detectors and transports do not regroup.
 	}
 	else // otherwise, execute micro
 	{
@@ -158,9 +163,9 @@ void Squad::addUnitsToMicroManagers()
 	// add _units to micro managers
 	for (auto & unit : _units)
 	{
-		if(unit->isCompleted() && unit->getHitPoints() > 0 && unit->exists())
+		UAB_ASSERT(unit, "missing unit");
+		if (unit->isCompleted() && unit->getHitPoints() > 0 && unit->exists())
 		{
-			// select detector _units
             if (unit->getType() == BWAPI::UnitTypes::Terran_Medic)
             {
                 medicUnits.insert(unit);
@@ -177,21 +182,24 @@ void Squad::addUnitsToMicroManagers()
 			{
 				detectorUnits.insert(unit);
 			}
-			// select transport _units
-			else if (unit->getType() == BWAPI::UnitTypes::Protoss_Shuttle || unit->getType() == BWAPI::UnitTypes::Terran_Dropship)
+			// TOOO excludes overlords (which are also detectors, a confusing case)
+			else if (unit->getType() == BWAPI::UnitTypes::Protoss_Shuttle ||
+				unit->getType() == BWAPI::UnitTypes::Terran_Dropship)
 			{
 				transportUnits.insert(unit);
 			}
-			// select ranged _units
-			else if ((unit->getType().groundWeapon().maxRange() > 32) || (unit->getType() == BWAPI::UnitTypes::Protoss_Reaver) || (unit->getType() == BWAPI::UnitTypes::Zerg_Scourge))
+			// TODO excludes certain units, especially carriers; also valkyries, corsairs, devourers
+			else if ((unit->getType().groundWeapon().maxRange() > 32) ||
+				unit->getType() == BWAPI::UnitTypes::Protoss_Reaver ||
+				unit->getType() == BWAPI::UnitTypes::Zerg_Scourge)
 			{
 				rangedUnits.insert(unit);
 			}
-			// select melee _units
 			else if (unit->getType().groundWeapon().maxRange() <= 32)
 			{
 				meleeUnits.insert(unit);
 			}
+			// Note: Some units may fall through and not be assigned.
 		}
 	}
 
@@ -210,7 +218,15 @@ bool Squad::needsToRegroup()
 	// if we are not attacking, never regroup
 	if (_units.empty() || (_order.getType() != SquadOrderTypes::Attack))
 	{
-		_regroupStatus = std::string("\x04 No attackers available");
+		_regroupStatus = std::string("No attackers available");
+		return false;
+	}
+
+	// If we're nearly maxed and have good income or cash, don't retreat.
+	if (BWAPI::Broodwar->self()->supplyUsed() >= 340 &&
+		(BWAPI::Broodwar->self()->minerals() > 1000 || WorkerManager::Instance().getNumMineralWorkers() > 16))
+	{
+		_regroupStatus = std::string("Maxed. Banzai!");
 		return false;
 	}
 
@@ -218,46 +234,44 @@ bool Squad::needsToRegroup()
 
 	if (!unitClosest)
 	{
-		_regroupStatus = std::string("\x04 No closest unit");
+		_regroupStatus = std::string("No closest unit");
 		return false;
 	}
 
-    // if none of our units are in attack range of any enemy units, don't retreat
     std::vector<UnitInfo> enemyCombatUnits;
     const auto & enemyUnitInfo = InformationManager::Instance().getUnitInfo(BWAPI::Broodwar->enemy());
 
-    bool anyInRange = false;
+	// if none of our units are in attack range of any enemy units, don't retreat
+	bool anyInRange = false;
     for (const auto & eui : enemyUnitInfo)
     {
-        bool inRange = false;
         for (const auto & u : _units)
         {
-            int range = UnitUtil::GetAttackRange(eui.second.type, u->getType());
+            int range = UnitUtil::GetAttackRangeAssumingUpgrades(eui.second.type, u->getType());
 
             if (range + 128 >= eui.second.lastPosition.getDistance(u->getPosition()))
             {
-                inRange = true;
-                break;
+				anyInRange = true;
+                break;   // break out of inner loop
             }
         }
 
-        if (inRange)
+		if (anyInRange)
         {
-            anyInRange = true;
-            break;
+            break;       // break out of outer loop
         }
     }
 
     if (!anyInRange)
     {
-        _regroupStatus = std::string("\x04 No enemy units in attack range");
+        _regroupStatus = std::string("No enemy units in attack range");
         return false;
     }
 
 	// if we are DT rushing and we haven't lost a DT yet, no retreat!
 	if (Config::Strategy::StrategyName == "Protoss_DTRush" && (BWAPI::Broodwar->self()->deadUnitCount(BWAPI::UnitTypes::Protoss_Dark_Templar) == 0))
 	{
-		_regroupStatus = std::string("\x04 DARK TEMPLAR HOOOOO!");
+		_regroupStatus = std::string("GO DARK TEMPLAR!");
 		return false;
 	}
 
@@ -291,11 +305,11 @@ bool Squad::needsToRegroup()
 	
 	if (retreat)
 	{
-		_regroupStatus = std::string("\x04 Retreat - predict defeat");
+		_regroupStatus = std::string("Retreat");
 	}
 	else
 	{
-		_regroupStatus = std::string("\x04 Attack - predict success");
+		_regroupStatus = std::string("Attack");
 	}
 
 	return retreat;
@@ -387,6 +401,8 @@ BWAPI::Unit Squad::unitClosestToEnemy()
 	BWAPI::Unit closest = nullptr;
 	int closestDist = 100000;
 
+	UAB_ASSERT(_order.getPosition().isValid(), "bad order position");
+
 	for (auto & unit : _units)
 	{
 		if (unit->getType() == BWAPI::UnitTypes::Zerg_Overlord ||
@@ -402,28 +418,6 @@ BWAPI::Unit Squad::unitClosestToEnemy()
 		{
 			closest = unit;
 			closestDist = dist;
-		}
-	}
-
-	if (!closest)
-	{
-		for (auto & unit : _units)
-		{
-			if (unit->getType() == BWAPI::UnitTypes::Zerg_Overlord ||
-				unit->getType() == BWAPI::UnitTypes::Protoss_Observer)
-			{
-				continue;
-			}
-
-			// the distance to the enemy base
-			// TODO does this work at all?
-			int dist = unit->getDistance(BWAPI::Position(BWAPI::Broodwar->enemy()->getStartLocation()));
-
-			if (dist != -1 && (!closest || dist < closestDist))
-			{
-				closest = unit;
-				closestDist = dist;
-			}
 		}
 	}
 
@@ -460,6 +454,7 @@ void Squad::addUnit(BWAPI::Unit u)
 	_units.insert(u);
 }
 
+// NOTE: If the unit is a worker, you may have to release it before calling this.
 void Squad::removeUnit(BWAPI::Unit u)
 {
     _units.erase(u);

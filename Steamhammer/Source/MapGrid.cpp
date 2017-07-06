@@ -28,6 +28,7 @@ BWAPI::Position MapGrid::getNaturalExpansion()
 	return naturalExpansion;
 }
 
+//  The least-recently explored cell accessible by land.
 BWAPI::Position MapGrid::getLeastExplored() 
 {
 	int minSeen = 1000000;
@@ -153,11 +154,8 @@ void MapGrid::update()
 			    BWAPI::Broodwar->drawTextMap(cell.center.x, cell.center.y+10, "Row/Col (%d, %d)", r, c);
 		    }
 	    }
-
-
     }
 
-	// clear the grid
 	clearGrid();
 
 	//BWAPI::Broodwar->printf("MapGrid info: WH(%d, %d)  CS(%d)  RC(%d, %d)  C(%d)", mapWidth, mapHeight, cellSize, rows, cols, cells.size());

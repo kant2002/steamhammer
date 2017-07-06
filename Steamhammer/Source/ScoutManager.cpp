@@ -7,7 +7,6 @@ ScoutManager::ScoutManager()
     : _workerScout(nullptr)
 	, _scoutStatus("None")
 	, _gasStealStatus("None")
-	, _numWorkerScouts(0)
 	, _scoutLocationOnly(false)
     , _scoutUnderAttack(false)
 	, _tryGasSteal(false)
@@ -33,7 +32,8 @@ void ScoutManager::update()
 	}
 
 	// If the worker scout is gone, admit it.
-	if (!_workerScout->exists() || _workerScout->getHitPoints() <= 0)
+	if (!_workerScout->exists() || _workerScout->getHitPoints() <= 0 ||   // it died
+		_workerScout->getPlayer() != BWAPI::Broodwar->self())             // it got mind controlled!
 	{
 		_workerScout = nullptr;
 		return;
@@ -42,8 +42,7 @@ void ScoutManager::update()
 	// If we only want to locate the enemy base and we have, release the scout worker.
 	if (_scoutLocationOnly && InformationManager::Instance().getEnemyMainBaseLocation())
 	{
-		WorkerManager::Instance().finishedWithWorker(_workerScout);
-		_workerScout = nullptr;
+		releaseWorkerScout();
 		return;
 	}
 
@@ -67,6 +66,16 @@ void ScoutManager::setWorkerScout(BWAPI::Unit unit)
 
     _workerScout = unit;
     WorkerManager::Instance().setScoutWorker(_workerScout);
+}
+
+// Send the scout home.
+void ScoutManager::releaseWorkerScout()
+{
+	if (_workerScout)
+	{
+		WorkerManager::Instance().finishedWithWorker(_workerScout);
+		_workerScout = nullptr;
+	}
 }
 
 void ScoutManager::setGasSteal()
@@ -200,7 +209,7 @@ void ScoutManager::moveScout()
 			// if we haven't explored it yet
 			if (!BWAPI::Broodwar->isExplored(startLocation->getTilePosition())) 
 			{
-				// assign a zergling to go scout it
+				// assign a unit to go scout it
 				Micro::SmartMove(_workerScout, BWAPI::Position(startLocation->getTilePosition()));			
 				return;
 			}
@@ -381,7 +390,7 @@ int ScoutManager::getClosestVertexIndex(BWAPI::Unit unit)
 
 BWAPI::Position ScoutManager::getFleePosition()
 {
-    UAB_ASSERT_WARNING(!_enemyRegionVertices.empty(), "We should have an enemy region vertices if we are fleeing");
+    UAB_ASSERT_WARNING(!_enemyRegionVertices.empty(), "should have enemy region vertices");
     
     BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getEnemyMainBaseLocation();
 
@@ -425,7 +434,6 @@ BWAPI::Position ScoutManager::getFleePosition()
 void ScoutManager::calculateEnemyRegionVertices()
 {
     BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getEnemyMainBaseLocation();
-    //UAB_ASSERT_WARNING(enemyBaseLocation, "We should have an enemy base location if we are fleeing");
 
     if (!enemyBaseLocation)
     {
@@ -433,7 +441,6 @@ void ScoutManager::calculateEnemyRegionVertices()
     }
 
     BWTA::Region * enemyRegion = enemyBaseLocation->getRegion();
-    //UAB_ASSERT_WARNING(enemyRegion, "We should have an enemy region if we are fleeing");
 
     if (!enemyRegion)
     {
@@ -446,45 +453,44 @@ void ScoutManager::calculateEnemyRegionVertices()
     std::set<BWAPI::Position> unsortedVertices;
 
     // check each tile position
-    for (size_t i(0); i < closestTobase.size(); ++i)
-    {
-        const BWAPI::TilePosition & tp = closestTobase[i];
+	for (size_t i(0); i < closestTobase.size(); ++i)
+	{
+		const BWAPI::TilePosition & tp = closestTobase[i];
 
-        if (BWTA::getRegion(tp) != enemyRegion)
-        {
-            continue;
-        }
+		if (BWTA::getRegion(tp) != enemyRegion)
+		{
+			continue;
+		}
 
-        // a tile is 'surrounded' if
-        // 1) in all 4 directions there's a tile position in the current region
-        // 2) in all 4 directions there's a buildable tile
-        bool surrounded = true;
-        if (BWTA::getRegion(BWAPI::TilePosition(tp.x+1, tp.y)) != enemyRegion || !BWAPI::Broodwar->isBuildable(BWAPI::TilePosition(tp.x+1, tp.y))
-            || BWTA::getRegion(BWAPI::TilePosition(tp.x, tp.y+1)) != enemyRegion || !BWAPI::Broodwar->isBuildable(BWAPI::TilePosition(tp.x, tp.y+1))
-            || BWTA::getRegion(BWAPI::TilePosition(tp.x-1, tp.y)) != enemyRegion || !BWAPI::Broodwar->isBuildable(BWAPI::TilePosition(tp.x-1, tp.y))
-            || BWTA::getRegion(BWAPI::TilePosition(tp.x, tp.y-1)) != enemyRegion || !BWAPI::Broodwar->isBuildable(BWAPI::TilePosition(tp.x, tp.y -1))) 
-        { 
-            surrounded = false; 
-        }
-        
-        // push the tiles that aren't surrounded
-        if (!surrounded && BWAPI::Broodwar->isBuildable(tp))
-        {
-            if (Config::Debug::DrawScoutInfo)
-            {
-                int x1 = tp.x * 32 + 2;
-                int y1 = tp.y * 32 + 2;
-                int x2 = (tp.x+1) * 32 - 2;
-                int y2 = (tp.y+1) * 32 - 2;
-        
-                BWAPI::Broodwar->drawTextMap(x1+3, y1+2, "%d", MapTools::Instance().getGroundDistance(BWAPI::Position(tp), basePosition));
-                BWAPI::Broodwar->drawBoxMap(x1, y1, x2, y2, BWAPI::Colors::Green, false);
-            }
-            
-            unsortedVertices.insert(BWAPI::Position(tp) + BWAPI::Position(16, 16));
-        }
-    }
+		// a tile is 'surrounded' if
+		// 1) in all 4 directions there's a tile position in the current region
+		// 2) in all 4 directions there's a buildable tile
+		bool surrounded = true;
+		if (BWTA::getRegion(BWAPI::TilePosition(tp.x + 1, tp.y)) != enemyRegion || !BWAPI::Broodwar->isBuildable(BWAPI::TilePosition(tp.x + 1, tp.y))
+			|| BWTA::getRegion(BWAPI::TilePosition(tp.x, tp.y + 1)) != enemyRegion || !BWAPI::Broodwar->isBuildable(BWAPI::TilePosition(tp.x, tp.y + 1))
+			|| BWTA::getRegion(BWAPI::TilePosition(tp.x - 1, tp.y)) != enemyRegion || !BWAPI::Broodwar->isBuildable(BWAPI::TilePosition(tp.x - 1, tp.y))
+			|| BWTA::getRegion(BWAPI::TilePosition(tp.x, tp.y - 1)) != enemyRegion || !BWAPI::Broodwar->isBuildable(BWAPI::TilePosition(tp.x, tp.y - 1)))
+		{
+			surrounded = false;
+		}
 
+		// push the tiles that aren't surrounded
+		if (!surrounded && BWAPI::Broodwar->isBuildable(tp))
+		{
+			if (Config::Debug::DrawScoutInfo)
+			{
+				int x1 = tp.x * 32 + 2;
+				int y1 = tp.y * 32 + 2;
+				int x2 = (tp.x + 1) * 32 - 2;
+				int y2 = (tp.y + 1) * 32 - 2;
+
+				BWAPI::Broodwar->drawTextMap(x1 + 3, y1 + 2, "%d", MapTools::Instance().getGroundDistance(BWAPI::Position(tp), basePosition));
+				BWAPI::Broodwar->drawBoxMap(x1, y1, x2, y2, BWAPI::Colors::Green, false);
+			}
+
+			unsortedVertices.insert(BWAPI::Position(tp) + BWAPI::Position(16, 16));
+		}
+	}
 
     std::vector<BWAPI::Position> sortedVertices;
     BWAPI::Position current = *unsortedVertices.begin();

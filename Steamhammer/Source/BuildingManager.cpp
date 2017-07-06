@@ -23,6 +23,7 @@ void BuildingManager::update()
     checkForCompletedBuildings();           // check to see if any buildings have completed and update data structures
 }
 
+// In the building queue with any status.
 bool BuildingManager::isBeingBuilt(BWAPI::UnitType type)
 {
     for (auto & b : _buildings)
@@ -52,18 +53,20 @@ void BuildingManager::validateWorkersAndBuildings()
             continue;
         }
 
-        if (b.buildingUnit == nullptr || !b.buildingUnit->getType().isBuilding() || b.buildingUnit->getHitPoints() <= 0)
+		if (!b.buildingUnit ||
+			!b.buildingUnit->exists() ||
+			b.buildingUnit->getHitPoints() <= 0 ||
+			!b.buildingUnit->getType().isBuilding())
         {
             toRemove.push_back(b);
         }
     }
 
-    removeBuildings(toRemove);
+    undoBuildings(toRemove);
 }
 
 // STEP 2: ASSIGN WORKERS TO BUILDINGS WITHOUT THEM
 // Also places the building.
-// TODO simplify this, it seems too messy
 void BuildingManager::assignWorkersToUnassignedBuildings()
 {
     // for each building that doesn't have a builder, assign one
@@ -83,13 +86,6 @@ void BuildingManager::assignWorkersToUnassignedBuildings()
         BWAPI::TilePosition testLocation = getBuildingLocation(b);
         if (!testLocation.isValid())
         {
-			// BWAPI::Broodwar->printf(" - can't place the building");
-			// Try to correct a possible cause of the failure.
-			if (b.type == BWAPI::UnitTypes::Zerg_Hatchery && b.macroLocation != MacroLocation::Macro)
-			{
-				// Make it a macro hatchery.
-				b.macroLocation = MacroLocation::Macro;
-			}
 			continue;
         }
 
@@ -97,19 +93,17 @@ void BuildingManager::assignWorkersToUnassignedBuildings()
 
 		// grab the worker unit from WorkerManager which is closest to this final position
 		b.builderUnit = WorkerManager::Instance().getBuilder(b);
-		if (!b.builderUnit)
+		if (!b.builderUnit || !b.builderUnit->exists())
 		{
-			// BWAPI::Broodwar->printf(" - no builder");
 			continue;
 		}
-
-		// BWAPI::Broodwar->printf("VALID WORKER BEING ASSIGNED: %d", b.builderUnit->getID());
 
         // reserve this building's space
         BuildingPlacer::Instance().reserveTiles(b.finalPosition,b.type.tileWidth(),b.type.tileHeight());
 
         b.status = BuildingStatus::Assigned;
-    }
+		// BWAPI::Broodwar->printf("assigned and placed building %s", b.type.getName().c_str());
+	}
 }
 
 // STEP 3: ISSUE CONSTRUCTION ORDERS TO ASSIGNED BUILDINGS AS NEEDED
@@ -122,42 +116,53 @@ void BuildingManager::constructAssignedBuildings()
             continue;
         }
 
-        // if that worker is not currently constructing
-        if (!b.builderUnit->isConstructing())
+		UAB_ASSERT(b.builderUnit, "bad builder unit");
+
+		/* this seems to cause errors?
+		if (!b.builderUnit->exists())
+		{
+			// The builder unit no longer exists() and must be replaced.
+
+			BWAPI::Broodwar->printf("b.builderUnit gone, b.type = %s", b.type.getName().c_str());
+
+			WorkerManager::Instance().finishedWithWorker(b.builderUnit);    // better still do this
+			b.builderUnit = nullptr;
+			b.buildCommandGiven = false;
+			b.status = BuildingStatus::Unassigned;
+			BuildingPlacer::Instance().freeTiles(b.finalPosition, b.type.tileWidth(), b.type.tileHeight());
+		}
+        else */
+		if (!b.builderUnit->isConstructing())
         {
             // if we haven't explored the build position, go there
             if (!isBuildingPositionExplored(b))
             {
-                Micro::SmartMove(b.builderUnit,BWAPI::Position(b.finalPosition));
+				Micro::SmartMove(b.builderUnit, BWAPI::Position(b.finalPosition));
             }
             // if this is not the first time we've sent this guy to build this
             // it must be the case that something was in the way
-            else if (b.buildCommandGiven)
+			else if (b.buildCommandGiven)
             {
                 // tell worker manager the unit we had is not needed now, since we might not be able
                 // to get a valid location soon enough
                 WorkerManager::Instance().finishedWithWorker(b.builderUnit);
 
-                // free the previous location in reserved
-                BuildingPlacer::Instance().freeTiles(b.finalPosition,b.type.tileWidth(),b.type.tileHeight());
-
-                // nullify its current builder unit
                 b.builderUnit = nullptr;
-
-                // reset the build command given flag
                 b.buildCommandGiven = false;
-
-                // add the building back to be assigned
                 b.status = BuildingStatus::Unassigned;
-            }
+
+				// Unreserve the building location. The building will mark its own location.
+				BuildingPlacer::Instance().freeTiles(b.finalPosition, b.type.tileWidth(), b.type.tileHeight());
+			}
             else
             {
-                // issue the build order!
-                b.builderUnit->build(b.type,b.finalPosition);
+				// Issue the build order!
+				// If the builderUnit is zerg, it changes to !exists() when it builds.
+				b.builderUnit->build(b.type, b.finalPosition);
 
-                // set the flag to true
-                b.buildCommandGiven = true;
-            }
+				// set the flag to true
+				b.buildCommandGiven = true;
+           }
         }
     }
 }
@@ -193,15 +198,15 @@ void BuildingManager::checkForStartedConstruction()
                 b.underConstruction = true;
                 b.buildingUnit = buildingStarted;
 
-                // if we are zerg, the buildingUnit now becomes nullptr since it's destroyed
                 if (BWAPI::Broodwar->self()->getRace() == BWAPI::Races::Zerg)
                 {
-                    b.builderUnit = nullptr;
-                    // if we are protoss, give the worker back to worker manager
+					// if we are zerg, the builderUnit now becomes nullptr since it's destroyed
+					b.builderUnit = nullptr;
                 }
                 else if (BWAPI::Broodwar->self()->getRace() == BWAPI::Races::Protoss)
                 {
-                    // if this was the gas steal unit then it's the scout worker so give it back to the scout manager
+					// if we are protoss, give the worker back to worker manager
+					// if this was the gas steal unit then it's the scout worker so give it back to the scout manager
                     if (b.isGasSteal)
                     {
                         ScoutManager::Instance().setWorkerScout(b.builderUnit);
@@ -243,6 +248,8 @@ void BuildingManager::checkForCompletedBuildings()
         {
             continue;       
         }
+
+		UAB_ASSERT(b.buildingUnit, "null buildingUnit");
 
         // if the unit has completed
         if (b.buildingUnit->isCompleted())
@@ -340,9 +347,13 @@ void BuildingManager::drawBuildingInformation(int x,int y)
         BWAPI::Broodwar->drawTextMap(unit->getPosition().x,unit->getPosition().y+5,"\x07%d",unit->getID());
     }
 
-	for (auto geyser : BWAPI::Broodwar->getStaticGeysers())
+	//for (auto geyser : BWAPI::Broodwar->getStaticGeysers())
+	for (auto geyser : BWAPI::Broodwar->getAllUnits())
 	{
-		BWAPI::Broodwar->drawTextMap(geyser->getPosition().x, geyser->getPosition().y + 5, "\x07%d", geyser->getType());
+		if (geyser->getType() == BWAPI::UnitTypes::Resource_Vespene_Geyser)
+		{
+			BWAPI::Broodwar->drawTextMap(geyser->getPosition().x, geyser->getPosition().y + 5, "\x07%d", geyser->getType());
+		}
 	}
 	
 	BWAPI::Broodwar->drawTextScreen(x, y, "\x04 Building Information:");
@@ -399,7 +410,7 @@ BuildingManager & BuildingManager::Instance()
     return instance;
 }
 
-// The number of buildings queued and not yet started.
+// The buildings queued and not yet started.
 std::vector<BWAPI::UnitType> BuildingManager::buildingsQueued()
 {
     std::vector<BWAPI::UnitType> buildingsQueued;
@@ -415,14 +426,70 @@ std::vector<BWAPI::UnitType> BuildingManager::buildingsQueued()
     return buildingsQueued;
 }
 
+// Cancel a given building when possible.
+// Used as part of the extractor trick or in an emergency.
+void BuildingManager::cancelBuilding(Building & b)
+{
+	if (b.status == BuildingStatus::Unassigned)
+	{
+		_reservedMinerals -= b.type.mineralPrice();
+		_reservedGas -= b.type.gasPrice();
+		undoBuildings({ b });
+	}
+	else if (b.status == BuildingStatus::Assigned)
+	{
+		_reservedMinerals -= b.type.mineralPrice();
+		_reservedGas -= b.type.gasPrice();
+		WorkerManager::Instance().finishedWithWorker(b.builderUnit);
+		BuildingPlacer::Instance().freeTiles(b.finalPosition, b.type.tileWidth(), b.type.tileHeight());
+		undoBuildings({ b });
+	}
+	else if (b.status == BuildingStatus::UnderConstruction)
+	{
+		if (b.buildingUnit && b.buildingUnit->exists() && !b.buildingUnit->isCompleted())
+		{
+			b.buildingUnit->cancelConstruction();
+			BuildingPlacer::Instance().freeTiles(b.finalPosition, b.type.tileWidth(), b.type.tileHeight());
+		}
+		undoBuildings({ b });
+	}
+	else
+	{
+		UAB_ASSERT(false, "unexpected building status");
+	}
+}
+
+// It's an emergency. Cancel all buildings which are not yet started.
+void BuildingManager::cancelQueuedBuildings()
+{
+	for (Building & b : _buildings)
+	{
+		if (b.status == BuildingStatus::Unassigned || b.status == BuildingStatus::Assigned)
+		{
+			cancelBuilding(b);
+		}
+	}
+}
+
+// It's an emergency. Cancel all buildings of a given type.
+void BuildingManager::cancelBuildingType(BWAPI::UnitType t)
+{
+	for (Building & b : _buildings)
+	{
+		if (b.type == t)
+		{
+			cancelBuilding(b);
+		}
+	}
+}
+
 // TODO fails in placing a hatchery after all others are destroyed - why?
-// TODO fails in placing static defense at the natural - why?
 BWAPI::TilePosition BuildingManager::getBuildingLocation(const Building & b)
 {
 	if (b.isGasSteal)
     {
         BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getEnemyMainBaseLocation();
-        UAB_ASSERT(enemyBaseLocation,"Should have enemy base location before attempting gas steal");
+        UAB_ASSERT(enemyBaseLocation,"Should find enemy base before gas steal");
         UAB_ASSERT(enemyBaseLocation->getGeysers().size() > 0,"Should have spotted an enemy geyser");
 
         for (auto & unit : enemyBaseLocation->getGeysers())
@@ -474,40 +541,32 @@ BWAPI::TilePosition BuildingManager::getBuildingLocation(const Building & b)
 	return BuildingPlacer::Instance().getBuildLocationNear(b, distance);
 }
 
+// The building failed or is canceled.
+// Undo any connections with other data structures, then delete.
+void BuildingManager::undoBuildings(const std::vector<Building> & toRemove)
+{
+	for (auto & b : toRemove)
+	{
+		// If the building was to establish a base, unreserve the base location.
+		if (b.type.isResourceDepot() && b.macroLocation != MacroLocation::Macro && b.finalPosition.isValid())
+		{
+			InformationManager::Instance().unreserveBase(b.finalPosition);
+		}
+	}
+
+	removeBuildings(toRemove);
+}
+
+// Remove buildings from the list of buildings--nothing more, nothing less.
 void BuildingManager::removeBuildings(const std::vector<Building> & toRemove)
 {
     for (auto & b : toRemove)
     {
-        auto & it = std::find(_buildings.begin(), _buildings.end(), b);
+		auto & it = std::find(_buildings.begin(), _buildings.end(), b);
 
         if (it != _buildings.end())
         {
             _buildings.erase(it);
         }
     }
-}
-
-// Part of the extractor trick: Cancel the building.
-// TODO unreserve space
-void BuildingManager::cancelBuilding(Building & b)
-{
-	if (b.status == BuildingStatus::Unassigned)
-	{
-		// This is all we need.
-		removeBuildings({ b });
-	}
-	else if (b.status == BuildingStatus::Assigned)
-	{
-		BuildingPlacer::Instance().freeTiles(b.finalPosition, b.type.tileWidth(), b.type.tileHeight());
-		removeBuildings({ b });
-	}
-	else if (b.status == BuildingStatus::UnderConstruction)
-	{
-		if (b.buildingUnit->exists() && !b.buildingUnit->isCompleted())
-		{
-			b.buildingUnit->cancelConstruction();
-			BuildingPlacer::Instance().freeTiles(b.finalPosition, b.type.tileWidth(), b.type.tileHeight());
-		}
-		removeBuildings({ b });
-	}
 }

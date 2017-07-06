@@ -8,30 +8,19 @@ namespace UAlbertaBot
 {
 struct BuildOrderItem
 {
-    MacroAct			macroAct;	// the thing we want to 'build'
-    int					priority;	// the priority at which to place it in the queue
-    bool                isGasSteal;
+    MacroAct macroAct;	   // the thing we want to produce
+    bool     isGasSteal;
 
-    BuildOrderItem(MacroAct m,int p,bool gasSteal = false)
+    BuildOrderItem(MacroAct m, bool gasSteal = false)
         : macroAct(m)
-        , priority(p)
         , isGasSteal(gasSteal) 
     {
-    }
-
-    bool operator<(const BuildOrderItem &x) const
-    {
-        return priority < x.priority;
     }
 };
 
 class BuildOrderQueue
 {
     std::deque< BuildOrderItem > queue;
-
-    int lowestPriority;
-    int highestPriority;
-    int defaultPrioritySpacing;
 
 	void queueItem(BuildOrderItem b);							// queues something with a given priority
 
@@ -50,6 +39,8 @@ public:
     void removeAll(MacroAct m);									// removes all matching meta types from queue
 
     BuildOrderItem & getHighestPriorityItem();					// returns the highest priority item
+	BWAPI::UnitType getNextUnit();								// skip commands and return item if it's a unit
+	int getNextGasCost(int n);									// look n ahead, return next nonzero gas cost
 	
 	bool anyInQueue(BWAPI::UpgradeType type);
 	bool anyInQueue(BWAPI::UnitType type);
