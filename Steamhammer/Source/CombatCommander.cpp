@@ -39,7 +39,7 @@ void CombatCommander::initializeSquads()
 	}
 
 	// add a drop squad if we are using a drop strategy
-    if (Config::Strategy::StrategyName == "Protoss_Drop")
+    if (StrategyManager::Instance().getOpeningGroup() == "drop")
     {
         SquadOrder zealotDrop(SquadOrderTypes::Drop, ourBasePosition, 900, "Wait for transport");
         _squadData.addSquad("Drop", Squad("Drop", zealotDrop, DropPriority));
@@ -175,7 +175,7 @@ void CombatCommander::updateAttackSquads()
 
 void CombatCommander::updateDropSquads()
 {
-    if (Config::Strategy::StrategyName != "Protoss_Drop")
+	if (StrategyManager::Instance().getOpeningGroup() != "drop")
     {
         return;
     }

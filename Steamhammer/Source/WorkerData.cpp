@@ -311,7 +311,7 @@ bool WorkerData::depotIsFull(BWAPI::Unit depot)
 	int assignedWorkers = getNumAssignedWorkers(depot);
 	int mineralsNearDepot = getMineralsNearDepot(depot);
 
-	return assignedWorkers >= mineralsNearDepot * 2;
+	return assignedWorkers >= int (Config::Macro::WorkersPerPatch * mineralsNearDepot + 0.5);
 }
 
 BWAPI::Unitset WorkerData::getMineralPatchesNearDepot(BWAPI::Unit depot)

@@ -2,6 +2,7 @@
 #include "BuildingManager.h"
 #include "Micro.h"
 #include "ScoutManager.h"
+#include "UnitUtil.h"
 
 using namespace UAlbertaBot;
 
@@ -37,12 +38,9 @@ bool BuildingManager::isBeingBuilt(BWAPI::UnitType type)
     return false;
 }
 
-// STEP 1: DO BOOK KEEPING ON WORKERS WHICH MAY HAVE DIED
+// STEP 1: DO BOOK KEEPING ON BUILDINGS WHICH MAY HAVE DIED
 void BuildingManager::validateWorkersAndBuildings()
 {
-    // TODO: if a terran worker dies while constructing and its building
-    //       is under construction, place unit back into buildingsNeedingBuilders
-
     std::vector<Building> toRemove;
     
     // find any buildings which have become obsolete
@@ -158,10 +156,13 @@ void BuildingManager::constructAssignedBuildings()
             {
 				// Issue the build order!
 				// If the builderUnit is zerg, it changes to !exists() when it builds.
-				b.builderUnit->build(b.type, b.finalPosition);
+				bool success = b.builderUnit->build(b.type, b.finalPosition);
 
-				// set the flag to true
-				b.buildCommandGiven = true;
+				// TODO testing
+				if (success)
+				{
+					b.buildCommandGiven = true;
+				}
            }
         }
     }
@@ -220,10 +221,8 @@ void BuildingManager::checkForStartedConstruction()
                     b.builderUnit = nullptr;
                 }
 
-                // put it in the under construction vector
                 b.status = BuildingStatus::UnderConstruction;
 
-                // free this space
                 BuildingPlacer::Instance().freeTiles(b.finalPosition,b.type.tileWidth(),b.type.tileHeight());
 
                 // only one building will match
@@ -233,8 +232,33 @@ void BuildingManager::checkForStartedConstruction()
     }
 }
 
-// STEP 5: IF WE ARE TERRAN, THIS MATTERS, SO: LOL
-void BuildingManager::checkForDeadTerranBuilders() {}
+// STEP 5: IF THE SCV DIED DURING CONSTRUCTION, ASSIGN A NEW ONE
+void BuildingManager::checkForDeadTerranBuilders()
+{
+	if (BWAPI::Broodwar->self()->getRace() != BWAPI::Races::Terran)
+	{
+		return;
+	}
+
+	for (auto & b : _buildings)
+	{
+		if (b.status != BuildingStatus::UnderConstruction)
+		{
+			continue;
+		}
+
+		UAB_ASSERT(b.buildingUnit, "null buildingUnit");
+
+		if (!UnitUtil::IsValidUnit(b.builderUnit))
+		{
+			b.builderUnit = WorkerManager::Instance().getBuilder(b);
+			if (b.builderUnit && b.builderUnit->exists())
+			{
+				b.builderUnit->rightClick(b.buildingUnit);
+			}
+		}
+	}
+}
 
 // STEP 6: CHECK FOR COMPLETED BUILDINGS
 void BuildingManager::checkForCompletedBuildings()

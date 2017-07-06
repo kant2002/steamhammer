@@ -88,7 +88,8 @@ void WorkerManager::updateWorkerStatus()
 		{
 			BWAPI::Unit target = getClosestEnemyUnit(worker);
 
-			if (target && !target->isMoving() && target->exists() && worker->getDistance(target) <= 64)
+			if (target && (!target->isMoving() || target->isStuck()) &&
+				target->exists() && worker->getDistance(target) <= 64)
 			{
 				Micro::SmartAttackUnit(worker, target);
 			}

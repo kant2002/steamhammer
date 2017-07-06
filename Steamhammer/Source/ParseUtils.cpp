@@ -96,7 +96,14 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
         JSONTools::ReadInt("BuildingSpacing", macro, Config::Macro::BuildingSpacing);
         JSONTools::ReadInt("PylonSpacing", macro, Config::Macro::PylonSpacing);
         JSONTools::ReadInt("WorkersPerRefinery", macro, Config::Macro::WorkersPerRefinery);
-    }
+
+		// Max workers per mineral patch at a base, a floating point number that varies by race.
+		const char * wppIndex = (BWAPI::Broodwar->self()->getRace().getName() + "_WorkersPerPatch").c_str();
+		if (macro.HasMember(wppIndex) && macro[wppIndex].IsDouble())
+		{
+			Config::Macro::WorkersPerPatch = macro[wppIndex].GetDouble();
+		}
+	}
 
     // Parse the Debug Options
     if (doc.HasMember("Debug") && doc["Debug"].IsObject())
@@ -212,6 +219,12 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
                     continue;
                 }
 
+				std::string openingGroup("");
+				if (val.HasMember("OpeningGroup") && val["OpeningGroup"].IsString())
+				{
+					openingGroup = val["OpeningGroup"].GetString();
+				}
+
                 BuildOrder buildOrder(strategyRace);
                 if (val.HasMember("OpeningBuildOrder") && val["OpeningBuildOrder"].IsArray())
                 {
@@ -227,7 +240,7 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
 
 							// You can specify a count, like "6 x mutalisk". The spaces are required.
 							// Mostly useful for units!
-							std::regex countRegex("([0-9]+)\\s+x\\s+([a-zA-Z_]+)");
+							std::regex countRegex("([0-9]+)\\s+x\\s+([a-zA-Z_ ]+)");
 							std::smatch m;
 							if (std::regex_match(itemName, m, countRegex)) {
 								unitCount = GetIntFromString(m[1].str());
@@ -252,7 +265,7 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
                     }
                 }
 
-                StrategyManager::Instance().addStrategy(name, Strategy(name, strategyRace, buildOrder));
+				StrategyManager::Instance().addStrategy(name, Strategy(name, strategyRace, openingGroup, buildOrder));
             }
         }
     }

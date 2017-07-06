@@ -93,12 +93,16 @@ void GameCommander::drawGameInformation(int x, int y)
 	}
 
 	BWAPI::Broodwar->drawTextScreen(x, y, "\x04Players:");
-	BWAPI::Broodwar->drawTextScreen(x+50, y, "%c%s \x04vs. %c%s", BWAPI::Broodwar->self()->getTextColor(), BWAPI::Broodwar->self()->getName().c_str(), 
-                                                                  BWAPI::Broodwar->enemy()->getTextColor(), BWAPI::Broodwar->enemy()->getName().c_str());
+	BWAPI::Broodwar->drawTextScreen(x+50, y, "%c%s \x04vs. %c%s",
+		BWAPI::Broodwar->self()->getTextColor(), BWAPI::Broodwar->self()->getName().c_str(), 
+        BWAPI::Broodwar->enemy()->getTextColor(), BWAPI::Broodwar->enemy()->getName().c_str());
 	y += 12;
-		
+	
     BWAPI::Broodwar->drawTextScreen(x, y, "\x04Strategy:");
-	BWAPI::Broodwar->drawTextScreen(x+50, y, "\x03%s %s", Config::Strategy::StrategyName.c_str(), Config::Strategy::FoundEnemySpecificStrategy ? "(enemy specific)" : "");
+	BWAPI::Broodwar->drawTextScreen(x + 50, y, "\x03%s%s %s",
+		Config::Strategy::StrategyName.c_str(),
+		StrategyManager::Instance().getOpeningGroup() != "" ? (" (" + StrategyManager::Instance().getOpeningGroup() + ")").c_str() : "",
+		Config::Strategy::FoundEnemySpecificStrategy ? "- enemy specific" : "");
 	BWAPI::Broodwar->setTextSize();
 	y += 12;
 

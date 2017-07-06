@@ -160,7 +160,6 @@ void Squad::addUnitsToMicroManagers()
     BWAPI::Unitset tankUnits;
     BWAPI::Unitset medicUnits;
 
-	// add _units to micro managers
 	for (auto & unit : _units)
 	{
 		UAB_ASSERT(unit, "missing unit");
@@ -212,7 +211,7 @@ void Squad::addUnitsToMicroManagers()
     _medicManager.setUnits(medicUnits);
 }
 
-// calculates whether or not to regroup, aka retreat
+// Calculates whether to regroup, aka retreat. Does combat sim if necessary.
 bool Squad::needsToRegroup()
 {
 	// if we are not attacking, never regroup
@@ -269,7 +268,7 @@ bool Squad::needsToRegroup()
     }
 
 	// if we are DT rushing and we haven't lost a DT yet, no retreat!
-	if (Config::Strategy::StrategyName == "Protoss_DTRush" && (BWAPI::Broodwar->self()->deadUnitCount(BWAPI::UnitTypes::Protoss_Dark_Templar) == 0))
+	if (StrategyManager::Instance().getOpeningGroup() == "dark templar" && (BWAPI::Broodwar->self()->deadUnitCount(BWAPI::UnitTypes::Protoss_Dark_Templar) == 0))
 	{
 		_regroupStatus = std::string("GO DARK TEMPLAR!");
 		return false;

@@ -92,7 +92,7 @@ void Micro::SmartAttackMove(BWAPI::Unit attacker, const BWAPI::Position & target
 
 void Micro::SmartMove(BWAPI::Unit attacker, const BWAPI::Position & targetPosition)
 {
-	// -- -- TODO temporary extra debugging to solve a problem
+	// -- -- TODO temporary extra debugging to solve 2 bugs
 	/*
 	if (!attacker->exists())
 	{
@@ -115,7 +115,7 @@ void Micro::SmartMove(BWAPI::Unit attacker, const BWAPI::Position & targetPositi
 
 	if (!attacker || !attacker->exists() || attacker->getPlayer() != BWAPI::Broodwar->self() || !targetPosition.isValid())
 	{
-		// UAB_ASSERT(false, "bad arg");  // TODO restore this after the bug is solved; can make too many beeps
+		// UAB_ASSERT(false, "bad arg");  // TODO restore this after the bugs are solved; can make too many beeps
 		return;
 	}
 

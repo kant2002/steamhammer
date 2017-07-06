@@ -7,7 +7,7 @@ namespace Config
     {
         bool ConfigFileFound                = false;
         bool ConfigFileParsed               = false;
-        std::string ConfigFileLocation      = "bwapi-data/AI/Steamhammer_1.1.1.json";
+        std::string ConfigFileLocation      = "bwapi-data/AI/Steamhammer_1.2.json";
     }
 
     namespace Strategy
@@ -102,6 +102,7 @@ namespace Config
     {
         int BOSSFrameLimit                  = 160;
         int WorkersPerRefinery              = 3;
+		double WorkersPerPatch              = 3.0;
         int BuildingSpacing                 = 1;
         int PylonSpacing                    = 3;
     }

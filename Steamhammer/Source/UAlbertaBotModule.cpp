@@ -21,7 +21,8 @@ void UAlbertaBotModule::onStart()
     // Initialize BOSS, the Build Order Search System
     BOSS::init();
 
-    // Parse the bot's configuration file if it has one, change this file path to where your config file is
+    // Parse the bot's configuration file.
+	// Change this file path to point to your config file.
     // Any relative path name will be relative to Starcraft installation folder
     ParseUtils::ParseConfigFile(Config::ConfigFile::ConfigFileLocation);
 
@@ -53,6 +54,8 @@ void UAlbertaBotModule::onStart()
         StrategyManager::Instance().readResults();
         StrategyManager::Instance().setLearnedStrategy();
     }
+
+	StrategyManager::Instance().setOpeningGroup();
 }
 
 void UAlbertaBotModule::onEnd(bool isWinner) 
