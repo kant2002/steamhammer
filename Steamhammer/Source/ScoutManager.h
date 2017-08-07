@@ -21,12 +21,11 @@ class ScoutManager
 	std::vector<BWAPI::Position>    _enemyRegionVertices;
 
 	bool                            enemyWorkerInRadius();
-    bool			                immediateThreat();
     void                            gasSteal();
     int                             getClosestVertexIndex(BWAPI::Unit unit);
     BWAPI::Position                 getFleePosition();
-	BWAPI::Unit						getEnemyGeyser();
-	BWAPI::Unit						enemyWorkerToHarass();
+	BWAPI::Unit						getEnemyGeyser() const;
+	BWAPI::Unit						enemyWorkerToHarass() const;
     void                            followPerimeter();
 	void                            moveScout();
     void                            drawScoutInformation(int x, int y);

@@ -43,7 +43,7 @@ void SquadData::removeSquad(const std::string & squadName)
         return;
     }
 
-    for (auto & unit : squadPtr->second.getUnits())
+    for (const auto unit : squadPtr->second.getUnits())
     {
         if (unit->getType().isWorker())
         {

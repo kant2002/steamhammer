@@ -140,6 +140,9 @@
     <ClCompile Include="..\Source\MicroRanged.cpp" />
     <ClCompile Include="..\Source\MicroTransports.cpp" />
     <ClCompile Include="..\Source\MicroHighTemplar.cpp" />
+    <ClCompile Include="..\Source\Random.cpp" />
+    <ClCompile Include="..\Source\Base.cpp" />
+    <ClCompile Include="..\Source\FAP.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Source\CombatCommander.h">
@@ -250,5 +253,8 @@
     <ClInclude Include="..\Source\MicroRanged.h" />
     <ClInclude Include="..\Source\MicroTransports.h" />
     <ClInclude Include="..\Source\MicroHighTemplar.h" />
+    <ClInclude Include="..\Source\Random.h" />
+    <ClInclude Include="..\Source\Base.h" />
+    <ClInclude Include="..\Source\FAP.h" />
   </ItemGroup>
 </Project>

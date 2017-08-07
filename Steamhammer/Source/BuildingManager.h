@@ -46,7 +46,9 @@ public:
     int                 getReservedMinerals() const;
     int                 getReservedGas() const;
 
-    bool                isBeingBuilt(BWAPI::UnitType type);
+	bool				anythingBeingBuilt() const { return !_buildings.empty();  };
+    bool                isBeingBuilt(BWAPI::UnitType type) const;
+	size_t              getNumUnstarted(BWAPI::UnitType type) const;
 
     std::vector<BWAPI::UnitType> buildingsQueued();
 

@@ -202,8 +202,7 @@ bool GameCommander::isAssigned(BWAPI::Unit unit) const
 // validates units as usable for distribution to various managers
 void GameCommander::setValidUnits()
 {
-	// make sure the unit is completed and alive and usable
-	for (auto & unit : BWAPI::Broodwar->self()->getUnits())
+	for (const auto unit : BWAPI::Broodwar->self()->getUnits())
 	{
 		if (UnitUtil::IsValidUnit(unit))
 		{	
@@ -236,9 +235,9 @@ void GameCommander::setScoutUnits()
 // sets combat units to be passed to CombatCommander
 void GameCommander::setCombatUnits()
 {
-	for (auto & unit : _validUnits)
+	for (const auto unit : _validUnits)
 	{
-		if (!isAssigned(unit) && UnitUtil::IsCombatUnit(unit) || unit->getType().isWorker())		
+		if (!isAssigned(unit) && (UnitUtil::IsCombatUnit(unit) || unit->getType().isWorker()))		
 		{	
 			assignUnit(unit, _combatUnits);
 		}
@@ -255,37 +254,6 @@ void GameCommander::goScoutAlways()
 void GameCommander::goScoutIfNeeded()
 {
 	_scoutIfNeeded = true;
-}
-
-// Get the first spawning pool, supply depot, or pylon.
-// This is by default the timing of the initial scout. It has nothing to do with supply.
-BWAPI::Unit GameCommander::getFirstSupplyProvider()
-{
-	BWAPI::Unit supplyProvider = nullptr;
-
-	if (BWAPI::Broodwar->self()->getRace() == BWAPI::Races::Zerg)
-	{
-		for (auto & unit : BWAPI::Broodwar->self()->getUnits())
-		{
-			if (unit->getType() == BWAPI::UnitTypes::Zerg_Spawning_Pool)
-			{
-				supplyProvider = unit;
-			}
-		}
-	}
-	else
-	{
-		
-		for (auto & unit : BWAPI::Broodwar->self()->getUnits())
-		{
-			if (unit->getType() == BWAPI::Broodwar->self()->getRace().getSupplyProvider())
-			{
-				supplyProvider = unit;
-			}
-		}
-	}
-
-	return supplyProvider;
 }
 
 void GameCommander::onUnitShow(BWAPI::Unit unit)			
@@ -371,7 +339,7 @@ bool GameCommander::surrenderMonkey()
 	// 1. We don't have the cash to make a worker.
 	// 2. We have no unit that can attack.
 	// 3. The enemy has at least one visible unit that can destroy buildings.
-	// Terran does not float buildings, so we check if the enemy can attack ground.
+	// Terran does not float buildings, so we check whether the enemy can attack ground.
 
 	// 1. Our cash.
 	if (BWAPI::Broodwar->self()->minerals() >= 50)

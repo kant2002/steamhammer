@@ -28,7 +28,7 @@ class CombatCommander
 
 	bool			unitIsGoodToDrop(const BWAPI::Unit unit) const;
 
-	void			cancelDyingBuildings();
+	void			cancelDyingItems();
 
 	int             getNumType(BWAPI::Unitset & units, BWAPI::UnitType type);
 
@@ -50,6 +50,8 @@ class CombatCommander
     int             numZerglingsInOurBase() const;
     bool            buildingRush() const;
 
+	static int		workerPullScore(BWAPI::Unit worker);
+
 public:
 
 	CombatCommander();
@@ -58,7 +60,10 @@ public:
 
 	void setAggression(bool aggressive) { _goAggressive = aggressive;  }
 	bool getAggression() const { return _goAggressive; };
-    
+
+	void pullWorkers(int n);
+	void releaseWorkers();
+	
 	void drawSquadInformation(int x, int y);
 
 	static CombatCommander & Instance();

@@ -15,13 +15,11 @@ using namespace UAlbertaBot;
 // This gets called when the bot starts!
 void UAlbertaBotModule::onStart()
 {
-    // Initialize SparCraft, the combat simulation package
-    SparCraft::init();
-
     // Initialize BOSS, the Build Order Search System
     BOSS::init();
 
-	// Call BWTA to read and analyze the current map
+	// Call BWTA to read and analyze the current map.
+	// Very slow if the map has not been seen before, so that info is not cached.
 	BWTA::readMap();
 	BWTA::analyze();
 
@@ -48,12 +46,6 @@ void UAlbertaBotModule::onStart()
     if (Config::BotInfo::PrintInfoOnStart)
     {
         BWAPI::Broodwar->printf("%s by %s, based on UAlbertaBot.", Config::BotInfo::BotName.c_str(), Config::BotInfo::Authors.c_str());
-    }
-
-    if (Config::Modules::UsingStrategyIO)
-    {
-        StrategyManager::Instance().readResults();
-        StrategyManager::Instance().setLearnedStrategy();
     }
 
 	StrategyManager::Instance().setOpeningGroup();

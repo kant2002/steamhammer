@@ -7,6 +7,7 @@ namespace UAlbertaBot
 {
 namespace Micro
 {
+	void SmartStop(BWAPI::Unit unit);
 	void SmartAttackUnit(BWAPI::Unit attacker, BWAPI::Unit target);
     void SmartAttackMove(BWAPI::Unit attacker, const BWAPI::Position & targetPosition);
     void SmartMove(BWAPI::Unit attacker, const BWAPI::Position & targetPosition);

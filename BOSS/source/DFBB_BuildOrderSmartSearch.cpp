@@ -76,7 +76,7 @@ void DFBB_BuildOrderSmartSearch::calculateSearchSettings()
     // set the repetitions
     setRepetitions();
 
-    int maxWorkers = 45;
+    int maxWorkers = 75;
     if (_goal.getGoal(worker) > maxWorkers)
     {
         _goal.setGoal(worker, maxWorkers);

@@ -4,11 +4,12 @@
 using namespace UAlbertaBot;
 
 Squad::Squad()
-	: _hasAir(false)
+	: _name("Default")
+	, _combatSquad(false)
+	, _hasAir(false)
 	, _hasGround(false)
 	, _hasAntiAir(false)
 	, _hasAntiGround(false)
-	, _name("Default")
 	, _attackAtMax(false)
     , _lastRetreatSwitch(0)
     , _lastRetreatSwitchVal(false)
@@ -17,8 +18,17 @@ Squad::Squad()
     int a = 10;   // only you can prevent linker errors
 }
 
-Squad::Squad(const std::string & name, SquadOrder order, size_t priority) 
+// A "combat" squad is any squad except the Idle squad, which is full of workers
+// (and possibly unused units like unassigned overlords).
+// The usual work of workers is managed by WorkerManager. If we put workers into
+// another squad, we have to notify WorkerManager.
+Squad::Squad(const std::string & name, SquadOrder order, size_t priority)
 	: _name(name)
+	, _combatSquad(name != "Idle")
+	, _hasAir(false)
+	, _hasGround(false)
+	, _hasAntiAir(false)
+	, _hasAntiGround(false)
 	, _attackAtMax(false)
 	, _lastRetreatSwitch(0)
     , _lastRetreatSwitchVal(false)
@@ -87,12 +97,12 @@ void Squad::update()
 
 		if (Config::Debug::DrawSquadInfo)
 		{
-			BWAPI::Broodwar->drawCircleMap(regroupPosition.x, regroupPosition.y, 30, BWAPI::Colors::Purple, true);
+			BWAPI::Broodwar->drawCircleMap(regroupPosition.x, regroupPosition.y, 20, BWAPI::Colors::Purple, true);
 		}
         
 		_microMelee.regroup(regroupPosition);
 		_microRanged.regroup(regroupPosition);
-		_microLurkers.regroup(regroupPosition);
+		//_microLurkers.regroup(regroupPosition);    // does more harm than good
 		_microTanks.regroup(regroupPosition);
 	}
 	else
@@ -100,9 +110,12 @@ void Squad::update()
 		// No need to regroup. Execute micro.
 		_microMelee.execute(_order);
 		_microRanged.execute(_order);
-		_microLurkers.execute(_order);
 		_microTanks.execute(_order);
 	}
+
+	// Lurkers never regroup, always execute their order.
+	// TODO It is because regrouping works poorly. It retreats and unburrows them too often.
+	_microLurkers.execute(_order);
 
 	// Maybe stim marines and firebats.
 	stimIfNeeded();
@@ -145,6 +158,7 @@ void Squad::updateUnits()
 }
 
 // Clean up the _units vector.
+// Also notice and remember a few facts about the members of the squad.
 // Note: Some units may be loaded in a bunker or transport and cannot accept orders.
 //       Check unit->isLoaded() before issuing orders.
 void Squad::setAllUnits()
@@ -188,13 +202,10 @@ void Squad::setNearEnemyUnits()
 
 	for (const auto unit : _units)
 	{
-		if (!unit->exists() || unit->isLoaded())
+		if (!unit->getPosition().isValid())   // excludes loaded units
 		{
 			continue;
 		}
-
-		int x = unit->getPosition().x;
-		int y = unit->getPosition().y;
 
 		_nearEnemy[unit] = unitNearEnemy(unit);
 
@@ -203,6 +214,9 @@ void Squad::setNearEnemyUnits()
 			int right = unit->getType().dimensionRight();
 			int top = unit->getType().dimensionUp();
 			int bottom = unit->getType().dimensionDown();
+
+			int x = unit->getPosition().x;
+			int y = unit->getPosition().y;
 
 			BWAPI::Broodwar->drawBoxMap(x - left, y - top, x + right, y + bottom,
 				(_nearEnemy[unit]) ? Config::Debug::ColorUnitNearEnemy : Config::Debug::ColorUnitNotNearEnemy);
@@ -225,15 +239,7 @@ void Squad::addUnitsToMicroManagers()
 	{
 		if (unit->isCompleted() && unit->getHitPoints() > 0 && unit->exists() && !unit->isLoaded())
 		{
-			if (unit->getType().isWorker())
-			{
-				// We accept workers into the squad, but do not give them orders.
-				// WorkerManager is responsible for that.
-				// The squad creator (in CombatCommander) should be sure to give each worker
-				// an appropriate job using the WorkerManager.
-				// squad.clear() releases the worker jobs, so you don't have to worry about that.
-			}
-			else if (unit->getType() == BWAPI::UnitTypes::Protoss_High_Templar)
+			if (unit->getType() == BWAPI::UnitTypes::Protoss_High_Templar)
 			{
 				highTemplarUnits.insert(unit);
 			}
@@ -267,6 +273,14 @@ void Squad::addUnitsToMicroManagers()
 				unit->getType() == BWAPI::UnitTypes::Protoss_Carrier)
 			{
 				rangedUnits.insert(unit);
+			}
+			else if (unit->getType().isWorker() && _combatSquad)
+			{
+				// If this is a combat squad, then workers are melee units like any other,
+				// but we have to tell WorkerManager about them.
+				// If it's not a combat squad, WorkerManager owns them; don't add them to a micromanager.
+				WorkerManager::Instance().setCombatWorker(unit);
+				meleeUnits.insert(unit);
 			}
 			else if (unit->getType().groundWeapon().maxRange() <= 32)
 			{
@@ -323,14 +337,6 @@ bool Squad::needsToRegroup()
 		}
 	}
 
-	// if we are DT rushing and we haven't lost a DT yet, no retreat!
-	if (StrategyManager::Instance().getOpeningGroup() == "dark templar" &&
-		BWAPI::Broodwar->self()->deadUnitCount(BWAPI::UnitTypes::Protoss_Dark_Templar) == 0)
-	{
-		_regroupStatus = std::string("Go dark templar!");
-		return false;
-	}
-
 	BWAPI::Unit unitClosest = unitClosestToEnemy();
 
 	if (!unitClosest)
@@ -355,22 +361,22 @@ bool Squad::needsToRegroup()
 
 			// Max of weapon range and vision range. Vision range is as long or longer, except for tanks.
 			// We assume that the tanks may siege, and check the siege range of unsieged tanks.
-			int range = 0;     // range of enemy unit, zero if it cannot hit us
 			if (UnitUtil::CanAttack(eui.second.type, u->getType()))
 			{
+				int range = 0;     // range of enemy unit
 				if (eui.second.type == BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode ||
 					eui.second.type == BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode)
 				{
-					range = (BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode).groundWeapon().maxRange() + 64;  // plus safety fudge
+					range = (BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode).groundWeapon().maxRange() + 128;  // plus safety fudge
 				}
 				else
 				{
-					// This is always >= weapon range, so we can stop here.
+					// Sight range is >= weapon range, so we can stop here.
 					range = eui.second.type.sightRange();
 				}
 				range += 128;    // plus some to account for our squad spreading out
 
-				if (range >= eui.second.lastPosition.getDistance(u->getPosition()))
+				if (range >= u->getDistance(eui.second.lastPosition))
 				{
 					anyInRange = true;
 					break;   // break out of inner loop
@@ -390,33 +396,23 @@ bool Squad::needsToRegroup()
         return false;
     }
 
-	SparCraft::ScoreType score = 0;
+	// If we most recently retreated, don't attack again until retreatDuration frames have passed.
+	const int retreatDuration = 3 * 24;
+	bool retreat = _lastRetreatSwitchVal && (BWAPI::Broodwar->getFrameCount() - _lastRetreatSwitch < retreatDuration);
 
-	//do the SparCraft Simulation!
-	CombatSimulation sim;
-    
-	sim.setCombatUnits(unitClosest->getPosition(), Config::Micro::CombatRegroupRadius);
-	score = sim.simulateCombat();
+	if (!retreat)
+	{
+		// All other checks are done. Finally do the expensive combat simulation.
+		CombatSimulation sim;
 
-    bool retreat = score < 0;
-    int switchTime = 100;
-    bool waiting = false;
+		sim.setCombatUnits(unitClosest->getPosition(), Config::Micro::CombatRegroupRadius);
+		double score = sim.simulateCombat();
 
-    // we should not attack unless 5 seconds have passed since a retreat
-    if (retreat != _lastRetreatSwitchVal)
-    {
-        if (!retreat && (BWAPI::Broodwar->getFrameCount() - _lastRetreatSwitch < switchTime))
-        {
-            waiting = true;
-            retreat = _lastRetreatSwitchVal;
-        }
-        else
-        {
-            waiting = false;
-            _lastRetreatSwitch = BWAPI::Broodwar->getFrameCount();
-            _lastRetreatSwitchVal = retreat;
-        }
-    }
+		retreat = score < 0;
+		_lastRetreatSwitch = BWAPI::Broodwar->getFrameCount();
+		_lastRetreatSwitchVal = retreat;
+
+	}
 	
 	if (retreat)
 	{
@@ -440,17 +436,29 @@ bool Squad::containsUnit(BWAPI::Unit u) const
     return _units.contains(u);
 }
 
+bool Squad::containsUnitType(BWAPI::UnitType t) const
+{
+	for (const auto u : _units)
+	{
+		if (u->getType() == t)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 void Squad::clear()
 {
-    for (const auto unit : _units)
-    {
-        if (unit->getType().isWorker())
-        {
-            WorkerManager::Instance().finishedWithWorker(unit);
-        }
-    }
+	for (const auto unit : _units)
+	{
+		if (unit->getType().isWorker())
+		{
+			WorkerManager::Instance().finishedWithWorker(unit);
+		}
+	}
 
-    _units.clear();
+	_units.clear();
 }
 
 bool Squad::unitNearEnemy(BWAPI::Unit unit)
@@ -492,23 +500,29 @@ BWAPI::Position Squad::calcRegroupPosition()
 
 	int minDist = 100000;
 
-	// Retreat to the location of the unit not near the enemy which is
-	// closest to the order's target destination.
+	// Retreat to the location of the squad unit not near the enemy which is
+	// closest to the order position.
 	// NOTE May retreat somewhere silly if the chosen unit was newly produced.
 	//      Zerg sometimes retreats back and forth through the enemy when new
 	//      zerg units are produced in bases on opposite sides.
 	for (const auto unit : _units)
 	{
-		// Don't return the position of a detector, which may be in a weird place.
-		// That means science vessel, protoss observer, or overlord.
-		// Bug fix thanks to AIL!
-		if (!_nearEnemy[unit] && !unit->getType().isDetector() && !unit->isLoaded())
+		// Count combat units only. Bug fix originally thanks to AIL, it's been rewritten a bit since then.
+		if (!_nearEnemy[unit] &&
+			!unit->getType().isDetector() &&
+			unit->getType() != BWAPI::UnitTypes::Terran_Medic &&
+			unit->getPosition().isValid())    // excludes loaded units
 		{
 			int dist = unit->getDistance(_order.getPosition());
 			if (dist < minDist)
 			{
-				minDist = dist;
-				regroup = unit->getPosition();
+				// If the squad has any ground units, don't try to retreat to the position of an air unit
+				// which is flying in a place that a ground unit cannot reach.
+				if (!_hasGround || -1 != MapTools::Instance().getGroundTileDistance(unit->getPosition(), _order.getPosition()))
+				{
+					minDist = dist;
+					regroup = unit->getPosition();
+				}
 			}
 		}
 	}
@@ -530,8 +544,7 @@ BWAPI::Position Squad::calcRegroupPosition()
 	return regroup;
 }
 
-// Actually the unit closest to the order position by ground distance.
-// This is usually OK for air units, but may sometimes be a little silly.
+// Return the unit closest to the order position (not actually closest to the enemy).
 BWAPI::Unit Squad::unitClosestToEnemy()
 {
 	BWAPI::Unit closest = nullptr;
@@ -541,15 +554,28 @@ BWAPI::Unit Squad::unitClosestToEnemy()
 
 	for (const auto unit : _units)
 	{
-		if (unit->getType().isDetector() || unit->isLoaded())
+		// Non-combat units should be ignored for this calculation.
+		if (unit->getType().isDetector() ||
+			!unit->getPosition().isValid() ||       // includes units loaded into bunkers or transports
+			unit->getType() == BWAPI::UnitTypes::Terran_Medic)
 		{
 			continue;
 		}
 
-		// the distance to the order position
-		int dist = MapTools::Instance().getGroundDistance(unit->getPosition(), _order.getPosition());
+		int dist;
+		if (_hasGround)
+		{
+			// A ground or air-ground squad. Use ground distance.
+			// It is -1 if no ground path exists.
+			dist = MapTools::Instance().getGroundDistance(unit->getPosition(), _order.getPosition());
+		}
+		else
+		{
+			// An all-air squad. Use air distance (which is what unit->getDistance() gives).
+			dist = unit->getDistance(_order.getPosition());
+		}
 
-		if (dist != -1 && dist < closestDist)
+		if (dist < closestDist && dist != -1)
 		{
 			closest = unit;
 			closestDist = dist;
@@ -574,10 +600,27 @@ void Squad::addUnit(BWAPI::Unit u)
 	_units.insert(u);
 }
 
-// NOTE If the unit is a worker, you may have to release it before calling this.
 void Squad::removeUnit(BWAPI::Unit u)
 {
+	if (_combatSquad && u->getType().isWorker())
+	{
+		WorkerManager::Instance().finishedWithWorker(u);
+	}
 	_units.erase(u);
+}
+
+// Remove all workers from the squad, releasing them back to WorkerManager.
+void Squad::releaseWorkers()
+{
+	UAB_ASSERT(_combatSquad, "Idle squad should not release workers");
+
+	for (const auto unit : _units)
+	{
+		if (unit->getType().isWorker())
+		{
+			removeUnit(unit);
+		}
+	}
 }
 
 const std::string & Squad::getName() const

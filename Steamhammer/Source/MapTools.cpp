@@ -17,8 +17,8 @@ MapTools::MapTools()
 	UAB_ASSERT(_rows > 0 && _cols > 0, "empty map");
 
     _map    = std::vector<bool>(_rows*_cols,false);
-    _units  = std::vector<bool>(_rows*_cols,false);
-    _fringe = std::vector<int>(_rows*_cols,0);
+	_units = std::vector<bool>(_rows*_cols, false);
+    _fringe = std::vector<short int>(_rows*_cols,0);
 
     setBWAPIMapData();
 }
@@ -29,48 +29,60 @@ inline int MapTools::getIndex(int row,int col)
     return row * _cols + col;
 }
 
+// Is the tile unexplored?
 bool MapTools::unexplored(DistanceMap & dmap,const int index) const
 {
-    return (index != -1) && dmap[index] == -1 && _map[index];
+    return index != -1 &&            // index is valid
+		dmap[index] == -1 &&         // tile doesn't have a known distance
+		_map[index];                 // the map says it's walkable
 }
 
-// resets the distance and fringe vectors, call before each search
-void MapTools::reset()
-{
-    std::fill(_fringe.begin(),_fringe.end(),0);
-}
-
-// reads in the map data from bwapi and stores it in our map format
+// Read the map data from BWAPI and remember which 32x32 build tiles are walkable.
+// NOTE The game map is walkable at the resolution of 8x8 walk tiles, so this is an approximation.
+//      We're asking "Can big units walk here?" Small units may be able to squeeze into more places.
 void MapTools::setBWAPIMapData()
 {
+	// 1. Check terrain: Is it walkable?
     for (int r(0); r < _rows; ++r)
     {
         for (int c(0); c < _cols; ++c)
         {
-            bool clear = true;
+            bool walkable = true;
 
             // check each walk tile within this TilePosition
-            for (int i=0; i<4; ++i)
+            for (int i=0; i<4 && walkable; ++i)
             {
-                for (int j=0; j<4; ++j)
+                for (int j=0; j<4 && walkable; ++j)
                 {
                     if (!BWAPI::Broodwar->isWalkable(c*4 + i,r*4 + j))
                     {
-                        clear = false;
-                        break;
-                    }
-
-                    if (clear)
-                    {
-                        break;
+                        walkable = false;
                     }
                 }
-            }
+			}
 
-            // set the map as binary clear or not
-            _map[getIndex(r,c)] = clear;
+            _map[getIndex(r,c)] = walkable;
         }
     }
+
+	// 2. Check static units: Do they block tiles?
+	// TODO in progress
+	for (const auto unit : BWAPI::Broodwar->getStaticNeutralUnits())
+	{
+		// The neutral units may include moving critters which do not permanently block tiles.
+		// Someting immobile blocks tiles it occupies until it is destroyed (exceptions may be possible).
+		if (!unit->getType().canMove() && !unit->isFlying())
+		{
+			BWAPI::TilePosition pos = unit->getTilePosition();
+			for (int r = pos.y; r < pos.y + unit->getType().tileHeight(); ++r)
+			{
+				for (int c = pos.x; c < pos.x + unit->getType().tileWidth(); ++c)
+				{
+					_map[getIndex(r, c)] = false;
+				}
+			}
+		}
+	}
 }
 
 void MapTools::resetFringe()
@@ -78,32 +90,48 @@ void MapTools::resetFringe()
     std::fill(_fringe.begin(),_fringe.end(),0);
 }
 
-int MapTools::getGroundDistance(BWAPI::Position origin,BWAPI::Position destination)
+// Ground distance in tiles, -1 if no path exists.
+int MapTools::getGroundTileDistance(BWAPI::Position origin, BWAPI::Position destination)
 {
     // if we have too many maps, reset our stored maps in case we run out of memory
-    if (_allMaps.size() > 20)
+	if (_allMaps.size() > allMapsSize)
     {
         _allMaps.clear();
 
-        // BWAPI::Broodwar->printf("Cleared stored distance map cache");
+		if (Config::Debug::DrawMapDistances)
+		{
+			BWAPI::Broodwar->printf("Cleared distance map cache");
+		}
     }
 
-    // if we haven't yet computed the distance map to the destination
-    if (_allMaps.find(destination) == _allMaps.end())
-    {
-        // if we have computed the opposite direction, we can use that too
-        if (_allMaps.find(origin) != _allMaps.end())
-        {
-            return _allMaps[origin][destination];
-        }
+    // if we have already computed the distance map to the destination
+	if (_allMaps.find(destination) != _allMaps.end())
+	{
+		return _allMaps[destination][origin];
+	}
 
-        // add the map and compute it
-        _allMaps.insert(std::pair<BWAPI::Position,DistanceMap>(destination,DistanceMap()));
-        computeDistance(_allMaps[destination],destination);
-    }
+	// if we have computed the opposite direction, we can use that too
+	if (_allMaps.find(origin) != _allMaps.end())
+	{
+		return _allMaps[origin][destination];
+	}
 
-    // get the distance from the map
-    return _allMaps[destination][origin];
+	// add the map and compute it
+	_allMaps.insert(std::pair<BWAPI::Position,DistanceMap>(destination,DistanceMap()));
+	computeDistance(_allMaps[destination],destination);
+	return _allMaps[destination][origin];
+}
+
+// Ground distance in pixels (with build tile granularity), -1 if no path exists.
+// Build tile granularity means that the distance is a multiple of 32 pixels.
+int MapTools::getGroundDistance(BWAPI::Position origin, BWAPI::Position destination)
+{
+	int tiles = getGroundTileDistance(origin, destination);
+	if (tiles > 0)
+	{
+		return 32 * tiles;
+	}
+	return tiles;
 }
 
 // computes walk distance from Position P to all other points on the map
@@ -119,7 +147,7 @@ void MapTools::search(DistanceMap & dmap,const int sR,const int sC)
     resetFringe();
 
     // set the starting position for this search
-    dmap.setStartPosition(sR,sC);
+    // dmap.setStartPosition(sR,sC);
 
     // set the distance of the start cell to zero
     dmap[getIndex(sR,sC)] = 0;
@@ -150,7 +178,6 @@ void MapTools::search(DistanceMap & dmap,const int sR,const int sC)
         {
             // set the distance based on distance to current cell
             dmap.setDistance(nextIndex,newDist);
-            dmap.setMoveTo(nextIndex,'D');
             dmap.addSorted(getTilePosition(nextIndex));
 
             // put it in the fringe
@@ -163,7 +190,6 @@ void MapTools::search(DistanceMap & dmap,const int sR,const int sC)
         {
             // set the distance based on distance to current cell
             dmap.setDistance(nextIndex,newDist);
-            dmap.setMoveTo(nextIndex,'U');
             dmap.addSorted(getTilePosition(nextIndex));
 
             // put it in the fringe
@@ -176,7 +202,6 @@ void MapTools::search(DistanceMap & dmap,const int sR,const int sC)
         {
             // set the distance based on distance to current cell
             dmap.setDistance(nextIndex,newDist);
-            dmap.setMoveTo(nextIndex,'R');
             dmap.addSorted(getTilePosition(nextIndex));
 
             // put it in the fringe
@@ -189,7 +214,6 @@ void MapTools::search(DistanceMap & dmap,const int sR,const int sC)
         {
             // set the distance based on distance to current cell
             dmap.setDistance(nextIndex,newDist);
-            dmap.setMoveTo(nextIndex,'L');
             dmap.addSorted(getTilePosition(nextIndex));
 
             // put it in the fringe
@@ -201,8 +225,8 @@ void MapTools::search(DistanceMap & dmap,const int sR,const int sC)
 const std::vector<BWAPI::TilePosition> & MapTools::getClosestTilesTo(BWAPI::Position pos)
 {
     // make sure the distance map is calculated with pos as a destination
-//    int a = getGroundDistance(BWAPI::Position(BWAPI::Broodwar->self()->getStartLocation()),pos);
-	int a = getGroundDistance(pos, pos);
+//    int a = getGroundTileDistance(BWAPI::Position(BWAPI::Broodwar->self()->getStartLocation()),pos);
+	int a = getGroundTileDistance(pos, pos);
 
     return _allMaps[pos].getSortedTiles();
 }
@@ -227,7 +251,7 @@ void MapTools::drawHomeDistanceMap()
         {
             BWAPI::Position pos(x*32, y*32);
 
-            int dist = getGroundDistance(pos, homePosition);
+            int dist = getGroundTileDistance(pos, homePosition);
 
             BWAPI::Broodwar->drawTextMap(pos + BWAPI::Position(16,16), "%d", dist);
         }
@@ -246,7 +270,7 @@ BWTA::BaseLocation * MapTools::nextExpansion(bool hidden, bool minOnlyOK)
 	
 	BWAPI::TilePosition homeTile = InformationManager::Instance().getMyMainBaseLocation()->getTilePosition();
 	BWAPI::Position myBasePosition(homeTile);
-	BWTA::BaseLocation * enemyBase = InformationManager::Instance().getEnemyMainBaseLocation();
+	BWTA::BaseLocation * enemyBase = InformationManager::Instance().getEnemyMainBaseLocation();  // may be null
 
     for (BWTA::BaseLocation * base : BWTA::getBaseLocations())
     {
@@ -285,7 +309,7 @@ BWTA::BaseLocation * MapTools::nextExpansion(bool hidden, bool minOnlyOK)
 				}
 
 				// TODO bug: this doesn't include enemy buildings which are known but out of sight
-				for (auto & unit : BWAPI::Broodwar->getUnitsOnTile(BWAPI::TilePosition (tile.x + x, tile.y + y)))
+				for (const auto unit : BWAPI::Broodwar->getUnitsOnTile(BWAPI::TilePosition (tile.x + x, tile.y + y)))
                 {
                     if (unit->getType().isBuilding() && !unit->isLifted())
                     {
@@ -302,7 +326,7 @@ BWTA::BaseLocation * MapTools::nextExpansion(bool hidden, bool minOnlyOK)
         }
 
         // Want to be close to our own base (unless this is to be a hidden base).
-		double distanceFromUs = MapTools::Instance().getGroundDistance(BWAPI::Position(tile), myBasePosition);
+		double distanceFromUs = MapTools::Instance().getGroundTileDistance(BWAPI::Position(tile), myBasePosition);
 
         // if it is not connected, continue
 		if (!BWTA::isConnected(homeTile, tile) || distanceFromUs < 0)
@@ -314,8 +338,8 @@ BWTA::BaseLocation * MapTools::nextExpansion(bool hidden, bool minOnlyOK)
 		double distanceFromEnemy = 0.0;
 		if (enemyBase) {
 			BWAPI::TilePosition enemyTile = enemyBase->getTilePosition();
-			distanceFromEnemy = MapTools::Instance().getGroundDistance(BWAPI::Position(tile), BWAPI::Position(enemyTile));
-			if (!BWTA::isConnected(enemyTile, tile) || distanceFromEnemy < 0)
+			distanceFromEnemy = MapTools::Instance().getGroundTileDistance(BWAPI::Position(tile), BWAPI::Position(enemyTile));
+			if (distanceFromEnemy < 0)        // no ground connection between the locations
 			{
 				distanceFromEnemy = 0.0;
 			}
@@ -377,36 +401,4 @@ BWAPI::TilePosition MapTools::reserveNextExpansion(bool hidden, bool minOnlyOK)
 		return base->getTilePosition();
 	}
 	return BWAPI::TilePositions::None;
-}
-
-void MapTools::parseMap()
-{
-    BWAPI::Broodwar->printf("Parsing Map Information");
-    std::ofstream mapFile;
-    std::string file = "c:\\scmaps\\" + BWAPI::Broodwar->mapName() + ".txt";
-    mapFile.open(file.c_str());
-
-    mapFile << BWAPI::Broodwar->mapWidth()*4 << "\n";
-    mapFile << BWAPI::Broodwar->mapHeight()*4 << "\n";
-
-    for (int j=0; j<BWAPI::Broodwar->mapHeight()*4; j++) 
-    {
-        for (int i=0; i<BWAPI::Broodwar->mapWidth()*4; i++) 
-        {
-            if (BWAPI::Broodwar->isWalkable(i,j)) 
-            {
-                mapFile << "0";
-            }
-            else 
-            {
-                mapFile << "1";
-            }
-        }
-
-        mapFile << "\n";
-    }
-
-    BWAPI::Broodwar->printf(file.c_str());
-
-    mapFile.close();
 }

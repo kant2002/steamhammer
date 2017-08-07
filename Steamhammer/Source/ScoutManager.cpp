@@ -59,10 +59,7 @@ void ScoutManager::update()
 void ScoutManager::setWorkerScout(BWAPI::Unit unit)
 {
     // if we have a previous worker scout, release it back to the worker manager
-    if (_workerScout)
-    {
-        WorkerManager::Instance().finishedWithWorker(_workerScout);
-    }
+	releaseWorkerScout();
 
     _workerScout = unit;
     WorkerManager::Instance().setScoutWorker(_workerScout);
@@ -116,11 +113,6 @@ void ScoutManager::moveScout()
 
     int scoutDistanceThreshold = 30;
 
-    if (_workerScout->isCarryingGas())
-    {
-        BWAPI::Broodwar->drawCircleMap(_workerScout->getPosition(), 10, BWAPI::Colors::Purple, true);
-    }
-
     // if we initiated a gas steal and the worker isn't idle, 
     bool finishedConstructingGasSteal = _workerScout->isIdle() || _workerScout->isCarryingGas();
     if (!_gasStealFinished && _didGasSteal && !finishedConstructingGasSteal)
@@ -136,7 +128,7 @@ void ScoutManager::moveScout()
 	// if we know where the enemy region is and where our scout is
 	if (_workerScout && enemyBaseLocation)
 	{
-        int scoutDistanceToEnemy = MapTools::Instance().getGroundDistance(_workerScout->getPosition(), enemyBaseLocation->getPosition());
+        int scoutDistanceToEnemy = MapTools::Instance().getGroundTileDistance(_workerScout->getPosition(), enemyBaseLocation->getPosition());
         bool scoutInRangeOfenemy = scoutDistanceToEnemy <= scoutDistanceThreshold;
         
         // we only care if the scout is under attack within the enemy region
@@ -154,38 +146,34 @@ void ScoutManager::moveScout()
 		// if the scout is in the enemy region
 		if (scoutInRangeOfenemy)
 		{
-			// if the worker scout is not under attack
-			if (!_scoutUnderAttack)
+			if (_scoutUnderAttack)
 			{
-				// get the closest enemy worker
+				_scoutStatus = "Under attack, fleeing";
+				followPerimeter();
+			}
+			else
+			{
 				BWAPI::Unit closestWorker = enemyWorkerToHarass();
 
-				// if there is a worker nearby, harass it
-				if (Config::Strategy::ScoutHarassEnemy && (!_tryGasSteal || _gasStealFinished) && closestWorker && (_workerScout->getDistance(closestWorker) < 800))
+				// If configured and reasonable, harass an enemy worker.
+				if (Config::Strategy::ScoutHarassEnemy && closestWorker && (!_tryGasSteal || _gasStealFinished))
 				{
                     _scoutStatus = "Harass enemy worker";
                     _currentRegionVertexIndex = -1;
 					Micro::SmartAttackUnit(_workerScout, closestWorker);
 				}
-				// otherwise keep moving to the enemy region
+				// otherwise keep circling the enemy region
 				else
 				{
                     _scoutStatus = "Following perimeter";
                     followPerimeter();  
                 }
-				
-			}
-			// if the worker scout is under attack
-			else
-			{
-                _scoutStatus = "Under attack inside, fleeing";
-                followPerimeter();
 			}
 		}
 		// if the scout is not in the enemy region
 		else if (_scoutUnderAttack)
 		{
-            _scoutStatus = "Under attack inside, fleeing";
+            _scoutStatus = "Under attack, fleeing";
 
             followPerimeter();
 		}
@@ -274,14 +262,10 @@ void ScoutManager::gasSteal()
 }
 
 // Choose an enemy worker to harass, or none.
-BWAPI::Unit ScoutManager::enemyWorkerToHarass()
+BWAPI::Unit ScoutManager::enemyWorkerToHarass() const
 {
-	BWAPI::Unit enemyWorker = nullptr;
-	double maxDist = 0;
-
-	BWAPI::Unit geyser = getEnemyGeyser();
-	
-	for (auto & unit : BWAPI::Broodwar->enemy()->getUnits())
+	// First look for any enemy worker that is building.
+	for (const auto unit : BWAPI::Broodwar->enemy()->getUnits())
 	{
 		if (unit->getType().isWorker() && unit->isConstructing())
 		{
@@ -289,18 +273,19 @@ BWAPI::Unit ScoutManager::enemyWorkerToHarass()
 		}
 	}
 
-	// Only harass terran SCVs that are building, no other workers.
-	// Conclusion: Doesn't help. Scout dies if counterattacked at all.
-	// return nullptr;
+	BWAPI::Unit enemyWorker = nullptr;
+	int maxDist = 600;    // ignore any beyond this range
 
-	// for each enemy worker
-	for (auto & unit : BWAPI::Broodwar->enemy()->getUnits())
+	BWAPI::Unit geyser = getEnemyGeyser();
+
+	// Failing that, find the enemy worker closest to the gas.
+	for (const auto unit : BWAPI::Broodwar->enemy()->getUnits())
 	{
 		if (unit->getType().isWorker())
 		{
-			double dist = unit->getDistance(geyser);
+			int dist = unit->getDistance(geyser);
 
-			if (dist < 800 && dist > maxDist)
+			if (dist < maxDist)
 			{
 				maxDist = dist;
 				enemyWorker = unit;
@@ -313,7 +298,7 @@ BWAPI::Unit ScoutManager::enemyWorkerToHarass()
 
 // If there is exactly 1 geyser in the enemy base, return it.
 // If there's 0 we can't steal it, and if >1 then it's no use to steal it.
-BWAPI::Unit ScoutManager::getEnemyGeyser()
+BWAPI::Unit ScoutManager::getEnemyGeyser() const
 {
 	BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getEnemyMainBaseLocation();
 
@@ -328,40 +313,9 @@ BWAPI::Unit ScoutManager::getEnemyGeyser()
 
 bool ScoutManager::enemyWorkerInRadius()
 {
-	for (auto & unit : BWAPI::Broodwar->enemy()->getUnits())
+	for (const auto unit : BWAPI::Broodwar->enemy()->getUnits())
 	{
 		if (unit->getType().isWorker() && (unit->getDistance(_workerScout) < 300))
-		{
-			return true;
-		}
-	}
-
-	return false;
-}
-
-// Unused.
-bool ScoutManager::immediateThreat()
-{
-	BWAPI::Unitset enemyAttackingWorkers;
-	for (auto & unit : BWAPI::Broodwar->enemy()->getUnits())
-	{
-		if (unit->getType().isWorker() && unit->isAttacking())
-		{
-			enemyAttackingWorkers.insert(unit);
-		}
-	}
-	
-	if (_workerScout->isUnderAttack())
-	{
-		return true;
-	}
-
-	for (auto & unit : BWAPI::Broodwar->enemy()->getUnits())
-	{
-		double dist = unit->getDistance(_workerScout);
-		double range = unit->getType().groundWeapon().maxRange();
-
-		if (unit->getType().canAttack() && !unit->getType().isWorker() && (dist <= range + 32))
 		{
 			return true;
 		}
@@ -373,11 +327,11 @@ bool ScoutManager::immediateThreat()
 int ScoutManager::getClosestVertexIndex(BWAPI::Unit unit)
 {
     int closestIndex = -1;
-    double closestDistance = 10000000;
+    int closestDistance = 10000000;
 
     for (size_t i(0); i < _enemyRegionVertices.size(); ++i)
     {
-        double dist = unit->getDistance(_enemyRegionVertices[i]);
+        int dist = unit->getDistance(_enemyRegionVertices[i]);
         if (dist < closestDistance)
         {
             closestDistance = dist;
@@ -406,29 +360,24 @@ BWAPI::Position ScoutManager::getFleePosition()
         {
             return BWAPI::Position(BWAPI::Broodwar->self()->getStartLocation());
         }
-        else
-        {
-            // set the current index so we know how to iterate if we are still fleeing later
-            _currentRegionVertexIndex = closestPolygonIndex;
-            return _enemyRegionVertices[closestPolygonIndex];
-        }
+
+        // set the current index so we know how to iterate if we are still fleeing later
+        _currentRegionVertexIndex = closestPolygonIndex;
+        return _enemyRegionVertices[closestPolygonIndex];
     }
+
     // if we are still fleeing from the previous frame, get the next location if we are close enough
-    else
+    double distanceFromCurrentVertex = _enemyRegionVertices[_currentRegionVertexIndex].getDistance(_workerScout->getPosition());
+
+    // keep going to the next vertex in the perimeter until we get to one we're far enough from to issue another move command
+    while (distanceFromCurrentVertex < 128)
     {
-        double distanceFromCurrentVertex = _enemyRegionVertices[_currentRegionVertexIndex].getDistance(_workerScout->getPosition());
+        _currentRegionVertexIndex = (_currentRegionVertexIndex + 1) % _enemyRegionVertices.size();
 
-        // keep going to the next vertex in the perimeter until we get to one we're far enough from to issue another move command
-        while (distanceFromCurrentVertex < 128)
-        {
-            _currentRegionVertexIndex = (_currentRegionVertexIndex + 1) % _enemyRegionVertices.size();
-
-            distanceFromCurrentVertex = _enemyRegionVertices[_currentRegionVertexIndex].getDistance(_workerScout->getPosition());
-        }
-
-        return _enemyRegionVertices[_currentRegionVertexIndex];
+        distanceFromCurrentVertex = _enemyRegionVertices[_currentRegionVertexIndex].getDistance(_workerScout->getPosition());
     }
 
+    return _enemyRegionVertices[_currentRegionVertexIndex];
 }
 
 void ScoutManager::calculateEnemyRegionVertices()
@@ -484,7 +433,7 @@ void ScoutManager::calculateEnemyRegionVertices()
 				int x2 = (tp.x + 1) * 32 - 2;
 				int y2 = (tp.y + 1) * 32 - 2;
 
-				BWAPI::Broodwar->drawTextMap(x1 + 3, y1 + 2, "%d", MapTools::Instance().getGroundDistance(BWAPI::Position(tp), basePosition));
+				BWAPI::Broodwar->drawTextMap(x1 + 3, y1 + 2, "%d", MapTools::Instance().getGroundTileDistance(BWAPI::Position(tp), basePosition));
 				BWAPI::Broodwar->drawBoxMap(x1, y1, x2, y2, BWAPI::Colors::Green, false);
 			}
 
@@ -561,8 +510,6 @@ void ScoutManager::calculateEnemyRegionVertices()
         {
             break;
         }
-
-        double dist = sortedVertices[maxFarthestStart].getDistance(sortedVertices[maxFarthestEnd]);
 
         std::vector<BWAPI::Position> temp;
 

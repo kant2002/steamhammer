@@ -115,6 +115,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\Source\Base.cpp" />
     <ClCompile Include="..\Source\BOSSManager.cpp" />
     <ClCompile Include="..\Source\BuildingData.cpp" />
     <ClCompile Include="..\source\BuildingManager.cpp" />
@@ -125,6 +126,7 @@
     <ClCompile Include="..\Source\CombatCommander.cpp" />
     <ClCompile Include="..\Source\Common.cpp" />
     <ClCompile Include="..\Source\Dll.cpp" />
+    <ClCompile Include="..\Source\FAP.cpp" />
     <ClCompile Include="..\Source\GameCommander.cpp" />
     <ClCompile Include="..\Source\InformationManager.cpp" />
     <ClCompile Include="..\source\JSONTools.cpp" />
@@ -145,6 +147,7 @@
     <ClCompile Include="..\Source\MicroTransports.cpp" />
     <ClCompile Include="..\Source\ParseUtils.cpp" />
     <ClCompile Include="..\source\ProductionManager.cpp" />
+    <ClCompile Include="..\Source\Random.cpp" />
     <ClCompile Include="..\source\ScoutManager.cpp" />
     <ClCompile Include="..\Source\Squad.cpp" />
     <ClCompile Include="..\Source\SquadData.cpp" />
@@ -159,6 +162,7 @@
     <ClCompile Include="..\source\WorkerManager.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\Source\Base.h" />
     <ClInclude Include="..\Source\BOSSManager.h" />
     <ClInclude Include="..\Source\BuildingData.h" />
     <ClInclude Include="..\source\BuildingManager.h" />
@@ -169,6 +173,7 @@
     <ClInclude Include="..\Source\CombatCommander.h" />
     <ClInclude Include="..\Source\Common.h" />
     <ClInclude Include="..\Source\DistanceMap.hpp" />
+    <ClInclude Include="..\Source\FAP.h" />
     <ClInclude Include="..\Source\GameCommander.h" />
     <ClInclude Include="..\Source\InformationManager.h" />
     <ClInclude Include="..\source\JSONTools.h" />
@@ -190,6 +195,7 @@
     <ClInclude Include="..\Source\MicroTransports.h" />
     <ClInclude Include="..\Source\ParseUtils.h" />
     <ClInclude Include="..\source\ProductionManager.h" />
+    <ClInclude Include="..\Source\Random.h" />
     <ClInclude Include="..\source\ScoutManager.h" />
     <ClInclude Include="..\Source\Squad.h" />
     <ClInclude Include="..\Source\SquadData.h" />

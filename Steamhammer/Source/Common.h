@@ -18,15 +18,14 @@
 
 #include <BWAPI.h>
 #include <BWTA.h>
-#include "Logger.h"
 
 #include "Config.h"
+#include "Logger.h"
 #include "UABAssert.h"
 
 BWAPI::AIModule * __NewAIModule();
 
-#define UALBERTABOT_PROJECT
-
+/* Unused but potentially useful.
 struct double2
 {
 	double x,y;
@@ -47,7 +46,7 @@ struct double2
 	double len()							const { return sqrt(lenSq()); }
 	double2 normal()						const { return *this / len(); }
 
-	void normalise() { double s(len()); x/=s; y/=s; } 
+	void normalize() { double s(len()); x/=s; y/=s; } 
 	void rotate(double angle) 
 	{ 	
 		angle = angle*M_PI/180.0;
@@ -60,12 +59,13 @@ struct Rect
     int x, y;
     int height, width;
 };
+*/
 
 int GetIntFromString(const std::string & s);
 std::string TrimRaceName(const std::string & s);
 std::string UnitTypeName(BWAPI::UnitType type);
 
-// Color codes for drawing text on the screen.
+// Short color codes for drawing text on the screen.
 const char yellow  = '\x03';
 const char white   = '\x04';
 const char darkRed = '\x06';   // dim

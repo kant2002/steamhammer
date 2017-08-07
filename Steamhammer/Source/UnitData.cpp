@@ -13,8 +13,8 @@ UnitData::UnitData()
 		maxTypeID = maxTypeID > t.getID() ? maxTypeID : t.getID();
 	}
 
-	numDeadUnits	    = std::vector<int>(maxTypeID + 1, 0);
-	numUnits		    = std::vector<int>(maxTypeID + 1, 0);
+	numUnits		= std::vector<int>(maxTypeID + 1, 0);
+	numDeadUnits	= std::vector<int>(maxTypeID + 1, 0);
 }
 
 void UnitData::updateUnit(BWAPI::Unit unit)
@@ -52,10 +52,13 @@ void UnitData::removeUnit(BWAPI::Unit unit)
 
 	mineralsLost += unit->getType().mineralPrice();
 	gasLost += unit->getType().gasPrice();
-	numUnits[unit->getType().getID()]--;
-	numDeadUnits[unit->getType().getID()]++;
-		
+	--numUnits[unit->getType().getID()];
+	++numDeadUnits[unit->getType().getID()];
+	
 	unitMap.erase(unit);
+
+	// NOTE This assert fails, so the unit counts cannot be trusted. :-(
+	// UAB_ASSERT(numUnits[unit->getType().getID()] >= 0, "negative units");
 }
 
 void UnitData::removeBadUnits()

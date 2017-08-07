@@ -14,9 +14,13 @@ enum class MacroCommandType
 	, StopGas
 	, GasUntil
 	, StealGas
-	, ExtractorTrick    // NOTE implemented, but tickles a bug in BWAPI; don't use it
+	, ExtractorTrickDrone
+	, ExtractorTrickZergling
 	, Aggressive
 	, Defensive
+	, PullWorkers
+	, PullWorkersLeaving
+	, ReleaseWorkers
 	};
 
 class MacroCommand
@@ -36,9 +40,13 @@ public:
 			, MacroCommandType::StopGas
 			, MacroCommandType::GasUntil
 			, MacroCommandType::StealGas
-			, MacroCommandType::ExtractorTrick
+			, MacroCommandType::ExtractorTrickDrone
+			, MacroCommandType::ExtractorTrickZergling
 			, MacroCommandType::Aggressive
 			, MacroCommandType::Defensive
+			, MacroCommandType::PullWorkers
+			, MacroCommandType::PullWorkersLeaving
+			, MacroCommandType::ReleaseWorkers
 		};
 	}
 
@@ -73,10 +81,13 @@ public:
         return _type;
     }
 
-	// Only GasUntil has an argument, the amount of gas to gather.
+	// The command has a numeric argument, the _amount.
 	static const bool hasArgument(MacroCommandType t)
 	{
-		return t == MacroCommandType::GasUntil;
+		return
+			t == MacroCommandType::GasUntil ||
+			t == MacroCommandType::PullWorkers || 
+			t == MacroCommandType::PullWorkersLeaving;
 	}
 
 	static const std::string getName(MacroCommandType t)
@@ -109,9 +120,13 @@ public:
 		{
 			return "go steal gas";
 		}
-		if (t == MacroCommandType::ExtractorTrick)
+		if (t == MacroCommandType::ExtractorTrickDrone)
 		{
-			return "go extractor trick";
+			return "go extractor trick drone";
+		}
+		if (t == MacroCommandType::ExtractorTrickZergling)
+		{
+			return "go extractor trick zergling";
 		}
 		if (t == MacroCommandType::Aggressive)
 		{
@@ -120,6 +135,18 @@ public:
 		if (t == MacroCommandType::Defensive)
 		{
 			return "go defensive";
+		}
+		if (t == MacroCommandType::PullWorkers)
+		{
+			return "go pull workers";
+		}
+		if (t == MacroCommandType::PullWorkersLeaving)
+		{
+			return "go pull workers leaving";
+		}
+		if (t == MacroCommandType::ReleaseWorkers)
+		{
+			return "go release workers";
 		}
 
 		UAB_ASSERT(t == MacroCommandType::None, "unrecognized MacroCommandType");

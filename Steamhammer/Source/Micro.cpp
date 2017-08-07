@@ -8,6 +8,31 @@ size_t TotalCommands = 0;
 
 const int dotRadius = 2;
 
+void Micro::SmartStop(BWAPI::Unit unit)
+{
+	if (!unit || !unit->exists() || unit->getPlayer() != BWAPI::Broodwar->self())
+	{
+		UAB_ASSERT(false, "bad arg");
+		return;
+	}
+
+	// if we have issued a command to this unit already this frame, ignore this one
+	if (unit->getLastCommandFrame() >= BWAPI::Broodwar->getFrameCount() || unit->isAttackFrame())
+	{
+		return;
+	}
+
+	// If we already gave this command, don't repeat it.
+	BWAPI::UnitCommand currentCommand(unit->getLastCommand());
+	if (currentCommand.getType() == BWAPI::UnitCommandTypes::Stop)
+	{
+		return;
+	}
+
+	unit->stop();
+	TotalCommands++;
+}
+
 void Micro::SmartAttackUnit(BWAPI::Unit attacker, BWAPI::Unit target)
 {
 	if (!attacker || !attacker->exists() || attacker->getPlayer() != BWAPI::Broodwar->self() ||
@@ -20,7 +45,7 @@ void Micro::SmartAttackUnit(BWAPI::Unit attacker, BWAPI::Unit target)
     // if we have issued a command to this unit already this frame, ignore this one
     if (attacker->getLastCommandFrame() >= BWAPI::Broodwar->getFrameCount() || attacker->isAttackFrame())
     {
-        return;
+		return;
     }
 
     // get the unit's current command
@@ -29,9 +54,9 @@ void Micro::SmartAttackUnit(BWAPI::Unit attacker, BWAPI::Unit target)
     // if we've already told this unit to attack this target, ignore this command
     if (currentCommand.getType() == BWAPI::UnitCommandTypes::Attack_Unit &&	currentCommand.getTarget() == target)
     {
-        return;
+		return;
     }
-
+	
     // if nothing prevents it, attack the target
     attacker->attack(target);
     TotalCommands++;
@@ -40,7 +65,7 @@ void Micro::SmartAttackUnit(BWAPI::Unit attacker, BWAPI::Unit target)
     {
         BWAPI::Broodwar->drawCircleMap(attacker->getPosition(), dotRadius, BWAPI::Colors::Red, true);
         BWAPI::Broodwar->drawCircleMap(target->getPosition(), dotRadius, BWAPI::Colors::Red, true);
-        BWAPI::Broodwar->drawLineMap( attacker->getPosition(), target->getPosition(), BWAPI::Colors::Red );
+        BWAPI::Broodwar->drawLineMap(attacker->getPosition(), target->getPosition(), BWAPI::Colors::Red);
     }
 }
 
@@ -390,13 +415,11 @@ void Micro::SmartKiteTarget(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 	{
 		kite = false;
 	}
-
-    // if the unit can't attack back don't kite
-	// Disabled: we care about the entire context.
-    //if ((rangedUnit->isFlying() && !UnitUtil::CanAttackAir(target)) || (!rangedUnit->isFlying() && !UnitUtil::CanAttackGround(target)))
-    //{
-    //	kite = false;
-    //}
+    // If the target can't attack back, then don't kite.
+	else if (!UnitUtil::CanAttack(target, rangedUnit))
+    {
+    	kite = false;
+    }
 
 	// Kite if we're not ready yet: Wait for the weapon.
 	double dist(rangedUnit->getDistance(target));
@@ -475,24 +498,4 @@ BWAPI::Position Micro::GetKiteVector(BWAPI::Unit unit, BWAPI::Unit target)
     double fleeAngle = atan2(fleeVec.y, fleeVec.x);
     fleeVec = BWAPI::Position(static_cast<int>(64 * cos(fleeAngle)), static_cast<int>(64 * sin(fleeAngle)));
     return fleeVec;
-}
-
-// TODO "Common.h" has double2 with rotate and normalize
-
-const double PI = 3.14159265;
-void Micro::Rotate(double &x, double &y, double angle)
-{
-	angle = angle*PI/180.0;
-	x = (x * cos(angle)) - (y * sin(angle));
-	y = (y * cos(angle)) + (x * sin(angle));
-}
-
-void Micro::Normalize(double &x, double &y)
-{
-	double length = sqrt((x * x) + (y * y));
-	if (length != 0)
-	{
-		x = (x / length);
-		y = (y / length);
-	}
 }

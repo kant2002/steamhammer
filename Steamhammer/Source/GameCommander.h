@@ -67,8 +67,6 @@ public:
     void drawGameInformation(int x, int y);
 	void drawUnitOrders();
 
-	BWAPI::Unit getFirstSupplyProvider();
-	// BWAPI::Unit getClosestUnitToTarget(BWAPI::UnitType type, BWAPI::Position target);
 	BWAPI::Unit getAnyFreeWorker();
 
 	void onUnitShow(BWAPI::Unit unit);

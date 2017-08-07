@@ -6,12 +6,18 @@
 namespace UAlbertaBot
 {
 
-// Next tech target to work toward (not necessarily quickly).
-enum class TechTarget
+// Unit choices for main unit mix and tech target.
+// This deliberately omits support units like queens and defilers.
+enum class TechUnit : int
 	{ None
+	, Zerglings
 	, Hydralisks
+	, Lurkers
 	, Mutalisks
 	, Ultralisks
+	, Guardians
+	, Devourers
+	, Size
 };
 
 class StrategyBossZerg
@@ -27,7 +33,11 @@ class StrategyBossZerg
 	// The target unit mix. If nothing can or should be made, None.
 	BWAPI::UnitType _mineralUnit;
 	BWAPI::UnitType _gasUnit;
-	TechTarget _techTarget;
+	BWAPI::UnitType _auxUnit;
+	int _auxUnitCount;
+
+	// The tech target, what tech to aim for next.
+	TechUnit _techTarget;
 
 	// Target proportion of larvas spent on drones versus combat units.
 	double _economyRatio;
@@ -72,13 +82,16 @@ class StrategyBossZerg
 	int nLings;
 	int nHydras;
 	int nMutas;
+	int nGuardians;
+	int nDevourers;
 
 	// Tech stuff. It has to be completed for the tech to be available.
 	int nEvo;
 	bool hasPool;
 	bool hasDen;
-	bool hasHydraSpeed;
 	bool hasSpire;
+	bool hasGreaterSpire;
+	bool hasLurkers;
 	bool hasQueensNest;
 	bool hasUltra;
 	bool hasUltraUps;
@@ -94,6 +107,9 @@ class StrategyBossZerg
 	int nMineralPatches;  // mineral patches at all our bases
 	int maxDrones;        // maximum reasonable number given nMineralPatches and nGas
 
+	// For choosing the tech target and the unit mix.
+	std::array<int, int(TechUnit::Size)> techScores;
+
 	// Update the resources, unit counts, and related stuff above.
 	void updateSupply();
 	void updateGameState();
@@ -105,26 +121,39 @@ class StrategyBossZerg
 	bool nextInQueueIsUseless(BuildOrderQueue & queue) const;
 
 	void produce(const MacroAct & act);
-	bool needDroneNext();
-	
+	bool needDroneNext() const;
+	BWAPI::UnitType findUnitType(BWAPI::UnitType type) const;
+
 	void makeOverlords(BuildOrderQueue & queue);
 
 	bool takeUrgentAction(BuildOrderQueue & queue);
 	void makeUrgentReaction(BuildOrderQueue & queue);
 
+	bool rebuildCriticalLosses();
+
 	void checkGroundDefenses(BuildOrderQueue & queue);
 	void analyzeExtraDrones();
 
-	bool vProtossGroundOverAir();
-	bool vTerranGroundOverAir();
-	bool vZergGroundOverAir();
-	bool chooseGroundOverAir();
-	void chooseTechTarget(bool groundOverAir);
-	void chooseUnitMix(bool groundOverAir);
+	bool lairTechUnit(TechUnit techUnit) const;
+	bool airTechUnit(TechUnit techUnit) const;
+	bool hiveTechUnit(TechUnit techUnit) const;
+	bool lurkerDenTiming() const;
+	
+	int techTier(TechUnit techUnit) const;
+	void resetTechScores();
+	void setAvailableTechUnits(std::array<bool, int(TechUnit::Size)> & available);
+
+	void vProtossTechScores();
+	void vTerranTechScores();
+	void vZergTechScores();
+	void calculateTechScores();
+	void chooseTechTarget();
+	void chooseUnitMix();
+	void chooseAuxUnit();
 	void chooseEconomyRatio();
 	void chooseStrategy();
 	
-	std::string techTargetToString(TechTarget target);
+	std::string techTargetToString(TechUnit target);
 	void drawStrategyBossInformation();
 
 public:

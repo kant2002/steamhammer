@@ -12,11 +12,6 @@ namespace Config
         extern std::string ConfigFileLocation;
     }
 
-    namespace Modules
-    {
-        extern bool UsingStrategyIO;			
-    }
-    
     namespace BotInfo
     {
         extern std::string BotName;

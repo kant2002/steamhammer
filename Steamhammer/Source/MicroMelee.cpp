@@ -18,13 +18,13 @@ void MicroMelee::assignTargets(const BWAPI::Unitset & targets)
 {
     const BWAPI::Unitset & meleeUnits = getUnits();
 
-	// The set of potential targets.
 	BWAPI::Unitset meleeUnitTargets;
 	for (const auto target : targets) 
 	{
 		if (target->isVisible() &&
 			target->isDetected() &&
 			!target->isFlying() &&
+			target->getPosition().isValid() &&
 			target->getType() != BWAPI::UnitTypes::Zerg_Larva && 
 			target->getType() != BWAPI::UnitTypes::Zerg_Egg &&
 			!target->isStasised() &&
@@ -36,10 +36,14 @@ void MicroMelee::assignTargets(const BWAPI::Unitset & targets)
 
 	for (const auto meleeUnit : meleeUnits)
 	{
-		// if the order is to attack or defend
 		if (order.isCombatOrder()) 
         {
-            // run away if we meet the retreat criterion
+			if (unstickStuckUnit(meleeUnit))
+			{
+				continue;
+			}
+
+			// run away if we meet the retreat criterion
             if (meleeUnitShouldRetreat(meleeUnit, targets))
             {
 				// UAB_ASSERT(meleeUnit->exists(), "bad worker");  // TODO temporary debugging - see Micro::SmartMove
@@ -60,22 +64,21 @@ void MicroMelee::assignTargets(const BWAPI::Unitset & targets)
 				// There are targets. Pick the best one and attack it.
 				// NOTE We *always* choose a target. We can't decide none are worth it and bypass them.
 				//      This causes a lot of needless distraction.
-				BWAPI::Unit target = getBestTarget(meleeUnit, meleeUnitTargets);
+				BWAPI::Unit target = getTarget(meleeUnit, meleeUnitTargets);
 				Micro::SmartAttackUnit(meleeUnit, target);
 			}
 		}
 
 		if (Config::Debug::DrawUnitTargetInfo)
 		{
-			BWAPI::Broodwar->drawLineMap(meleeUnit->getPosition().x, meleeUnit->getPosition().y, 
-				meleeUnit->getTargetPosition().x, meleeUnit->getTargetPosition().y,
+			BWAPI::Broodwar->drawLineMap(meleeUnit->getPosition(), meleeUnit->getTargetPosition(),
 				Config::Debug::ColorLineTarget);
 		}
 	}
 }
 
 // Choose a target from the set. Never return null!
-BWAPI::Unit MicroMelee::getBestTarget(BWAPI::Unit meleeUnit, const BWAPI::Unitset & targets)
+BWAPI::Unit MicroMelee::getTarget(BWAPI::Unit meleeUnit, const BWAPI::Unitset & targets)
 {
 	int bestScore = -999999;
 	BWAPI::Unit bestTarget = nullptr;
@@ -92,7 +95,18 @@ BWAPI::Unit MicroMelee::getBestTarget(BWAPI::Unit meleeUnit, const BWAPI::Unitse
 
 		// Adjust for special features.
 		// This could adjust for relative speed and direction, so that we don't chase what we can't catch.
-		if (!target->isMoving())
+		if (meleeUnit->isInWeaponRange(target))
+		{
+			if (meleeUnit->getType() == BWAPI::UnitTypes::Zerg_Ultralisk)
+			{
+				score += 12 * 32;   // because they're big and awkward
+			}
+			else
+			{
+				score += 2 * 32;
+			}
+		}
+		else if (!target->isMoving())
 		{
 			if (target->isSieged() ||
 				target->getOrder() == BWAPI::Orders::Sieging ||
@@ -139,32 +153,8 @@ BWAPI::Unit MicroMelee::getBestTarget(BWAPI::Unit meleeUnit, const BWAPI::Unitse
 	return bestTarget;
 }
 
-// Choose a target from the set.
-BWAPI::Unit MicroMelee::getTarget(BWAPI::Unit meleeUnit, const BWAPI::Unitset & targets)
-{
-	int highPriority = 0;
-	double closestDist = std::numeric_limits<double>::infinity();
-	BWAPI::Unit closestTarget = nullptr;
-
-	for (auto & unit : targets)
-	{
-		int priority = getAttackPriority(meleeUnit, unit);
-		int distance = meleeUnit->getDistance(unit);
-
-		// if it's a higher priority, or it's closer, set it
-		if (!closestTarget || (priority > highPriority) || (priority == highPriority && distance < closestDist))
-		{
-			closestDist = distance;
-			highPriority = priority;
-			closestTarget = unit;
-		}
-	}
-
-	return closestTarget;
-}
-
 // get the attack priority of a type
-int MicroMelee::getAttackPriority(BWAPI::Unit attacker, BWAPI::Unit target) 
+int MicroMelee::getAttackPriority(BWAPI::Unit attacker, BWAPI::Unit target) const
 {
 	BWAPI::UnitType targetType = target->getType();
 
@@ -214,8 +204,8 @@ int MicroMelee::getAttackPriority(BWAPI::Unit attacker, BWAPI::Unit target)
 	{
 		return 12;
 	}
-	// next priority is bored worker
-	if (targetType.isWorker()) 
+	// next priority is bored workers and turrets
+	if (targetType.isWorker() || targetType == BWAPI::UnitTypes::Terran_Missile_Turret)
 	{
 		return 9;
 	}

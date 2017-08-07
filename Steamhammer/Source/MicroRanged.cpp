@@ -36,6 +36,28 @@ void MicroRanged::assignTargets(const BWAPI::Unitset & targets)
 			continue;
 		}
 
+		// Special case for irradiated zerg air units.
+		if (rangedUnit->isIrradiated() && rangedUnit->getType().getRace() == BWAPI::Races::Zerg)
+		{
+			if (rangedUnit->isFlying())
+			{
+				if (rangedUnit->getDistance(order.getPosition()) < 300)
+				{
+					Micro::SmartAttackMove(rangedUnit, order.getPosition());
+				}
+				else
+				{
+					Micro::SmartMove(rangedUnit, order.getPosition());
+				}
+				continue;
+			}
+			else if (rangedUnit->canBurrow())
+			{
+				rangedUnit->burrow();
+				continue;
+			}
+		}
+
 		// Carriers stay at home until they have enough interceptors to be useful,
 		// or retreat toward home to rebuild them if they run low.
 		// On attack-move so that they're not helpless, but that can cause problems too....
@@ -48,9 +70,13 @@ void MicroRanged::assignTargets(const BWAPI::Unitset & targets)
 			continue;
 		}
 
-		// if the order is to attack or defend
-		if (order.isCombatOrder()) 
+		if (order.isCombatOrder())
         {
+			if (unstickStuckUnit(rangedUnit))
+			{
+				continue;
+			}
+
 			// If a target can be found.
 			BWAPI::Unit target = getTarget(rangedUnit, rangedUnitTargets);
 			if (target)
@@ -77,10 +103,9 @@ void MicroRanged::assignTargets(const BWAPI::Unitset & targets)
 					Micro::SmartAttackUnit(rangedUnit, target);
 				}
 			}
-			// No target was found.
 			else
 			{
-				// if we're not near the order position, go there
+				// No target found. If we're not near the order position, go there.
 				if (rangedUnit->getDistance(order.getPosition()) > 100)
 				{
 					Micro::SmartAttackMove(rangedUnit, order.getPosition());
@@ -90,7 +115,7 @@ void MicroRanged::assignTargets(const BWAPI::Unitset & targets)
 	}
 }
 
-// This can return null if no target is worth attacking, but doesn't happen to.
+// This could return null if no target is worth attacking, but doesn't happen to.
 BWAPI::Unit MicroRanged::getTarget(BWAPI::Unit rangedUnit, const BWAPI::Unitset & targets)
 {
 	int bestScore = -999999;
@@ -139,9 +164,25 @@ BWAPI::Unit MicroRanged::getTarget(BWAPI::Unit rangedUnit, const BWAPI::Unitset 
 		{
 			score += 32;
 		}
-		else if (target->getHitPoints() < target->getType().maxHitPoints())
+		if (target->getHitPoints() < target->getType().maxHitPoints())
 		{
 			score += 24;
+		}
+
+		BWAPI::DamageType damage = UnitUtil::GetWeapon(rangedUnit, target).damageType();
+		if (damage == BWAPI::DamageTypes::Explosive)
+		{
+			if (target->getType().size() == BWAPI::UnitSizeTypes::Large)
+			{
+				score += 32;
+			}
+		}
+		else if (damage == BWAPI::DamageTypes::Concussive)
+		{
+			if (target->getType().size() == BWAPI::UnitSizeTypes::Small)
+			{
+				score += 32;
+			}
 		}
 
 		if (score > bestScore)
@@ -218,7 +259,15 @@ int MicroRanged::getAttackPriority(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 		}
 		if (target->getType().isBuilding())
 		{
-			return 12;
+			// This includes proxy buildings, which deserve high priority.
+			// But when bases are close together, it can include innocent buildings.
+			// We also don't want to disrupt priorities in case of proxy buildings
+			// supported by units; we may want to target the units first.
+			if (UnitUtil::CanAttackGround(target) || UnitUtil::CanAttackAir(target))
+			{
+				return 10;
+			}
+			return 8;
 		}
 	}
     
@@ -244,6 +293,11 @@ int MicroRanged::getAttackPriority(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 		return 12;
 	}
 
+	if (targetType == BWAPI::UnitTypes::Protoss_Reaver)
+	{
+		return 11;
+	}
+
 	// Short circuit: Give bunkers a lower priority to reduce bunker obsession.
 	if (targetType == BWAPI::UnitTypes::Terran_Bunker)
 	{
@@ -254,7 +308,7 @@ int MicroRanged::getAttackPriority(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 	if (UnitUtil::CanAttack(targetType, rangedType) && !targetType.isWorker())
 	{
 		// Enemy unit which is far enough outside its range is lower priority than a worker.
-		if (rangedUnit->getDistance(target) > 64 + UnitUtil::GetAttackRange(target, rangedUnit))
+		if (rangedUnit->getDistance(target) > 48 + UnitUtil::GetAttackRange(target, rangedUnit))
 		{
 			return 8;
 		}
@@ -294,7 +348,6 @@ int MicroRanged::getAttackPriority(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 	}
 	// Important combat units that we may not have targeted above (esp. if we're a flyer).
 	if (targetType == BWAPI::UnitTypes::Protoss_Carrier ||
-		targetType == BWAPI::UnitTypes::Protoss_Reaver || 
 		targetType == BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode ||
 		targetType == BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode)
 	{
@@ -303,7 +356,7 @@ int MicroRanged::getAttackPriority(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 	// Nydus canal is the most important building to kill.
 	if (targetType == BWAPI::UnitTypes::Zerg_Nydus_Canal)
 	{
-		return 8;
+		return 9;
 	}
 	// Spellcasters are as important as key buildings.
 	// Also remember to target other non-threat combat units.

@@ -1,6 +1,7 @@
 #include "Common.h"
 #include "InformationManager.h"
 #include "MapTools.h"
+#include "Random.h"
 #include "UnitUtil.h"
 
 using namespace UAlbertaBot;
@@ -16,10 +17,21 @@ InformationManager::InformationManager()
 	, _enemyHasCloakTech(false)
 	, _enemyHasMobileCloakTech(false)
 	, _enemyHasOverlordHunters(false)
+	, _enemyHasStaticDetection(false)
 	, _enemyHasMobileDetection(_enemy->getRace() == BWAPI::Races::Zerg)
 {
+	initializeTheBases();
 	initializeRegionInformation();
 	initializeNaturalBase();
+}
+
+// This fills in _theBases with neutral bases. An event will place our resourceDepot.
+void InformationManager::initializeTheBases()
+{
+	for (BWTA::BaseLocation * base : BWTA::getBaseLocations())
+	{
+		_theBases[base] = new Base(base->getPosition());
+	}
 }
 
 // Set up _mainBaseLocations and _occupiedLocations.
@@ -32,7 +44,7 @@ void InformationManager::initializeRegionInformation()
 	updateOccupiedRegions(BWTA::getRegion(_mainBaseLocations[_self]->getTilePosition()), _self);
 }
 
-// FIgure out what base is our "natural expansion". In rare cases, there might be none.
+// Figure out what base is our "natural expansion". In rare cases, there might be none.
 // Prerequisite: Call initializeRegionInformation() first.
 void InformationManager::initializeNaturalBase()
 {
@@ -55,10 +67,10 @@ void InformationManager::initializeNaturalBase()
 			continue;
 		}
 
-		// Want to be close to our own base (unless this is to be a hidden base).
-		double distanceFromUs = MapTools::Instance().getGroundDistance(BWAPI::Position(tile), myBasePosition);
+		// Ww want to be close to our own base.
+		double distanceFromUs = MapTools::Instance().getGroundTileDistance(BWAPI::Position(tile), myBasePosition);
 
-		// if it is not connected, continue
+		// If it is not connected, skip it. Islands do this.
 		if (!BWTA::isConnected(homeTile, tile) || distanceFromUs < 0)
 		{
 			continue;
@@ -81,20 +93,19 @@ void InformationManager::initializeNaturalBase()
 	_myNaturalBaseLocation = bestBase;
 }
 
-
 // A base is inferred to exist at the given position, without having been seen.
 // Only enemy bases can be inferred; we see our own.
-// Adjust its BaseStatus to match. It is not reserved.
+// Adjust its value to match. It is not reserved.
 void InformationManager::baseInferred(BWTA::BaseLocation * base)
 {
-	if (_theBases[base].owner != _self)
+	if (_theBases[base]->owner != _self)
 	{
-		_theBases[base] = BaseStatus(nullptr, _enemy, false);
+		_theBases[base]->setOwner(nullptr, _enemy);
 	}
 }
 
 // The given resource depot has been created or discovered.
-// Adjust its BaseStatus to match. It is not reserved.
+// Adjust its value to match. It is not reserved.
 // This accounts for the theoretical case that it might be neutral.
 void InformationManager::baseFound(BWAPI::Unit depot)
 {
@@ -111,31 +122,32 @@ void InformationManager::baseFound(BWAPI::Unit depot)
 	{
 		if (closeEnough(base->getTilePosition(), depot->getTilePosition()))
 		{
-			_theBases[base] = BaseStatus(depot, owner, false);
+			_theBases[base]->setOwner(depot, owner);
 			return;
 		}
 	}
 }
 
 // Something that may be a base was just destroyed.
-// If it is, update the BaseStatus to match.
+// If it is, update the value to match.
+// If the lost base was our main, choose a new one if possible.
 void InformationManager::baseLost(BWAPI::TilePosition basePosition)
 {
 	for (BWTA::BaseLocation * base : BWTA::getBaseLocations())
 	{
 		if (closeEnough(base->getTilePosition(), basePosition))
 		{
-			_theBases[base] = BaseStatus();
+			_theBases[base]->setOwner(nullptr, BWAPI::Broodwar->neutral());
 			if (base == getMyMainBaseLocation())
 			{
-				chooseNewMainBase();        // in case our main was destroyed
+				chooseNewMainBase();        // our main was lost, choose a new one
 			}
 			return;
 		}
 	}
 }
 
-// Our main base has been destroyed. Choose a new one.
+// Our main base has been destroyed. Choose a new one if possible.
 // Otherwise we'll keep trying to build in the old one, where the enemy may still be.
 void InformationManager::chooseNewMainBase()
 {
@@ -148,7 +160,7 @@ void InformationManager::chooseNewMainBase()
 
 	for (BWTA::BaseLocation * base : BWTA::getBaseLocations())
 	{
-		if (_theBases[base].owner == _self)
+		if (_theBases[base]->owner == _self)
 		{
 			double dist = base->getAirDistance(oldMain);
 			if (dist > newMainDist)
@@ -160,9 +172,36 @@ void InformationManager::chooseNewMainBase()
 	}
 
 	// If we didn't find a new main base, we're in deep trouble. We may as well keep the old one.
+	// By decree, we always have a main base, even if it is unoccupied. It simplifies the rest.
 	if (newMain)
 	{
 		_mainBaseLocations[_self] = newMain;
+	}
+}
+
+// With some probability, randomly choose a base as the new "main" base.
+void InformationManager::maybeChooseNewMainBase()
+{
+	// 1. Decide randomly whether to choose a new base.
+	if (Random::Instance().index(2) == 0)
+	{
+		// 2. List my bases.
+		std::vector<BWTA::BaseLocation *> myBases;
+		for (BWTA::BaseLocation * base : BWTA::getBaseLocations())
+		{
+			if (_theBases[base]->owner == _self &&
+				_theBases[base]->resourceDepot &&
+				_theBases[base]->resourceDepot->isCompleted())
+			{
+				 myBases.push_back(base);
+			}
+		}
+
+		// 3. Choose one, if there is a choice.
+		if (myBases.size() > 1)
+		{
+			_mainBaseLocations[_self] = myBases.at(Random::Instance().index(myBases.size()));
+		}
 	}
 }
 
@@ -182,10 +221,10 @@ void InformationManager::maybeAddBase(BWAPI::Unit unit)
 }
 
 // The two possible base positions are close enough together
-// that we can say they are "the same place" for a base.
+// that we can say they are "the same place" as a base.
 bool InformationManager::closeEnough(BWAPI::TilePosition a, BWAPI::TilePosition b)
 {
-	return abs(a.x - b.x) <= 4 && abs(a.y - b.y) <= 4;
+	return abs(a.x - b.x) <= 2 && abs(a.y - b.y) <= 2;
 }
 
 void InformationManager::update()
@@ -196,12 +235,12 @@ void InformationManager::update()
 
 void InformationManager::updateUnitInfo() 
 {
-	for (auto & unit : _enemy->getUnits())
+	for (const auto unit : _enemy->getUnits())
 	{
 		updateUnit(unit);
 	}
 
-	for (auto & unit : _self->getUnits())
+	for (const auto unit : _self->getUnits())
 	{
 		updateUnit(unit);
 	}
@@ -233,10 +272,12 @@ void InformationManager::updateBaseLocationInfo()
 
 				// On a competition map, our base and the enemy base will never be in the same region.
 				// If we find an enemy building in our region, it's a proxy.
-				if (startLocation == getMyMainBaseLocation()) {
+				if (startLocation == getMyMainBaseLocation())
+				{
 					_enemyProxy = true;
 				}
-				else {
+				else
+				{
 					if (Config::Debug::DrawScoutInfo)
 					{
 						BWAPI::Broodwar->printf("Enemy base found by seeing it");
@@ -264,11 +305,11 @@ void InformationManager::updateBaseLocationInfo()
 		}
 
 		// if we've explored every start location except one, it's the enemy
-		if (!baseFound && exploredStartLocations == ((int)BWTA::getStartLocations().size() - 1)) 
+		if (!baseFound && exploredStartLocations + 1 == BWAPI::Broodwar->getStartLocations().size()) 
 		{
             if (Config::Debug::DrawScoutInfo)
             {
-                BWAPI::Broodwar->printf("Enemy base found by process of elimination");
+                BWAPI::Broodwar->printf("Enemy base found by elimination");
             }
 			
 			_mainBaseLocations[_enemy] = unexplored;
@@ -371,7 +412,7 @@ BWTA::BaseLocation * InformationManager::getEnemyMainBaseLocation()
 // Self, enemy, or neutral.
 BWAPI::Player InformationManager::getBaseOwner(BWTA::BaseLocation * base)
 {
-	return _theBases[base].owner;
+	return _theBases[base]->owner;
 }
 
 // If it's the enemy base, the depot will be null if it has not been seen.
@@ -379,7 +420,7 @@ BWAPI::Player InformationManager::getBaseOwner(BWTA::BaseLocation * base)
 // And if not null, the depot may be incomplete.
 BWAPI::Unit InformationManager::getBaseDepot(BWTA::BaseLocation * base)
 {
-	return _theBases[base].resourceDepot;
+	return _theBases[base]->resourceDepot;
 }
 
 // The natural base, whether it is taken or not.
@@ -397,7 +438,7 @@ int InformationManager::getNumBases(BWAPI::Player player)
 
 	for (BWTA::BaseLocation * base : BWTA::getBaseLocations())
 	{
-		if (_theBases[base].owner == player)
+		if (_theBases[base]->owner == player)
 		{
 			++count;
 		}
@@ -413,7 +454,7 @@ int InformationManager::getNumFreeLandBases()
 
 	for (BWTA::BaseLocation * base : BWTA::getBaseLocations())
 	{
-		if (_theBases[base].owner == BWAPI::Broodwar->neutral() && !base->isIsland())
+		if (_theBases[base]->owner == BWAPI::Broodwar->neutral() && !base->isIsland())
 		{
 			++count;
 		}
@@ -430,7 +471,7 @@ int InformationManager::getMyNumMineralPatches()
 
 	for (BWTA::BaseLocation * base : BWTA::getBaseLocations())
 	{
-		if (_theBases[base].owner == _self)
+		if (_theBases[base]->owner == _self)
 		{
 			count += base->getMinerals().size();
 		}
@@ -447,9 +488,9 @@ int InformationManager::getMyNumGeysers()
 
 	for (BWTA::BaseLocation * base : BWTA::getBaseLocations())
 	{
-		BWAPI::Unit depot = _theBases[base].resourceDepot;
+		BWAPI::Unit depot = _theBases[base]->resourceDepot;
 
-		if (_theBases[base].owner == _self &&
+		if (_theBases[base]->owner == _self &&
 			depot &&                // should never be null, but we check anyway
 			(depot->isCompleted() || UnitUtil::IsMorphedBuildingType(depot->getType())))
 		{
@@ -460,35 +501,47 @@ int InformationManager::getMyNumGeysers()
 	return count;
 }
 
-// Current number of completed refineries at all my completed bases.
-// TODO an untraced bug can cause this to falsely return too low a value
-int InformationManager::getMyNumRefineries()
+// Current number of completed refineries at my completed bases,
+// and number of bare geysers available to be taken.
+void InformationManager::getMyGasCounts(int & nRefineries, int & nFreeGeysers)
 {
-	int count = 0;
+	int refineries = 0;
+	int geysers = 0;
 
 	for (BWTA::BaseLocation * base : BWTA::getBaseLocations())
 	{
-		BWAPI::Unit depot = _theBases[base].resourceDepot;
+		BWAPI::Unit depot = _theBases[base]->resourceDepot;
 
-		if (_theBases[base].owner == _self &&
+		if (_theBases[base]->owner == _self &&
 			depot &&                // should never be null, but we check anyway
 			(depot->isCompleted() || UnitUtil::IsMorphedBuildingType(depot->getType())))
 		{
-			for (const auto geyser : base->getGeysers())
+			// Recalculate the base's geysers every time.
+			// This is a slow but accurate way to work around the BWAPI geyser bug.
+			// To save cycles, call findGeysers() only when necessary (e.g. a refinery is destroyed).
+			_theBases[base]->findGeysers();
+
+			for (const auto geyser : _theBases[base]->getGeysers())
 			{
-				if (geyser &&
-					geyser->exists() &&
-					geyser->getPlayer() == _self &&
-					geyser->getType().isRefinery() &&
-					geyser->isCompleted())
+				if (geyser && geyser->exists())
 				{
-					++count;
+					if (geyser->getPlayer() == _self &&
+						geyser->getType().isRefinery() &&
+						geyser->isCompleted())
+					{
+						++refineries;
+					}
+					else if (geyser->getPlayer() == BWAPI::Broodwar->neutral())
+					{
+						++geysers;
+					}
 				}
 			}
 		}
 	}
 
-	return count;
+	nRefineries = refineries;
+	nFreeGeysers = geysers;
 }
 
 int InformationManager::getAir2GroundSupply(BWAPI::Player player) const
@@ -499,7 +552,7 @@ int InformationManager::getAir2GroundSupply(BWAPI::Player player) const
 	{
 		const UnitInfo & ui(kv.second);
 
-		if (ui.type.isFlyer() && ui.type.groundWeapon() != BWAPI::WeaponTypes::None)
+		if (ui.type.isFlyer() && UnitUtil::TypeCanAttackGround(ui.type))
 		{
 			supply += ui.type.supplyRequired();
 		}
@@ -733,7 +786,7 @@ void InformationManager::drawMapInformation()
 		//draw the outlines of vespene geysers
 		for (BWAPI::Unitset::iterator j = (*i)->getGeysers().begin(); j != (*i)->getGeysers().end(); j++)
 		{
-			BWAPI::TilePosition q = (*j)->getInitialTilePosition();
+			BWAPI::TilePosition q = (*j)->getTilePosition();
 			BWAPI::Broodwar->drawBoxMap(q.x * 32, q.y * 32, q.x * 32 + 4 * 32, q.y * 32 + 2 * 32, BWAPI::Colors::Orange);
 		}
 
@@ -784,13 +837,13 @@ void InformationManager::drawBaseInformation(int x, int y)
 		char color = gray;
 
 		char reservedChar = ' ';
-		if (_theBases[base].reserved)
+		if (_theBases[base]->reserved)
 		{
 			reservedChar = '*';
 		}
 
 		char inferredChar = ' ';
-		BWAPI::Player player = _theBases[base].owner;
+		BWAPI::Player player = _theBases[base]->owner;
 		if (player == _self)
 		{
 			color = green;
@@ -798,7 +851,7 @@ void InformationManager::drawBaseInformation(int x, int y)
 		else if (player == _enemy)
 		{
 			color = orange;
-			if (_theBases[base].resourceDepot == nullptr)
+			if (_theBases[base]->resourceDepot == nullptr)
 			{
 				inferredChar = '?';
 			}
@@ -866,15 +919,7 @@ void InformationManager::onUnitDestroy(BWAPI::Unit unit)
 	}
 }
 
-bool InformationManager::isCombatUnit(BWAPI::UnitType type) const
-{
-	return
-		type.canAttack() ||         // NOTE: excludes spellcasters
-		type == BWAPI::UnitTypes::Terran_Medic ||
-		type == BWAPI::UnitTypes::Terran_Bunker ||
-		type.isDetector();
-}
-
+// Only returns units believed to be completed.
 void InformationManager::getNearbyForce(std::vector<UnitInfo> & unitInfo, BWAPI::Position p, BWAPI::Player player, int radius) 
 {
 	// for each unit we know about for that player
@@ -884,7 +929,7 @@ void InformationManager::getNearbyForce(std::vector<UnitInfo> & unitInfo, BWAPI:
 
 		// if it's a combat unit we care about
 		// and it's finished! 
-		if (isCombatUnit(ui.type) && ui.completed)
+		if (UnitUtil::IsCombatSimUnit(ui.type) && ui.completed)
 		{
 			// Determine its attack range, plus a small fudge factor.
 			// TODO find range using the same method as UnitUtil
@@ -922,17 +967,17 @@ const UnitData & InformationManager::getUnitData(BWAPI::Player player) const
 
 bool InformationManager::isBaseReserved(BWTA::BaseLocation * base)
 {
-	return _theBases[base].reserved;
+	return _theBases[base]->reserved;
 }
 
 void InformationManager::reserveBase(BWTA::BaseLocation * base)
 {
-	_theBases[base].reserved = true;
+	_theBases[base]->reserved = true;
 }
 
 void InformationManager::unreserveBase(BWTA::BaseLocation * base)
 {
-	_theBases[base].reserved = false;
+	_theBases[base]->reserved = false;
 }
 
 void InformationManager::unreserveBase(BWAPI::TilePosition baseTilePosition)
@@ -941,7 +986,7 @@ void InformationManager::unreserveBase(BWAPI::TilePosition baseTilePosition)
 	{
 		if (closeEnough(base->getTilePosition(), baseTilePosition))
 		{
-			_theBases[base].reserved = false;
+			_theBases[base]->reserved = false;
 			return;
 		}
 	}
@@ -950,6 +995,7 @@ void InformationManager::unreserveBase(BWAPI::TilePosition baseTilePosition)
 }
 
 // We have complated combat units (excluding workers).
+// This is a latch, initially false and set true forever when we get our first combat units.
 bool InformationManager::weHaveCombatUnits()
 {
 	// Latch: Once we have combat units, pretend we always have them.
@@ -1083,6 +1129,7 @@ bool InformationManager::enemyHasCloakTech()
 			ui.type == BWAPI::UnitTypes::Protoss_Arbiter_Tribunal ||
 			ui.type == BWAPI::UnitTypes::Protoss_Arbiter ||
 			ui.type == BWAPI::UnitTypes::Zerg_Lurker ||
+			ui.type == BWAPI::UnitTypes::Zerg_Lurker_Egg ||
 			ui.unit->isBurrowed())
 		{
 			_enemyHasCloakTech = true;
@@ -1113,7 +1160,8 @@ bool InformationManager::enemyHasMobileCloakTech()
 			ui.type == BWAPI::UnitTypes::Protoss_Templar_Archives ||   // assume DT
 			ui.type == BWAPI::UnitTypes::Protoss_Arbiter_Tribunal ||
 			ui.type == BWAPI::UnitTypes::Protoss_Arbiter ||
-			ui.type == BWAPI::UnitTypes::Zerg_Lurker)
+			ui.type == BWAPI::UnitTypes::Zerg_Lurker ||
+			ui.type == BWAPI::UnitTypes::Zerg_Lurker_Egg)
 		{
 			_enemyHasMobileCloakTech = true;
 			return true;
@@ -1140,8 +1188,10 @@ bool InformationManager::enemyHasOverlordHunters()
 
 		if (ui.type == BWAPI::UnitTypes::Terran_Wraith ||
 			ui.type == BWAPI::UnitTypes::Terran_Valkyrie ||
+			ui.type == BWAPI::UnitTypes::Terran_Battlecruiser ||
 			ui.type == BWAPI::UnitTypes::Protoss_Corsair ||
 			ui.type == BWAPI::UnitTypes::Protoss_Scout ||
+			ui.type == BWAPI::UnitTypes::Protoss_Carrier ||
 			ui.type == BWAPI::UnitTypes::Protoss_Stargate ||
 			ui.type == BWAPI::UnitTypes::Zerg_Spire ||
 			ui.type == BWAPI::UnitTypes::Zerg_Greater_Spire ||
@@ -1149,6 +1199,33 @@ bool InformationManager::enemyHasOverlordHunters()
 			ui.type == BWAPI::UnitTypes::Zerg_Scourge)
 		{
 			_enemyHasOverlordHunters = true;
+			return true;
+		}
+	}
+
+	return false;
+}
+
+// Enemy has spore colonies, photon cannons, turrets, or spider mines.
+// Spider mines only catch cloaked ground units, so this routine is not ideal for countering wraiths.
+bool InformationManager::enemyHasStaticDetection()
+{
+	// Latch: Once they're known to have the tech, they always have it.
+	if (_enemyHasStaticDetection)
+	{
+		return true;
+	}
+
+	for (const auto & kv : getUnitData(_enemy).getUnits())
+	{
+		const UnitInfo & ui(kv.second);
+
+		if (ui.type == BWAPI::UnitTypes::Terran_Missile_Turret ||
+			ui.type == BWAPI::UnitTypes::Terran_Vulture_Spider_Mine ||
+			ui.type == BWAPI::UnitTypes::Protoss_Photon_Cannon ||
+			ui.type == BWAPI::UnitTypes::Zerg_Spore_Colony)
+		{
+			_enemyHasStaticDetection = true;
 			return true;
 		}
 	}

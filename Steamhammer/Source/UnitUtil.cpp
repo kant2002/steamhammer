@@ -13,33 +13,54 @@ bool UnitUtil::IsMorphedBuildingType(BWAPI::UnitType type)
 		type == BWAPI::UnitTypes::Zerg_Greater_Spire;
 }
 
-bool UnitUtil::IsCombatUnit(BWAPI::Unit unit)
+// This is a combat unit for purposes of combat simulation.
+// The combat simulation does not support spellcasters other than medics.
+// It does not support bunkers, reavers, or carriers--but we fake bunkers.
+bool UnitUtil::IsCombatSimUnit(BWAPI::UnitType type)
 {
-    UAB_ASSERT(unit != nullptr, "Unit was null");
-    if (!unit)
-    {
-        return false;
-    }
+	if (type.isWorker())
+	{
+		return false;
+	}
 
+	return
+		type.canAttack() ||            // includes static defense except bunkers, excludes spellcasters
+		type == BWAPI::UnitTypes::Terran_Medic ||
+		type.isDetector();
+}
+
+bool UnitUtil::IsCombatUnit(BWAPI::UnitType type)
+{
     // No workers, buildings, or carrier interceptors (which are not controllable).
-    if (unit->getType().isWorker() ||
-		unit->getType().isBuilding() ||
-		unit->getType() == BWAPI::UnitTypes::Protoss_Interceptor)  // apparently, they canAttack()
+	// Buildings include static defense buildings; they are not put into squads.
+	if (type.isWorker() ||
+		type.isBuilding() ||
+		type == BWAPI::UnitTypes::Protoss_Interceptor)  // apparently, they canAttack()
     {
         return false;
     }
 
-    // check for various types of combat units
-    if (unit->getType().canAttack() ||                            // includes carriers and reavers
-        unit->getType() == BWAPI::UnitTypes::Terran_Medic ||
-        unit->getType() == BWAPI::UnitTypes::Protoss_High_Templar ||
-        unit->getType() == BWAPI::UnitTypes::Protoss_Observer ||
-        unit->isFlying() && unit->getType().spaceProvided() > 0)  // transports
+	if (type.canAttack() ||                             // includes carriers and reavers
+		type.isDetector() ||
+		type == BWAPI::UnitTypes::Terran_Medic ||
+		type == BWAPI::UnitTypes::Protoss_High_Templar ||
+		type.isFlyer() && type.spaceProvided() > 0)     // transports
     {
         return true;
 	}
 
 	return false;
+}
+
+bool UnitUtil::IsCombatUnit(BWAPI::Unit unit)
+{
+	UAB_ASSERT(unit != nullptr, "Unit was null");
+	if (!unit)
+	{
+		return false;
+	}
+
+	return IsCombatUnit(unit->getType());
 }
 
 bool UnitUtil::IsValidUnit(BWAPI::Unit unit)
@@ -54,7 +75,7 @@ bool UnitUtil::IsValidUnit(BWAPI::Unit unit)
 
 bool UnitUtil::CanAttack(BWAPI::Unit attacker, BWAPI::Unit target)
 {
-	return CanAttack(attacker->getType(), target->getType());
+	return target->isFlying() ? TypeCanAttackAir(attacker->getType()) : TypeCanAttackGround(attacker->getType());
 }
 
 // Accounts for cases where units can attack without a weapon of their own.
@@ -70,6 +91,7 @@ bool UnitUtil::CanAttackAir(BWAPI::Unit attacker)
 	return TypeCanAttackAir(attacker->getType());
 }
 
+// Assume that a bunker is loaded and can shoot at air.
 bool UnitUtil::TypeCanAttackAir(BWAPI::UnitType attacker)
 {
 	return attacker.airWeapon() != BWAPI::WeaponTypes::None ||
@@ -85,6 +107,7 @@ bool UnitUtil::CanAttackGround(BWAPI::Unit attacker)
 	return TypeCanAttackGround(attacker->getType());
 }
 
+// Assume that a bunker is loaded and can shoot at ground.
 bool UnitUtil::TypeCanAttackGround(BWAPI::UnitType attacker)
 {
 	return attacker.groundWeapon() != BWAPI::WeaponTypes::None ||
@@ -93,7 +116,6 @@ bool UnitUtil::TypeCanAttackGround(BWAPI::UnitType attacker)
 		attacker == BWAPI::UnitTypes::Protoss_Reaver;
 }
 
-// NOTE Does not understand bunkers, carriers, or reavers.
 // NOTE Unused but potentially useful.
 double UnitUtil::CalculateLTD(BWAPI::Unit attacker, BWAPI::Unit target)
 {
@@ -107,13 +129,40 @@ double UnitUtil::CalculateLTD(BWAPI::Unit attacker, BWAPI::Unit target)
 	return double(weapon.damageAmount()) / weapon.damageCooldown();
 }
 
+// There is no way to handle bunkers here. You have to know what's in it.
 BWAPI::WeaponType UnitUtil::GetWeapon(BWAPI::Unit attacker, BWAPI::Unit target)
 {
-	return target->isFlying() ? attacker->getType().airWeapon() : attacker->getType().groundWeapon();
+	return GetWeapon(attacker->getType(), target);
 }
 
+// Handle carriers and reavers correctly in the case of floating buildings.
+// We have to check unit->isFlying() because unitType->isFlyer() is not correct
+// for a lifted terran building.
+// There is no way to handle bunkers here. You have to know what's in it.
+BWAPI::WeaponType UnitUtil::GetWeapon(BWAPI::UnitType attacker, BWAPI::Unit target)
+{
+	if (attacker == BWAPI::UnitTypes::Protoss_Carrier)
+	{
+		return GetWeapon(BWAPI::UnitTypes::Protoss_Interceptor, target);
+	}
+	if (attacker == BWAPI::UnitTypes::Protoss_Reaver)
+	{
+		return GetWeapon(BWAPI::UnitTypes::Protoss_Scarab, target);
+	}
+	return target->isFlying() ? attacker.airWeapon() : attacker.groundWeapon();
+}
+
+// There is no way to handle bunkers here. You have to know what's in it.
 BWAPI::WeaponType UnitUtil::GetWeapon(BWAPI::UnitType attacker, BWAPI::UnitType target)
 {
+	if (attacker == BWAPI::UnitTypes::Protoss_Carrier)
+	{
+		return GetWeapon(BWAPI::UnitTypes::Protoss_Interceptor, target);
+	}
+	if (attacker == BWAPI::UnitTypes::Protoss_Reaver)
+	{
+		return GetWeapon(BWAPI::UnitTypes::Protoss_Scarab, target);
+	}
 	return target.isFlyer() ? attacker.airWeapon() : attacker.groundWeapon();
 }
 
@@ -237,9 +286,9 @@ int UnitUtil::GetAttackRangeAssumingUpgrades(BWAPI::UnitType attacker, BWAPI::Un
 }
 
 // All our units, whether completed or not.
-size_t UnitUtil::GetAllUnitCount(BWAPI::UnitType type)
+int UnitUtil::GetAllUnitCount(BWAPI::UnitType type)
 {
-    size_t count = 0;
+    int count = 0;
     for (const auto unit : BWAPI::Broodwar->self()->getUnits())
     {
         // trivial case: unit which exists matches the type
@@ -270,9 +319,9 @@ size_t UnitUtil::GetAllUnitCount(BWAPI::UnitType type)
 }
 
 // Only our completed units.
-size_t UnitUtil::GetCompletedUnitCount(BWAPI::UnitType type)
+int UnitUtil::GetCompletedUnitCount(BWAPI::UnitType type)
 {
-	size_t count = 0;
+	int count = 0;
 	for (const auto unit : BWAPI::Broodwar->self()->getUnits())
 	{
 		if (unit->getType() == type && unit->isCompleted())

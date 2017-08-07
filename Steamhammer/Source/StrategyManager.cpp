@@ -20,11 +20,6 @@ StrategyManager & StrategyManager::Instance()
 	return instance;
 }
 
-const int StrategyManager::getScore(BWAPI::Player player) const
-{
-	return player->getBuildingScore() + player->getKillScore() + player->getRazingScore() + player->getUnitScore();
-}
-
 const BuildOrder & StrategyManager::getOpeningBookBuildOrder() const
 {
     auto buildOrderIt = _strategies.find(Config::Strategy::StrategyName);
@@ -283,6 +278,8 @@ const MetaPairVector StrategyManager::getTerranBuildOrderGoal()
 
 	int maxSCVs = WorkerManager::Instance().getMaxWorkers();
 
+	bool makeVessel = false;
+
 	BWAPI::Player self = BWAPI::Broodwar->self();
 
 	if (_openingGroup == "anti-rush")
@@ -351,6 +348,36 @@ const MetaPairVector StrategyManager::getTerranBuildOrderGoal()
 				goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Terran_Infantry_Armor, 1));
 			}
 		}
+
+		// Add in tanks if they're useful.
+		int enemiesCounteredByTanks =
+			InformationManager::Instance().getNumUnits(BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode, BWAPI::Broodwar->enemy()) +
+			InformationManager::Instance().getNumUnits(BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode, BWAPI::Broodwar->enemy()) +
+			InformationManager::Instance().getNumUnits(BWAPI::UnitTypes::Protoss_Dragoon, BWAPI::Broodwar->enemy()) +
+			InformationManager::Instance().getNumUnits(BWAPI::UnitTypes::Zerg_Lurker, BWAPI::Broodwar->enemy());
+		bool enemyHasStaticDefense =
+			InformationManager::Instance().getNumUnits(BWAPI::UnitTypes::Terran_Bunker, BWAPI::Broodwar->enemy()) > 0 ||
+			InformationManager::Instance().getNumUnits(BWAPI::UnitTypes::Protoss_Photon_Cannon, BWAPI::Broodwar->enemy()) > 0 ||
+			InformationManager::Instance().getNumUnits(BWAPI::UnitTypes::Zerg_Sunken_Colony, BWAPI::Broodwar->enemy()) > 0;
+		if (enemiesCounteredByTanks > 0 || enemyHasStaticDefense)
+		{
+			int nTanksWanted;
+			if (enemiesCounteredByTanks > 0)
+			{
+				nTanksWanted = std::min(numMarines / 4, enemiesCounteredByTanks);
+				nTanksWanted = std::min(nTanksWanted, numTanks + 2);
+			}
+			else
+			{
+				nTanksWanted = numTanks;
+				if (numTanks < 2)
+				{
+					nTanksWanted = numTanks + 1;
+				}
+			}
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode, nTanksWanted));
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::TechTypes::Tank_Siege_Mode, 1));
+		}
     }
 	else if (_openingGroup == "vultures")
     {
@@ -381,7 +408,7 @@ const MetaPairVector StrategyManager::getTerranBuildOrderGoal()
 		if (self->hasResearched(BWAPI::TechTypes::Tank_Siege_Mode))
 		{
 			// Maintain 1 vessel to spot for the tanks.
-			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Science_Vessel, 1));
+			makeVessel = true;
 		}
     }
 	else if (_openingGroup == "drop")
@@ -419,6 +446,11 @@ const MetaPairVector StrategyManager::getTerranBuildOrderGoal()
 		goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Comsat_Station, UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Terran_Command_Center)));
 	}
 
+	if (makeVessel || InformationManager::Instance().enemyHasCloakTech())
+	{
+		goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Science_Vessel, 1));
+	}
+
 	if (hasArmory &&
 		self->getUpgradeLevel(BWAPI::UpgradeTypes::Terran_Vehicle_Weapons) == 0 &&
 		!self->isUpgrading(BWAPI::UpgradeTypes::Terran_Vehicle_Weapons))
@@ -426,10 +458,10 @@ const MetaPairVector StrategyManager::getTerranBuildOrderGoal()
 		goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Terran_Vehicle_Weapons, 1));
 	}
 
-	// Make more SCVs, up to a limit.
+	// Make more SCVs, up to a limit. The anti-rush strategy makes its own SCVs.
 	if (_openingGroup != "anti-rush")
 	{
-		goal.push_back(MetaPair(BWAPI::UnitTypes::Terran_SCV, std::min(maxSCVs, numSCVs + 6)));
+		goal.push_back(MetaPair(BWAPI::UnitTypes::Terran_SCV, std::min(maxSCVs, numSCVs + 2 * numCC)));
 	}
 
 	if (shouldExpandNow())
@@ -457,180 +489,23 @@ const MetaPairVector StrategyManager::getZergBuildOrderGoal() const
 
 	const int droneMax = 48;             // number of drones not to exceed
 
-	// Simple default strategy in case you want to use this method.
+	// Simple default strategy as an example in case you want to use this method.
 	goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Hydralisk, nHydras + 12));
-	goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Muscular_Augments, 1));
-	goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Grooved_Spines, 1));
-	goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 2)));
 	if (shouldExpandNow())
 	{
 		goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Hatchery, nHatches + 1));
 		goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 10)));
 	}
+	else
+	{
+		goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Zerg_Drone, std::min(droneMax, nDrones + 2)));
+	}
 
 	return goal;
 }
-
-void StrategyManager::readResults()
-{
-    if (!Config::Modules::UsingStrategyIO)
-    {
-        return;
-    }
-
-    std::string enemyName = BWAPI::Broodwar->enemy()->getName();
-    std::replace(enemyName.begin(), enemyName.end(), ' ', '_');
-
-    std::string enemyResultsFile = Config::Strategy::ReadDir + enemyName + ".txt";
-    
-    std::string strategyName;
-    int wins = 0;
-    int losses = 0;
-
-    FILE *file = fopen ( enemyResultsFile.c_str(), "r" );
-    if ( file != nullptr )
-    {
-        char line [ 4096 ]; /* or other suitable maximum line size */
-        while ( fgets ( line, sizeof line, file ) != nullptr ) /* read a line */
-        {
-            std::stringstream ss(line);
-
-            ss >> strategyName;
-            ss >> wins;
-            ss >> losses;
-
-            //BWAPI::Broodwar->printf("Results Found: %s %d %d", strategyName.c_str(), wins, losses);
-
-            if (_strategies.find(strategyName) == _strategies.end())
-            {
-                //BWAPI::Broodwar->printf("Warning: Results file has unknown Strategy: %s", strategyName.c_str());
-            }
-            else
-            {
-                _strategies[strategyName]._wins = wins;
-                _strategies[strategyName]._losses = losses;
-            }
-        }
-
-        fclose ( file );
-    }
-    else
-    {
-        //BWAPI::Broodwar->printf("No results file found: %s", enemyResultsFile.c_str());
-    }
-}
-
-void StrategyManager::writeResults()
-{
-    if (!Config::Modules::UsingStrategyIO)
-    {
-        return;
-    }
-
-    std::string enemyName = BWAPI::Broodwar->enemy()->getName();
-    std::replace(enemyName.begin(), enemyName.end(), ' ', '_');
-
-    std::string enemyResultsFile = Config::Strategy::WriteDir + enemyName + ".txt";
-
-    std::stringstream ss;
-
-    for (auto & kv : _strategies)
-    {
-        const Strategy & strategy = kv.second;
-
-        ss << strategy._name << " " << strategy._wins << " " << strategy._losses << "\n";
-    }
-
-    Logger::LogOverwriteToFile(enemyResultsFile, ss.str());
-}
-
 void StrategyManager::onEnd(const bool isWinner)
 {
-    if (!Config::Modules::UsingStrategyIO)
-    {
-        return;
-    }
-
-    if (isWinner)
-    {
-        _strategies[Config::Strategy::StrategyName]._wins++;
-    }
-    else
-    {
-        _strategies[Config::Strategy::StrategyName]._losses++;
-    }
-
-    writeResults();
-}
-
-void StrategyManager::setLearnedStrategy()
-{
-    // we are currently not using this functionality for the competition so turn it off 
-    return;
-
-    if (!Config::Modules::UsingStrategyIO)
-    {
-        return;
-    }
-
-    const std::string & strategyName = Config::Strategy::StrategyName;
-    Strategy & currentStrategy = _strategies[strategyName];
-
-    int totalGamesPlayed = 0;
-    int strategyGamesPlayed = currentStrategy._wins + currentStrategy._losses;
-    double winRate = strategyGamesPlayed > 0 ? currentStrategy._wins / static_cast<double>(strategyGamesPlayed) : 0;
-
-    // if we are using an enemy specific strategy
-    if (Config::Strategy::FoundEnemySpecificStrategy)
-    {        
-        return;
-    }
-
-    // if our win rate with the current strategy is super high don't explore at all
-    // also we're pretty confident in our base strategies so don't change if insufficient games have been played
-    if (strategyGamesPlayed < 5 || (strategyGamesPlayed > 0 && winRate > 0.49))
-    {
-        BWAPI::Broodwar->printf("Still using default strategy");
-        return;
-    }
-
-    // get the total number of games played so far with this race
-    for (auto & kv : _strategies)
-    {
-        Strategy & strategy = kv.second;
-		if (strategy._race == _selfRace)
-        {
-            totalGamesPlayed += strategy._wins + strategy._losses;
-        }
-    }
-
-    // calculate the UCB value and store the highest
-    double C = 0.5;
-    std::string bestUCBStrategy;
-    double bestUCBStrategyVal = std::numeric_limits<double>::lowest();
-    for (auto & kv : _strategies)
-    {
-        Strategy & strategy = kv.second;
-		if (strategy._race != _selfRace)
-        {
-            continue;
-        }
-
-        int sGamesPlayed = strategy._wins + strategy._losses;
-		// TODO looks like an error: dividing by a number that is not the one tested
-        double sWinRate = sGamesPlayed > 0 ? currentStrategy._wins / static_cast<double>(strategyGamesPlayed) : 0;
-		// TODO looks like an error: and then dividing by a number that is not tested
-		double ucbVal = C * sqrt(log((double)totalGamesPlayed / sGamesPlayed));
-        double val = sWinRate + ucbVal;
-
-        if (val > bestUCBStrategyVal)
-        {
-            bestUCBStrategy = strategy._name;
-            bestUCBStrategyVal = val;
-        }
-    }
-
-    Config::Strategy::StrategyName = bestUCBStrategy;
+	// Nothing here for now.
 }
 
 void StrategyManager::handleUrgentProductionIssues(BuildOrderQueue & queue)

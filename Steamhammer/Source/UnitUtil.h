@@ -9,6 +9,8 @@ namespace UnitUtil
 {      
 	bool IsMorphedBuildingType(BWAPI::UnitType unitType);
 	
+	bool IsCombatSimUnit(BWAPI::UnitType type);
+	bool IsCombatUnit(BWAPI::UnitType type);
 	bool IsCombatUnit(BWAPI::Unit unit);
     bool IsValidUnit(BWAPI::Unit unit);
     
@@ -20,11 +22,12 @@ namespace UnitUtil
 	bool TypeCanAttackGround(BWAPI::UnitType attacker);
 	double CalculateLTD(BWAPI::Unit attacker, BWAPI::Unit target);
 	BWAPI::WeaponType GetWeapon(BWAPI::Unit attacker, BWAPI::Unit target);
+	BWAPI::WeaponType GetWeapon(BWAPI::UnitType attacker, BWAPI::Unit target);
 	BWAPI::WeaponType GetWeapon(BWAPI::UnitType attacker, BWAPI::UnitType target);
 	int GetAttackRange(BWAPI::Unit attacker, BWAPI::Unit target);
 	int GetAttackRangeAssumingUpgrades(BWAPI::UnitType attacker, BWAPI::UnitType target);
 	
-	size_t GetAllUnitCount(BWAPI::UnitType type);
-	size_t GetCompletedUnitCount(BWAPI::UnitType type);
+	int GetAllUnitCount(BWAPI::UnitType type);
+	int GetCompletedUnitCount(BWAPI::UnitType type);
 };
 }

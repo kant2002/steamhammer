@@ -42,7 +42,7 @@ void BuildingManager::validateWorkersAndBuildings()
 			b.buildingUnit->getHitPoints() <= 0 ||
 			!b.buildingUnit->getType().isBuilding())
         {
-            toRemove.push_back(b);
+			toRemove.push_back(b);
         }
     }
 
@@ -62,10 +62,6 @@ void BuildingManager::assignWorkersToUnassignedBuildings()
         }
 
 		// BWAPI::Broodwar->printf("Assigning Worker To: %s", b.type.getName().c_str());
-
-        // TODO: special case of terran building whose worker died mid construction
-        //       send the right click command to the buildingUnit to resume construction
-        //		 skip the buildingsAssigned step and push it back into buildingsUnderConstruction
 
         BWAPI::TilePosition testLocation = getBuildingLocation(b);
         if (!testLocation.isValid())
@@ -118,9 +114,9 @@ void BuildingManager::constructAssignedBuildings()
         else */
 		if (!b.builderUnit->isConstructing())
         {
-            // if we haven't explored the build position, go there
-            if (!isBuildingPositionExplored(b))
+			if (!isBuildingPositionExplored(b))
             {
+				// We haven't explored the build position. Go there.
 				Micro::SmartMove(b.builderUnit, BWAPI::Position(b.finalPosition));
             }
             // if this is not the first time we've sent this guy to build this
@@ -140,14 +136,9 @@ void BuildingManager::constructAssignedBuildings()
 			}
             else
             {
-				// Issue the build order!
+				// Issue the build order and record whether it succeeded.
 				// If the builderUnit is zerg, it changes to !exists() when it builds.
-				bool success = b.builderUnit->build(b.type, b.finalPosition);
-
-				if (success)
-				{
-					b.buildCommandGiven = true;
-				}
+				b.buildCommandGiven = b.builderUnit->build(b.type, b.finalPosition);
            }
         }
     }
@@ -157,7 +148,7 @@ void BuildingManager::constructAssignedBuildings()
 void BuildingManager::checkForStartedConstruction()
 {
     // for each building unit which is being constructed
-    for (auto & buildingStarted : BWAPI::Broodwar->self()->getUnits())
+    for (const auto buildingStarted : BWAPI::Broodwar->self()->getUnits())
     {
         // filter out units which aren't buildings under construction
         if (!buildingStarted->getType().isBuilding() || !buildingStarted->isBeingConstructed())
@@ -345,9 +336,9 @@ int BuildingManager::getReservedGas() const
 }
 
 // In the building queue with any status.
-bool BuildingManager::isBeingBuilt(BWAPI::UnitType type)
+bool BuildingManager::isBeingBuilt(BWAPI::UnitType type) const
 {
-	for (auto & b : _buildings)
+	for (const auto & b : _buildings)
 	{
 		if (b.type == type)
 		{
@@ -358,6 +349,22 @@ bool BuildingManager::isBeingBuilt(BWAPI::UnitType type)
 	return false;
 }
 
+// Number in the building queue with status other than "under constrution".
+size_t BuildingManager::getNumUnstarted(BWAPI::UnitType type) const
+{
+	size_t count = 0;
+
+	for (const auto & b : _buildings)
+	{
+		if (b.type == type && b.status != BuildingStatus::UnderConstruction)
+		{
+			++count;
+		}
+	}
+
+	return count;
+}
+
 void BuildingManager::drawBuildingInformation(int x, int y)
 {
     if (!Config::Debug::DrawBuildingInfo)
@@ -365,13 +372,13 @@ void BuildingManager::drawBuildingInformation(int x, int y)
         return;
     }
 
-    for (auto & unit : BWAPI::Broodwar->self()->getUnits())
+    for (const auto &unit : BWAPI::Broodwar->self()->getUnits())
     {
         BWAPI::Broodwar->drawTextMap(unit->getPosition().x,unit->getPosition().y+5,"\x07%d",unit->getID());
     }
 
 	//for (auto geyser : BWAPI::Broodwar->getStaticGeysers())
-	for (auto geyser : BWAPI::Broodwar->getAllUnits())
+	for (const auto geyser : BWAPI::Broodwar->getAllUnits())
 	{
 		if (geyser->getType() == BWAPI::UnitTypes::Resource_Vespene_Geyser)
 		{
@@ -384,14 +391,6 @@ void BuildingManager::drawBuildingInformation(int x, int y)
     BWAPI::Broodwar->drawTextScreen(x+150,y+20,"\x04 State");
 
     int yspace = 0;
-
-	//for (auto geyser : BWAPI::Broodwar->getStaticGeysers())
-	//{
-	//	char exists = geyser->exists() ? 'e' : '-';
-	//	char visible = geyser->isVisible() ? 'v' : '-';
-		// BWAPI::Broodwar->drawTextScreen(x, y, "\x07%d @ %d, %d %c%c", geyser->getType(), geyser->getInitialTilePosition().x, geyser->getInitialTilePosition().y, exists, visible);
-	//	y += 10;
-	//}
 
 	for (const auto & b : _buildings)
     {
@@ -517,9 +516,9 @@ BWAPI::TilePosition BuildingManager::getBuildingLocation(const Building & b)
         UAB_ASSERT(enemyBaseLocation,"Should find enemy base before gas steal");
         UAB_ASSERT(enemyBaseLocation->getGeysers().size() > 0,"Should have spotted an enemy geyser");
 
-        for (auto & unit : enemyBaseLocation->getGeysers())
+        for (const auto unit : enemyBaseLocation->getGeysers())
         {
-            return BWAPI::TilePosition(unit->getInitialTilePosition());
+            return BWAPI::TilePosition(unit->getTilePosition());
         }
     }
 

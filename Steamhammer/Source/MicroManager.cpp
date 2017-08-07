@@ -1,5 +1,6 @@
 #include "MicroManager.h"
 #include "MapTools.h"
+#include "UnitUtil.h"
 
 using namespace UAlbertaBot;
 
@@ -48,18 +49,27 @@ void MicroManager::execute(const SquadOrder & inputOrder)
 		return;
 	}
 
-	// Discover enemies within region of interest.
+	// Discover enemies within the region of interest.
 	BWAPI::Unitset nearbyEnemies;
 
 	// Always include enemies in the radius of the order.
 	MapGrid::Instance().GetUnits(nearbyEnemies, order.getPosition(), order.getRadius(), false, true);
 
-	// For attack but not defense, also include enemies near our units.
+	// For some orders, add enemies which are near our units, for different versions of "near".
 	if (order.getType() == SquadOrderTypes::Attack)
 	{
 		for (const auto unit : _units) 
 		{
 			MapGrid::Instance().GetUnits(nearbyEnemies, unit->getPosition(), unit->getType().sightRange(), false, true);
+		}
+	}
+	else if (order.getType() == SquadOrderTypes::Defend)
+	{
+		// Without this, defending units which are far from the base they are to defend will be
+		// assigned targets at the base, so they'll run blindly into enemies that are in the way.
+		for (const auto unit : _units)
+		{
+			MapGrid::Instance().GetUnits(nearbyEnemies, unit->getPosition(), 4 * 32, false, true);
 		}
 	}
 
@@ -86,22 +96,20 @@ bool MicroManager::containsType(BWAPI::UnitType type) const
 
 void MicroManager::regroup(const BWAPI::Position & regroupPosition) const
 {
-    BWAPI::Position ourBasePosition = BWAPI::Position(InformationManager::Instance().getMyMainBaseLocation()->getPosition());
-    int regroupDistanceFromBase = MapTools::Instance().getGroundDistance(regroupPosition, ourBasePosition);
-
 	for (const auto unit : _units)
 	{
-        int unitDistanceFromBase = MapTools::Instance().getGroundDistance(unit->getPosition(), ourBasePosition);
-
 		// 1. A broodling should never retreat, but attack as long as it lives.
-		// 2. A unit next to a sieged tank should not move away.
-		// TODO 3. A unit in stay-home mode should stay home, not "regroup" away from home.
-		// TODO 4. A unit whose retreat path is blocked by enemies should do something else, at least attack-move.
+		// 2. If none of its kind has died yet, a dark templar or lurker should not retreat.
+		// 3. A ground unit next to an enemy sieged tank should not move away.
+		// TODO 4. A unit in stay-home mode should stay home, not "regroup" away from home.
+		// TODO 5. A unit whose retreat path is blocked by enemies should do something else, at least attack-move.
 		if (buildScarabOrInterceptor(unit))
 		{
 			// We're done for this frame.
 		}
 		else if (unit->getType() == BWAPI::UnitTypes::Zerg_Broodling ||
+			unit->getType() == BWAPI::UnitTypes::Protoss_Dark_Templar && BWAPI::Broodwar->self()->deadUnitCount(BWAPI::UnitTypes::Protoss_Dark_Templar) == 0 ||
+			unit->getType() == BWAPI::UnitTypes::Zerg_Lurker && BWAPI::Broodwar->self()->deadUnitCount(BWAPI::UnitTypes::Zerg_Lurker) == 0 ||
 			(BWAPI::Broodwar->enemy()->getRace() == BWAPI::Races::Terran &&
 			!unit->isFlying() &&
 			 BWAPI::Broodwar->getClosestUnit(unit->getPosition(),
@@ -110,17 +118,20 @@ void MicroManager::regroup(const BWAPI::Position & regroupPosition) const
 		{
 			Micro::SmartAttackMove(unit, unit->getPosition());
 		}
-		else if (unitDistanceFromBase > regroupDistanceFromBase)
-        {
-            Micro::SmartMove(unit, ourBasePosition);
-        }
-		else if (unit->getDistance(regroupPosition) > 96)
+		else if (unit->getDistance(regroupPosition) > 96)   // air distance, which can be unhelpful sometimes
 		{
-			Micro::SmartMove(unit, regroupPosition);
+			if (!mobilizeUnit(unit))
+			{
+				Micro::SmartMove(unit, regroupPosition);
+			}
 		}
 		else
 		{
-			Micro::SmartAttackMove(unit, unit->getPosition());
+			// We have retreated to a good position.
+			if (!immobilizeUnit(unit))
+			{
+				Micro::SmartAttackMove(unit, unit->getPosition());
+			}
 		}
 	}
 }
@@ -160,7 +171,7 @@ bool MicroManager::unitNearEnemy(BWAPI::Unit unit)
 // returns true if position:
 // a) is walkable
 // b) doesn't have buildings on it
-// c) doesn't have a unit on it that can attack ground
+// c) isn't blocked by an enemy unit that can attack ground
 // NOTE Unused code, a candidate for throwing out.
 bool MicroManager::checkPositionWalkable(BWAPI::Position pos) 
 {
@@ -176,10 +187,11 @@ bool MicroManager::checkPositionWalkable(BWAPI::Position pos)
 	// for each of those units, if it's a building or an attacking enemy unit we don't want to go there
 	for (const auto unit : BWAPI::Broodwar->getUnitsOnTile(x/32, y/32)) 
 	{
-		if	(unit->getType().isBuilding() || unit->getType().isResourceContainer() || 
-			(unit->getPlayer() != BWAPI::Broodwar->self() && unit->getType().groundWeapon() != BWAPI::WeaponTypes::None)) 
+		if	(unit->getType().isBuilding() ||
+			unit->getType().isResourceContainer() || 
+			!unit->isFlying() && unit->getPlayer() != BWAPI::Broodwar->self() && UnitUtil::CanAttackGround(unit)) 
 		{		
-				return false;
+			return false;
 		}
 	}
 
@@ -195,6 +207,55 @@ bool MicroManager::unitNearChokepoint(BWAPI::Unit unit) const
 		{
 			return true;
 		}
+	}
+
+	return false;
+}
+
+// Mobilize the unit if it is immobile: A sieged tank or a burrowed zerg unit.
+// Return whether any action was taken.
+bool MicroManager::mobilizeUnit(BWAPI::Unit unit) const
+{
+	if (unit->getType() == BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode && unit->canUnsiege())
+	{
+		return unit->unsiege();
+	}
+	if (unit->isBurrowed() && unit->canUnburrow() &&
+		!unit->isIrradiated() &&
+		(double(unit->getType().maxHitPoints()) / double(unit->getHitPoints()) < 6.25))  // very weak units stay burrowed
+	{
+		return unit->unburrow();
+	}
+	return false;
+}
+
+// Immobilixe the unit: Siege a tank, burrow a lurker. Otherwise do nothing.
+// Return whether any action was taken.
+bool MicroManager::immobilizeUnit(BWAPI::Unit unit) const
+{
+	if (unit->getType() == BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode && unit->canSiege())
+	{
+		return unit->siege();
+	}
+	if (unit->canBurrow() &&
+		(unit->getType() == BWAPI::UnitTypes::Zerg_Lurker || unit->isIrradiated()))
+	{
+		return unit->burrow();
+	}
+	return false;
+}
+
+// Sometimes a unit on ground attack-move freezes in place.
+// Luckily it's easy to recognize, though units may be on PlayerGuard for other reasons.
+// Return whether any action was taken.
+bool MicroManager::unstickStuckUnit(BWAPI::Unit unit)
+{
+	if (!unit->isMoving() && !unit->getType().isFlyer() && !unit->isBurrowed() &&
+		unit->getOrder() == BWAPI::Orders::PlayerGuard &&
+		BWAPI::Broodwar->getFrameCount() % 4 == 0)
+	{
+		Micro::SmartStop(unit);
+		return true;
 	}
 
 	return false;

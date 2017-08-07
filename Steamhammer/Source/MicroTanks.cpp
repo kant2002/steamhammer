@@ -65,11 +65,12 @@ void MicroTanks::executeMicro(const BWAPI::Unitset & targets)
 				if (target &&
 					tank->getDistance(target) < siegeTankRange &&
 					shouldSiege &&
+					!shouldUnsiege &&
 					tank->canSiege())
                 {
                     tank->siege();
                 }
-                else if ((!target || tank->getDistance(target) > siegeTankRange || shouldUnsiege) && tank->canUnsiege())
+				else if (tank->canUnsiege() && (!target || tank->getDistance(target) > siegeTankRange || shouldUnsiege))
                 {
                     tank->unsiege();
                 }
@@ -106,17 +107,11 @@ void MicroTanks::executeMicro(const BWAPI::Unitset & targets)
 
 BWAPI::Unit MicroTanks::getTarget(BWAPI::Unit tank, const BWAPI::Unitset & targets)
 {
-	int bestPriorityDistance = 1000000;
-    int bestPriority = 0;
-    
-	BWAPI::Unit bestTargetThreatInRange = nullptr;
-    double bestTargetThreatInRangeLTD = 0;
-    
     int highPriority = 0;
 	int closestDist = 99999;
 	BWAPI::Unit closestTarget = nullptr;
 
-    int siegeTankRange = BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode.groundWeapon().maxRange() - 32;
+    int siegeTankRange = BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode.groundWeapon().maxRange() - 8;
     BWAPI::Unitset targetsInSiegeRange;
     for (const auto target : targets)
     {
@@ -137,8 +132,8 @@ BWAPI::Unit MicroTanks::getTarget(BWAPI::Unit tank, const BWAPI::Unitset & targe
             continue;
         }
 
-        int distance			= tank->getDistance(target);
-        int priority            = getAttackPriority(tank, target);
+        int distance = tank->getDistance(target);
+        int priority = getAttackPriority(tank, target);
 
 		if (!closestTarget || (priority > highPriority) || (priority == highPriority && distance < closestDist))
 		{
@@ -146,11 +141,6 @@ BWAPI::Unit MicroTanks::getTarget(BWAPI::Unit tank, const BWAPI::Unitset & targe
 			highPriority = priority;
 			closestTarget = target;
 		}       
-    }
-
-    if (bestTargetThreatInRange)
-    {
-        return bestTargetThreatInRange;
     }
 
     return closestTarget;

@@ -10,7 +10,7 @@
 namespace UAlbertaBot
 {
 
-enum class ExtractorTrick { None, Start, ExtractorOrdered, DroneOrdered };
+enum class ExtractorTrick { None, Start, ExtractorOrdered, UnitOrdered, MakeUnitBypass };
 
 class ProductionManager
 {
@@ -19,22 +19,22 @@ class ProductionManager
     BuildOrderQueue     _queue;
 	int					_lastProductionFrame;            // for detecting jams
     BWAPI::TilePosition _predictedTilePosition;
-    bool                _assignedWorkerForThisBuilding;
+    BWAPI::Unit         _assignedWorkerForThisBuilding;
     bool                _haveLocationForThisBuilding;
 	int					_delayBuildingPredictionUntilFrame;
 	bool				_outOfBook;                      // production queue is beyond the opening book
 	int					_targetGasAmount;                // for "go gas until <n>"; set to 0 if no target
 	ExtractorTrick		_extractorTrickState;
+	BWAPI::UnitType		_extractorTrickUnitType;         // drone or zergling
 	Building *			_extractorTrickBuilding;         // set depending on the extractor trick state
     
     BWAPI::Unit         getClosestUnitToPosition(const BWAPI::Unitset & units,BWAPI::Position closestTo);
 	BWAPI::Unit         getFarthestUnitFromPosition(const BWAPI::Unitset & units, BWAPI::Position farthest);
 	BWAPI::Unit         getClosestLarvaToPosition(BWAPI::Position closestTo);
-	BWAPI::Unit         selectUnitOfType(BWAPI::UnitType type, BWAPI::Position closestTo = BWAPI::Position(0, 0));
 	
-	void				executeCommand(MacroAct act);
+	void				executeCommand(MacroCommand command);
     bool                meetsReservedResources(MacroAct type);
-    void                create(BWAPI::Unit producer,BuildOrderItem & item);
+    void                create(BWAPI::Unit producer,const BuildOrderItem & item);
     void                manageBuildOrderQueue();
     bool                canMakeNow(BWAPI::Unit producer,MacroAct t);
     void                predictWorkerMovement(const Building & b);
@@ -57,7 +57,9 @@ public:
 	void	onUnitDestroy(BWAPI::Unit unit);
 	void	drawProductionInformation(int x, int y);
 	void	queueGasSteal();
-	void	startExtractorTrick();
+	void	startExtractorTrick(BWAPI::UnitType type);
+
+	bool	nextIsBuilding() const;
 
 	void	goOutOfBook();
 	bool	isOutOfBook() const { return _outOfBook; };
@@ -71,11 +73,12 @@ public:
 
     CompareWhenStarted() {}
 
-    // the sorting operator
+    // For sorting the display of items under construction.
+	// Some redundant code removed here thanks to Andrey Kurdiumov.
     bool operator() (BWAPI::Unit u1,BWAPI::Unit u2)
     {
-        int startedU1 = BWAPI::Broodwar->getFrameCount() - (u1->getType().buildTime() - u1->getRemainingBuildTime());
-        int startedU2 = BWAPI::Broodwar->getFrameCount() - (u2->getType().buildTime() - u2->getRemainingBuildTime());
+        int startedU1 = u1->getType().buildTime() - u1->getRemainingBuildTime();
+        int startedU2 = u2->getType().buildTime() - u2->getRemainingBuildTime();
         return startedU1 > startedU2;
     }
 };

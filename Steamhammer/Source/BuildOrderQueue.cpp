@@ -2,16 +2,51 @@
 
 using namespace UAlbertaBot;
 
-BuildOrderQueue::BuildOrderQueue() 
+BuildOrderQueue::BuildOrderQueue()
+	: modified(false)
 {
 }
 
 void BuildOrderQueue::clearAll() 
 {
 	queue.clear();
+	modified = true;
 }
 
-BuildOrderItem & BuildOrderQueue::getHighestPriorityItem()
+void BuildOrderQueue::queueAsHighestPriority(MacroAct m, bool gasSteal)
+{
+	queue.push_back(BuildOrderItem(m, gasSteal));
+	modified = true;
+}
+
+void BuildOrderQueue::queueAsLowestPriority(MacroAct m) 
+{
+	queue.push_front(BuildOrderItem(m));
+	modified = true;
+}
+
+void BuildOrderQueue::removeHighestPriorityItem() 
+{
+	queue.pop_back();
+	modified = true;
+}
+
+void BuildOrderQueue::doneWithHighestPriorityItem()
+{
+	queue.pop_back();
+}
+
+size_t BuildOrderQueue::size() const
+{
+	return queue.size();
+}
+
+bool BuildOrderQueue::isEmpty() const
+{
+	return queue.empty();
+}
+
+const BuildOrderItem & BuildOrderQueue::getHighestPriorityItem() const
 {
 	UAB_ASSERT(!queue.empty(), "taking from empty queue");
 
@@ -20,11 +55,11 @@ BuildOrderItem & BuildOrderQueue::getHighestPriorityItem()
 }
 
 // Return the next unit type in the queue, or None, skipping over commands.
-BWAPI::UnitType BuildOrderQueue::getNextUnit()
+BWAPI::UnitType BuildOrderQueue::getNextUnit() const
 {
 	for (int i = queue.size() - 1; i >= 0; --i)
 	{
-		MacroAct & act = queue[i].macroAct;
+		const MacroAct & act = queue[i].macroAct;
 		if (act.isUnit())
 		{
 			return act.getUnitType();
@@ -39,12 +74,12 @@ BWAPI::UnitType BuildOrderQueue::getNextUnit()
 }
 
 // Return the gas cost of the next item in the queue that has a nonzero gas cost.
-int BuildOrderQueue::getNextGasCost(int n)
+// Look at most n items ahead in the queue.
+int BuildOrderQueue::getNextGasCost(int n) const
 {
 	for (int i = queue.size() - 1; i >= std::max(0, int(queue.size()) - n); --i)
 	{
-		MacroAct & act = queue[i].macroAct;
-		int price = act.gasPrice();
+		int price = queue[i].macroAct.gasPrice();
 		if (price > 0)
 		{
 			return price;
@@ -54,35 +89,9 @@ int BuildOrderQueue::getNextGasCost(int n)
 	return 0;
 }
 
-void BuildOrderQueue::queueAsHighestPriority(MacroAct m, bool gasSteal)
+bool BuildOrderQueue::anyInQueue(BWAPI::UpgradeType type) const
 {
-	queue.push_back(BuildOrderItem(m, gasSteal));
-}
-
-void BuildOrderQueue::queueAsLowestPriority(MacroAct m) 
-{
-	queue.push_front(BuildOrderItem(m));
-}
-
-void BuildOrderQueue::removeHighestPriorityItem() 
-{
-	// remove the back element of the vector
-	queue.pop_back();
-}
-
-size_t BuildOrderQueue::size() const
-{
-	return queue.size();
-}
-
-bool BuildOrderQueue::isEmpty() const
-{
-	return queue.empty();
-}
-
-bool BuildOrderQueue::anyInQueue(BWAPI::UpgradeType type)
-{
-	for (auto & item : queue)
+	for (const auto & item : queue)
 	{
 		if (item.macroAct.isUpgrade() && item.macroAct.getUpgradeType() == type)
 		{
@@ -92,9 +101,9 @@ bool BuildOrderQueue::anyInQueue(BWAPI::UpgradeType type)
 	return false;
 }
 
-bool BuildOrderQueue::anyInQueue(BWAPI::UnitType type)
+bool BuildOrderQueue::anyInQueue(BWAPI::UnitType type) const
 {
-	for (auto & item : queue)
+	for (const auto & item : queue)
 	{
 		if (item.macroAct.isUnit() && item.macroAct.getUnitType() == type)
 		{
@@ -104,10 +113,10 @@ bool BuildOrderQueue::anyInQueue(BWAPI::UnitType type)
 	return false;
 }
 
-size_t BuildOrderQueue::numInQueue(BWAPI::UnitType type)
+size_t BuildOrderQueue::numInQueue(BWAPI::UnitType type) const
 {
 	size_t count = 0;
-	for (auto & item : queue)
+	for (const auto & item : queue)
 	{
 		if (item.macroAct.isUnit() && item.macroAct.getUnitType() == type)
 		{
@@ -117,11 +126,11 @@ size_t BuildOrderQueue::numInQueue(BWAPI::UnitType type)
 	return count;
 }
 
-void BuildOrderQueue::totalCosts(int & minerals, int & gas)
+void BuildOrderQueue::totalCosts(int & minerals, int & gas) const
 {
 	minerals = 0;
 	gas = 0;
-	for (auto & item : queue)
+	for (const auto & item : queue)
 	{
 		minerals += item.macroAct.mineralPrice();
 		gas += item.macroAct.gasPrice();

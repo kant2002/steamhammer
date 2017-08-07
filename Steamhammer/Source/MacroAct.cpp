@@ -289,8 +289,9 @@ int MacroAct::supplyRequired() const
 int MacroAct::mineralPrice() const
 {
 	if (isCommand()) {
-		if (_macroCommandType.getType() == MacroCommandType::ExtractorTrick) {
-			// 50 for the extractor and 50 for the drone. Never mind that you get some back.
+		if (_macroCommandType.getType() == MacroCommandType::ExtractorTrickDrone ||
+			_macroCommandType.getType() == MacroCommandType::ExtractorTrickZergling) {
+			// 50 for the extractor and 50 for the unit. Never mind that you get some back.
 			return 100;
 		}
 		return 0;

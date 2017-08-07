@@ -23,11 +23,9 @@ class WorkerManager
 	void        handleIdleWorkers();
 	void		handleReturnCargoWorkers();
 	void        handleRepairWorkers();
-	void        handleCombatWorkers();
     void        handleMoveWorkers();
 
-	BWAPI::Unit getBestEnemyTarget(BWAPI::Unit worker);
-	BWAPI::Unit getClosestEnemyUnit(BWAPI::Unit worker);
+	BWAPI::Unit findEnemyTargetForWorker(BWAPI::Unit worker);
 
 	WorkerManager();
 
@@ -40,7 +38,6 @@ public:
     void        onUnitRenegade(BWAPI::Unit unit);
 
     void        finishedWithWorker(BWAPI::Unit unit);
-    void        finishedWithCombatWorkers();
 
     void        drawResourceDebugInfo();
     void        updateWorkerStatus();
@@ -55,11 +52,12 @@ public:
 
     void        setScoutWorker(BWAPI::Unit worker);
 
-	// Note: _collectGas == false allows that a little more gas may still be collected.
+	// NOTE _collectGas == false allows that a little more gas may still be collected.
 	bool		isCollectingGas()              { return _collectGas; };
 	void		setCollectGas(bool collectGas) { _collectGas = collectGas; };
 
     bool        isWorkerScout(BWAPI::Unit worker);
+	bool		isCombatWorker(BWAPI::Unit worker);
     bool        isFree(BWAPI::Unit worker);
     bool        isBuilder(BWAPI::Unit worker);
 
@@ -73,11 +71,13 @@ public:
     void        setBuildingWorker(BWAPI::Unit worker,Building & b);
     void        setRepairWorker(BWAPI::Unit worker,BWAPI::Unit unitToRepair);
     void        stopRepairing(BWAPI::Unit worker);
-    void        setMoveWorker(int m,int g,BWAPI::Position p);
+	void        setMoveWorker(BWAPI::Unit worker, int mineralsNeeded, int gasNeeded, BWAPI::Position & p);
     void        setCombatWorker(BWAPI::Unit worker);
 
     bool        willHaveResources(int mineralsRequired,int gasRequired,double distance);
     void        rebalanceWorkers();
+
+	bool		maybeMineMineralBlocks(BWAPI::Unit worker);
 
     static WorkerManager &  Instance();
 };

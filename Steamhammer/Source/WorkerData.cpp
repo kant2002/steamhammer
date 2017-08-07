@@ -5,7 +5,7 @@ using namespace UAlbertaBot;
 
 WorkerData::WorkerData() 
 {
-    for (auto & unit : BWAPI::Broodwar->getAllUnits())
+    for (const auto unit : BWAPI::Broodwar->getAllUnits())
 	{
 		if ((unit->getType() == BWAPI::UnitTypes::Resource_Mineral_Field))
 		{

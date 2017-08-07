@@ -20,9 +20,14 @@ protected:
 	virtual void        executeMicro(const BWAPI::Unitset & targets) = 0;
 	bool				buildScarabOrInterceptor(BWAPI::Unit u) const;
 	bool                checkPositionWalkable(BWAPI::Position pos);
-	void                drawOrderText();
 	bool                unitNearEnemy(BWAPI::Unit unit);
 	bool                unitNearChokepoint(BWAPI::Unit unit) const;
+
+	bool				mobilizeUnit(BWAPI::Unit unit) const;      // unsiege or unburrow
+	bool				immobilizeUnit(BWAPI::Unit unit) const;    // siege or burrow
+	bool				unstickStuckUnit(BWAPI::Unit unit);
+
+	void                drawOrderText();
 
 public:
 						MicroManager();

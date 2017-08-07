@@ -33,6 +33,19 @@ struct UnitInfo
 	{
     }
 
+	UnitInfo(BWAPI::Unit unit)
+		: unitID(unit->getID())
+		, updateFrame(BWAPI::Broodwar->getFrameCount())
+		, lastHealth(unit->getHitPoints())
+		, lastShields(unit->getShields())
+		, player(unit->getPlayer())
+		, unit(unit)
+		, lastPosition(unit->getPosition())
+		, type(unit->getType())
+		, completed(unit->isCompleted())
+	{
+	}
+
     const bool operator == (BWAPI::Unit unit) const
     {
         return unitID == unit->getID();
@@ -58,8 +71,8 @@ class UnitData
 
     const bool badUnitInfo(const UnitInfo & ui) const;
 
-    std::vector<int>						numDeadUnits;
-    std::vector<int>						numUnits;
+    std::vector<int>						numUnits;       // how many now
+	std::vector<int>						numDeadUnits;   // how many lost
 
     int										mineralsLost;
     int										gasLost;

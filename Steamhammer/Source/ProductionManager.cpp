@@ -6,13 +6,14 @@ using namespace UAlbertaBot;
 
 ProductionManager::ProductionManager()
 	: _lastProductionFrame				 (0)
-	, _assignedWorkerForThisBuilding     (false)
+	, _assignedWorkerForThisBuilding     (nullptr)
 	, _haveLocationForThisBuilding       (false)
 	, _delayBuildingPredictionUntilFrame (0)
 	, _outOfBook                         (false)
 	, _targetGasAmount                   (0)
 	, _extractorTrickState			     (ExtractorTrick::None)
-	, _extractorTrickBuilding		     (nullptr)
+	, _extractorTrickUnitType			 (BWAPI::UnitTypes::None)
+	, _extractorTrickBuilding			 (nullptr)
 {
     setBuildOrder(StrategyManager::Instance().getOpeningBookBuildOrder());
 }
@@ -25,6 +26,7 @@ void ProductionManager::setBuildOrder(const BuildOrder & buildOrder)
 	{
 		_queue.queueAsLowestPriority(buildOrder[i]);
 	}
+	_queue.resetModified();
 }
 
 void ProductionManager::update() 
@@ -43,7 +45,7 @@ void ProductionManager::update()
 
 	// if nothing is currently building, get a new goal from the strategy manager
 	if (_queue.isEmpty())
-		{
+	{
 		if (Config::Debug::DrawBuildOrderSearchInfo)
 		{
 			BWAPI::Broodwar->drawTextScreen(150, 10, "Nothing left to build, replanning.");
@@ -57,21 +59,59 @@ void ProductionManager::update()
 	manageBuildOrderQueue();
 }
 
+// If something important was destroyed, we may want to react.
 void ProductionManager::onUnitDestroy(BWAPI::Unit unit)
 {
 	// If it's not our unit, we don't care.
-	// Also, zerg no longer relies on this.
-	if (BWAPI::Broodwar->self()->getRace() == BWAPI::Races::Zerg ||
-		!unit ||
-		unit->getPlayer() != BWAPI::Broodwar->self())
+	// This mostly works for zerg, but the extractor trick confuses it.
+	// So bail out if the extractor trick is underway.
+	if (!unit || unit->getPlayer() != BWAPI::Broodwar->self() ||
+		BWAPI::Broodwar->self()->getRace() == BWAPI::Races::Zerg)
 	{
 		return;
 	}
 	
-	// if it's a worker or a building, we need to re-search for the current goal
-	if ((unit->getType().isWorker() && !WorkerManager::Instance().isWorkerScout(unit)) ||
-		unit->getType().isBuilding())
+	// If it's a worker or a building, it affects the production plan.
+	if (unit->getType().isWorker() && !_outOfBook)
 	{
+		// We lost a worker in the opening. Replace it.
+		// It helps if a small number of workers are killed. If many are killed, you're toast anyway.
+		// Still, it's better than breaking out of the opening altogether.
+		_queue.queueAsHighestPriority(unit->getType());
+
+		// If we have a gateway and no zealots, or a barracks and no marines,
+		// consider making a military unit first. To, you know, stay alive and stuff.
+		if (BWAPI::Broodwar->self()->getRace() == BWAPI::Races::Protoss)
+		{
+			if (UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Protoss_Gateway) > 0 &&
+				UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Protoss_Zealot) == 0 &&
+				(BWAPI::Broodwar->self()->minerals() >= 150 || UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Protoss_Probe) > 0))
+			{
+				_queue.queueAsHighestPriority(BWAPI::UnitTypes::Protoss_Zealot);
+			}
+		}
+		else if (BWAPI::Broodwar->self()->getRace() == BWAPI::Races::Terran)
+		{
+			if (UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Terran_Barracks) > 0 &&
+				UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Terran_Marine) == 0 &&
+				(BWAPI::Broodwar->self()->minerals() >= 100 || UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Terran_SCV) > 0))
+			{
+				_queue.queueAsHighestPriority(BWAPI::UnitTypes::Terran_Marine);
+			}
+		}
+		else // Zerg
+		{
+			if (UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Zerg_Spawning_Pool) > 0 &&
+				UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Zerg_Zergling) == 0 &&
+				(BWAPI::Broodwar->self()->minerals() >= 100 || UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Zerg_Drone) > 0))
+			{
+				_queue.queueAsHighestPriority(BWAPI::UnitTypes::Zerg_Zergling);
+			}
+		}
+	}
+	else if (unit->getType().isBuilding() && !(UnitUtil::CanAttackAir(unit) || UnitUtil::CanAttackGround(unit)))
+	{
+		// We lost a building other than static defense. It may be serious. Replan from scratch.
 		goOutOfBook();
 	}
 }
@@ -85,22 +125,24 @@ void ProductionManager::manageBuildOrderQueue()
 		return;
 	}
 
-	// if there is nothing in the _queue, oh well
-	if (_queue.isEmpty()) 
+	// If we were planning to build and assigned a worker, but the queue was then
+	// changed behind our back, release the worker and continue.
+	if (_queue.isModified() && _assignedWorkerForThisBuilding)
 	{
-		return;
+		WorkerManager::Instance().finishedWithWorker(_assignedWorkerForThisBuilding);
+		_assignedWorkerForThisBuilding = nullptr;
 	}
 
-	// while there is still something left in the _queue
+	// We do nothing if the queue is empty (obviously).
 	while (!_queue.isEmpty()) 
 	{
-		BuildOrderItem & currentItem = _queue.getHighestPriorityItem();
+		const BuildOrderItem & currentItem = _queue.getHighestPriorityItem();
 
 		// If this is a command, execute it and keep going.
 		if (currentItem.macroAct.isCommand())
 		{
-			executeCommand(currentItem.macroAct);
-			_queue.removeHighestPriorityItem();
+			executeCommand(currentItem.macroAct.getCommandType());
+			_queue.doneWithHighestPriorityItem();
 			_lastProductionFrame = BWAPI::Broodwar->getFrameCount();
 			continue;
 		}
@@ -112,7 +154,7 @@ void ProductionManager::manageBuildOrderQueue()
 		// than you already have. So we drop any extra comsat.
 		if (!producer && currentItem.macroAct.isUnit() && currentItem.macroAct.getUnitType() == BWAPI::UnitTypes::Terran_Comsat_Station)
 		{
-			_queue.removeHighestPriorityItem();
+			_queue.doneWithHighestPriorityItem();
 			_lastProductionFrame = BWAPI::Broodwar->getFrameCount();
 			continue;
 		}
@@ -138,6 +180,7 @@ void ProductionManager::manageBuildOrderQueue()
 			// NOTE If the worker is set moving, this sets flag _movingToThisBuildingLocation = true
 			//      so that we don't 
 			predictWorkerMovement(b);
+			break;
 		}
 
 		// if we can make the current item
@@ -145,12 +188,12 @@ void ProductionManager::manageBuildOrderQueue()
 		{
 			// create it
 			create(producer, currentItem);
-			_assignedWorkerForThisBuilding = false;
+			_assignedWorkerForThisBuilding = nullptr;
 			_haveLocationForThisBuilding = false;
 			_delayBuildingPredictionUntilFrame = 0;
 
 			// and remove it from the _queue
-			_queue.removeHighestPriorityItem();
+			_queue.doneWithHighestPriorityItem();
 			_lastProductionFrame = BWAPI::Broodwar->getFrameCount();
 
 			// don't actually loop around in here
@@ -159,21 +202,19 @@ void ProductionManager::manageBuildOrderQueue()
 			//      Can cause delays in late game!
 			break;
 		}
-		else
-		{
-			// We didn't make anything. Check for a possible production jam.
-			// Jams can happen due to bugs, or due to losing prerequisites for planned items.
-			if (BWAPI::Broodwar->getFrameCount() > _lastProductionFrame + Config::Macro::ProductionJamFrameLimit)
-			{
-				// Looks very like a jam. Clear the queue and hope for better luck next time.
-				// BWAPI::Broodwar->printf("breaking a production jam");
-				goOutOfBook();
-				return;
-			}
 
-			// TODO not much of a loop, eh? breaks on all branches
-			break;
+		// We didn't make anything. Check for a possible production jam.
+		// Jams can happen due to bugs, or due to losing prerequisites for planned items.
+		if (BWAPI::Broodwar->getFrameCount() > _lastProductionFrame + Config::Macro::ProductionJamFrameLimit)
+		{
+			// Looks very like a jam. Clear the queue and hope for better luck next time.
+			// BWAPI::Broodwar->printf("breaking a production jam");
+			goOutOfBook();
 		}
+
+		// TODO not much of a loop, eh? breaks on all branches
+		//      only commands and bug workarounds continue to the next item
+		break;
 	}
 }
 
@@ -188,7 +229,7 @@ BWAPI::Unit ProductionManager::getProducer(MacroAct t, BWAPI::Position closestTo
 
     // make a set of all candidate producers
     BWAPI::Unitset candidateProducers;
-    for (auto & unit : BWAPI::Broodwar->self()->getUnits())
+    for (const auto unit : BWAPI::Broodwar->self()->getUnits())
     {
         // Reasons that a unit cannot produce the desired type:
 
@@ -196,8 +237,8 @@ BWAPI::Unit ProductionManager::getProducer(MacroAct t, BWAPI::Position closestTo
 
 		// TODO Due to a BWAPI 4.1.2 bug, lair research can't be done in a hive.
 		//      Also spire upgrades can't be done in a greater spire.
-		//      The bug is supposedly fixed in the next version.
-		//      When a fixed version is available, change the above line to the following:
+		//      The bug is fixed in the next version, 4.2.0.
+		//      When switching to a fixed version, change the above line to the following:
 		// If the producerType is a lair, a hive will do as well.
 		// Note: Burrow research in a hatchery can also be done in a lair or hive, but we rarely want to.
 		// Ignore the possibility so that we don't accidentally waste lair time.
@@ -228,8 +269,8 @@ BWAPI::Unit ProductionManager::getProducer(MacroAct t, BWAPI::Position closestTo
 
             // if we just told this unit to build an addon, then it will not be building another one
             // this deals with the frame-delay of telling a unit to build an addon and it actually starting to build
-            if (unit->getLastCommand().getType() == BWAPI::UnitCommandTypes::Build_Addon 
-                && (BWAPI::Broodwar->getFrameCount() - unit->getLastCommandFrame() < 10)) 
+            if (unit->getLastCommand().getType() == BWAPI::UnitCommandTypes::Build_Addon &&
+                (BWAPI::Broodwar->getFrameCount() - unit->getLastCommandFrame() < 10)) 
             { 
                 continue; 
             }
@@ -269,7 +310,7 @@ BWAPI::Unit ProductionManager::getProducer(MacroAct t, BWAPI::Position closestTo
 
 	// Trick: If we're producing a worker, choose the producer (command center, nexus,
 	// or larva) which is farthest from the main base. That way expansions are preferentially
-	// populated with less need for worker transfers.
+	// populated with less need to transfer workers.
 	if (t.isUnit() && t.getUnitType().isWorker())
 	{
 		return getFarthestUnitFromPosition(candidateProducers,
@@ -295,13 +336,13 @@ BWAPI::Unit ProductionManager::getClosestUnitToPosition(const BWAPI::Unitset & u
     }
 
     BWAPI::Unit closestUnit = nullptr;
-    double minDist(1000000);
+    int minDist(1000000);
 
-	for (auto & unit : units) 
+	for (const auto unit : units) 
     {
         UAB_ASSERT(unit != nullptr, "Unit was null");
 
-		double distance = unit->getDistance(closestTo);
+		int distance = unit->getDistance(closestTo);
 		if (distance < minDist) 
         {
 			closestUnit = unit;
@@ -326,13 +367,13 @@ BWAPI::Unit ProductionManager::getFarthestUnitFromPosition(const BWAPI::Unitset 
 	}
 
 	BWAPI::Unit farthestUnit = nullptr;
-	double maxDist(-1);
+	int maxDist(-1);
 
-	for (auto & unit : units)
+	for (const auto unit : units)
 	{
 		UAB_ASSERT(unit != nullptr, "Unit was null");
 
-		double distance = unit->getDistance(farthest);
+		int distance = unit->getDistance(farthest);
 		if (distance > maxDist)
 		{
 			farthestUnit = unit;
@@ -346,7 +387,7 @@ BWAPI::Unit ProductionManager::getFarthestUnitFromPosition(const BWAPI::Unitset 
 BWAPI::Unit ProductionManager::getClosestLarvaToPosition(BWAPI::Position closestTo)
 {
 	BWAPI::Unitset larvas;
-	for (auto & unit : BWAPI::Broodwar->self()->getUnits())
+	for (const auto unit : BWAPI::Broodwar->self()->getUnits())
 	{
 		if (unit->getType() == BWAPI::UnitTypes::Zerg_Larva)
 		{
@@ -357,8 +398,8 @@ BWAPI::Unit ProductionManager::getClosestLarvaToPosition(BWAPI::Position closest
 	return getClosestUnitToPosition(larvas, closestTo);
 }
 
-// check to see if all preconditions are met and then create a unit
-void ProductionManager::create(BWAPI::Unit producer, BuildOrderItem & item) 
+// Create a unit or start research.
+void ProductionManager::create(BWAPI::Unit producer, const BuildOrderItem & item) 
 {
     if (!producer)
     {
@@ -367,11 +408,21 @@ void ProductionManager::create(BWAPI::Unit producer, BuildOrderItem & item)
 
     MacroAct act = item.macroAct;
 
-    // if we're dealing with a building
-	if (act.isBuilding()                                        // implies act.isUnit()
-		&& !UnitUtil::IsMorphedBuildingType(act.getUnitType())  // morphed from another zerg building, not built
-		&& !act.getUnitType().isAddon())                        // terran addon
+	// If it's a terran add-on.
+	if (act.isUnit() && act.getUnitType().isAddon())
 	{
+		producer->buildAddon(act.getUnitType());
+	}
+	// If it's a building other than an add-on.
+	else if (act.isBuilding()                                    // implies act.isUnit()
+		&& !UnitUtil::IsMorphedBuildingType(act.getUnitType()))  // not morphed from another zerg building, not built
+	{
+		// Every once in a while, pick a new base as the "main" base to build in.
+		if (act.getRace() != BWAPI::Races::Protoss || act.getUnitType() == BWAPI::UnitTypes::Protoss_Pylon)
+		{
+			InformationManager::Instance().maybeChooseNewMainBase();
+		}
+
 		// By default, build in the main base.
 		// BuildingManager will override the location if it needs to.
 		// Otherwise it will find some spot near desiredLocation.
@@ -387,11 +438,6 @@ void ProductionManager::create(BWAPI::Unit producer, BuildOrderItem & item)
 		}
 		
 		BuildingManager::Instance().addBuildingTask(act, desiredLocation, item.isGasSteal);
-	}
-	else if (act.isUnit() && act.getUnitType().isAddon())
-	{
-		//BWAPI::TilePosition addonPosition(producer->getTilePosition().x + producer->getType().tileWidth(), producer->getTilePosition().y + producer->getType().tileHeight() - t.unitType.tileHeight());
-		producer->buildAddon(act.getUnitType());
 	}
 	// if we're dealing with a non-building unit, or a morphed zerg building
 	else if (act.isUnit())
@@ -418,7 +464,7 @@ void ProductionManager::create(BWAPI::Unit producer, BuildOrderItem & item)
 	}
 	else
 	{
-		UAB_ASSERT(false, "don't know how to create that");
+		UAB_ASSERT(false, "Unknown type");
 	}
 }
 
@@ -443,7 +489,7 @@ bool ProductionManager::canMakeNow(BWAPI::Unit producer, MacroAct t)
 		}
 		else if (t.isCommand())
 		{
-			canMake = true;
+			canMake = true;     // no-op
 		}
 		else
 		{
@@ -509,14 +555,17 @@ void ProductionManager::predictWorkerMovement(const Building & b)
 	//		- we haven't yet assigned a worker to move to this location
 	//		- the build position is valid
 	//		- we will have the required resources by the time the worker gets there
-	if (moveWorker && _haveLocationForThisBuilding && !_assignedWorkerForThisBuilding && (_predictedTilePosition != BWAPI::TilePositions::None) &&
+	if (moveWorker &&
+		!_assignedWorkerForThisBuilding &&
+		_haveLocationForThisBuilding &&
+		(_predictedTilePosition != BWAPI::TilePositions::None) &&
 		WorkerManager::Instance().willHaveResources(mineralsRequired, gasRequired, moveWorker->getDistance(walkToPosition)) )
 	{
 		// we have assigned a worker
-		_assignedWorkerForThisBuilding = true;
+		_assignedWorkerForThisBuilding = moveWorker;
 
 		// tell the worker manager to move this worker
-		WorkerManager::Instance().setMoveWorker(mineralsRequired, gasRequired, walkToPosition);
+		WorkerManager::Instance().setMoveWorker(moveWorker, mineralsRequired, gasRequired, walkToPosition);
 	}
 }
 
@@ -530,47 +579,74 @@ int ProductionManager::getFreeGas() const
 	return BWAPI::Broodwar->self()->gas() - BuildingManager::Instance().getReservedGas();
 }
 
-void ProductionManager::executeCommand(MacroAct act)
+void ProductionManager::executeCommand(MacroCommand command)
 {
-	UAB_ASSERT(act.isCommand(), "executing a non-command");
+	MacroCommandType cmd = command.getType();
 
-	MacroCommandType cmd = act.getCommandType().getType();
-	if (cmd == MacroCommandType::Scout) {
+	if (cmd == MacroCommandType::Scout)
+	{
 		GameCommander::Instance().goScoutAlways();
 	}
-	else if (cmd == MacroCommandType::ScoutIfNeeded) {
+	else if (cmd == MacroCommandType::ScoutIfNeeded)
+	{
 		GameCommander::Instance().goScoutIfNeeded();
 	}
-	else if (cmd == MacroCommandType::ScoutLocation) {
+	else if (cmd == MacroCommandType::ScoutLocation)
+	{
 		GameCommander::Instance().goScoutIfNeeded();
 		ScoutManager::Instance().setScoutLocationOnly();
 	}
-	else if (cmd == MacroCommandType::StopGas) {
+	else if (cmd == MacroCommandType::StopGas)
+	{
 		WorkerManager::Instance().setCollectGas(false);
 	}
-	else if (cmd == MacroCommandType::StartGas) {
+	else if (cmd == MacroCommandType::StartGas)
+	{
 		WorkerManager::Instance().setCollectGas(true);
 	}
-	else if (cmd == MacroCommandType::GasUntil) {
+	else if (cmd == MacroCommandType::GasUntil)
+	{
 		WorkerManager::Instance().setCollectGas(true);
 		_targetGasAmount = BWAPI::Broodwar->self()->gatheredGas()
 			- BWAPI::Broodwar->self()->gas()
-			+ act.getCommandType().getAmount();
+			+ command.getAmount();
 	}
-	else if (cmd == MacroCommandType::StealGas) {
+	else if (cmd == MacroCommandType::StealGas)
+	{
 		ScoutManager::Instance().setGasSteal();
 	}
-	else if (cmd == MacroCommandType::ExtractorTrick) {
-		startExtractorTrick();
+	else if (cmd == MacroCommandType::ExtractorTrickDrone)
+	{
+		startExtractorTrick(BWAPI::UnitTypes::Zerg_Drone);
 	}
-	else if (cmd == MacroCommandType::Aggressive) {
+	else if (cmd == MacroCommandType::ExtractorTrickZergling)
+	{
+		startExtractorTrick(BWAPI::UnitTypes::Zerg_Zergling);
+	}
+	else if (cmd == MacroCommandType::Aggressive)
+	{
 		CombatCommander::Instance().setAggression(true);
 	}
-	else if (cmd == MacroCommandType::Defensive) {
+	else if (cmd == MacroCommandType::Defensive)
+	{
 		CombatCommander::Instance().setAggression(false);
 	}
-	else {
-		UAB_ASSERT(false, "unknown macro command");
+	else if (cmd == MacroCommandType::PullWorkers)
+	{
+		CombatCommander::Instance().pullWorkers(command.getAmount());
+	}
+	else if (cmd == MacroCommandType::PullWorkersLeaving)
+	{
+		int nWorkers = WorkerManager::Instance().getNumMineralWorkers() + WorkerManager::Instance().getNumGasWorkers();
+		CombatCommander::Instance().pullWorkers(nWorkers - command.getAmount());
+	}
+	else if (cmd == MacroCommandType::ReleaseWorkers)
+	{
+		CombatCommander::Instance().releaseWorkers();
+	}
+	else
+	{
+		UAB_ASSERT(false, "unknown MacroCommand");
 	}
 }
 
@@ -578,66 +654,6 @@ void ProductionManager::executeCommand(MacroAct act)
 bool ProductionManager::meetsReservedResources(MacroAct act)
 {
 	return (act.mineralPrice() <= getFreeMinerals()) && (act.gasPrice() <= getFreeGas());
-}
-
-// selects a unit of a given type
-BWAPI::Unit ProductionManager::selectUnitOfType(BWAPI::UnitType type, BWAPI::Position closestTo) 
-{
-	// if we have none of the unit type, return nullptr right away
-	if (BWAPI::Broodwar->self()->completedUnitCount(type) == 0) 
-	{
-		return nullptr;
-	}
-
-	BWAPI::Unit unit = nullptr;
-
-	// if we are concerned about the position of the unit, that takes priority
-    if (closestTo != BWAPI::Positions::None) 
-    {
-		double minDist(1000000);
-
-		for (auto & u : BWAPI::Broodwar->self()->getUnits()) 
-        {
-			if (u->getType() == type) 
-            {
-				double distance = u->getDistance(closestTo);
-				if (!unit || distance < minDist) {
-					unit = u;
-					minDist = distance;
-				}
-			}
-		}
-
-	// if it is a building and we are worried about selecting the unit with the least
-	// amount of training time remaining
-	} 
-    else if (type.isBuilding()) 
-    {
-		for (auto & u : BWAPI::Broodwar->self()->getUnits()) 
-        {
-            UAB_ASSERT(u != nullptr, "Unit was null");
-
-			if (u->getType() == type && u->isCompleted() && !u->isTraining() && !u->isLifted() && u->isPowered()) {
-
-				return u;
-			}
-		}
-		// otherwise just return the first unit we come across
-	} 
-    else 
-    {
-		for (auto & u : BWAPI::Broodwar->self()->getUnits()) 
-		{
-            UAB_ASSERT(u != nullptr, "Unit was null");
-
-			if (u->getType() == type && u->isCompleted() && u->getHitPoints() > 0 && !u->isLifted() && u->isPowered()) 
-			{
-				return u;
-			}
-		}
-	}
-
-	return nullptr;
 }
 
 void ProductionManager::drawProductionInformation(int x, int y)
@@ -674,9 +690,9 @@ void ProductionManager::drawProductionInformation(int x, int y)
 	{
 		BWAPI::Broodwar->drawTextScreen(x - 10, y, "\x04 extractor trick: extractor ordered");
 	}
-	else if (_extractorTrickState == ExtractorTrick::DroneOrdered)
+	else if (_extractorTrickState == ExtractorTrick::UnitOrdered)
 	{
-		BWAPI::Broodwar->drawTextScreen(x - 10, y, "\x04 extractor trick: drone ordered");
+		BWAPI::Broodwar->drawTextScreen(x - 10, y, "\x04 extractor trick: unit ordered");
 	}
 	y += 2;
 
@@ -721,11 +737,13 @@ ProductionManager & ProductionManager::Instance()
 void ProductionManager::queueGasSteal()
 {
     _queue.queueAsHighestPriority(MacroAct(BWAPI::Broodwar->self()->getRace().getRefinery()), true);
+	_queue.resetModified();
 }
 
-// We're zerg and doing the extractor trick to get an extra drone.
-// Set a flag to start the procedure.
-void ProductionManager::startExtractorTrick()
+// We're zerg and doing the extractor trick to get an extra drone or pair of zerglings,
+// as specified in the argument.
+// Set a flag to start the procedure, and handle various error cases.
+void ProductionManager::startExtractorTrick(BWAPI::UnitType type)
 {
 	// Only zerg can do the extractor trick.
 	if (BWAPI::Broodwar->self()->getRace() != BWAPI::Races::Zerg)
@@ -734,10 +752,18 @@ void ProductionManager::startExtractorTrick()
 	}
 
 	// If we're not supply blocked, then we may have lost units earlier.
-	// No need to do the trick, just queue up a drone.
+	// We may or may not have a larva available now, so instead of finding a larva and
+	// morphing the unit here, we set a special case extractor trick state to do it
+	// when a larva becomes available.
+	// We can't queue a unit, because when we return the caller will delete the front queue
+	// item--Steamhammer used to do that, but Arrak found the bug.
 	if (BWAPI::Broodwar->self()->supplyTotal() - BWAPI::Broodwar->self()->supplyUsed() >= 2)
 	{
-		_queue.queueAsHighestPriority(MacroAct(BWAPI::UnitTypes::Zerg_Drone));
+		if (_extractorTrickUnitType != BWAPI::UnitTypes::None)
+		{
+			_extractorTrickState = ExtractorTrick::MakeUnitBypass;
+			_extractorTrickUnitType = type;
+		}
 		return;
 	}
 	
@@ -754,6 +780,7 @@ void ProductionManager::startExtractorTrick()
 	}
 	
 	_extractorTrickState = ExtractorTrick::Start;
+	_extractorTrickUnitType = type;
 }
 
 // The extractor trick is in progress. Take the next step, when possible.
@@ -771,6 +798,7 @@ void ProductionManager::doExtractorTrick()
 		}
 		// If there are "many" drones mining, assume we'll get resources to finish the trick.
 		// Otherwise wait for the full 100 before we start.
+		// NOTE 100 assumes we are making a drone or a pair of zerglings.
 		else if (getFreeMinerals() >= 100 || (nDrones >= 6 && getFreeMinerals() >= 76))
 		{
 			// We also need a larva to make the drone.
@@ -779,46 +807,96 @@ void ProductionManager::doExtractorTrick()
 				BWAPI::TilePosition loc = BWAPI::TilePosition(0, 0);     // this gets ignored
 				Building & b = BuildingManager::Instance().addTrackedBuildingTask(MacroAct(BWAPI::UnitTypes::Zerg_Extractor), loc, false);
 				_extractorTrickState = ExtractorTrick::ExtractorOrdered;
-				_extractorTrickBuilding = &b;
+				_extractorTrickBuilding = &b;    // points into building manager's queue of buildings
 			}
 		}
 	}
 	else if (_extractorTrickState == ExtractorTrick::ExtractorOrdered)
 	{
-		int supplyAvail = BWAPI::Broodwar->self()->supplyTotal() - BWAPI::Broodwar->self()->supplyUsed();
-		if (supplyAvail >= 2 && getFreeMinerals() >= 50)
+		if (_extractorTrickUnitType == BWAPI::UnitTypes::None)
 		{
-			// We can build a drone now: The extractor finished, or another unit died somewhere.
-			// Well, there is one more condition: We need a larva.
-			BWAPI::Unit larva = getClosestLarvaToPosition(BWAPI::Position(InformationManager::Instance().getMyMainBaseLocation()->getTilePosition()));
-			if (larva)
+			_extractorTrickState = ExtractorTrick::UnitOrdered;
+		}
+		else
+		{
+			int supplyAvail = BWAPI::Broodwar->self()->supplyTotal() - BWAPI::Broodwar->self()->supplyUsed();
+			if (supplyAvail >= 2 &&
+				getFreeMinerals() >= _extractorTrickUnitType.mineralPrice() &&
+				getFreeGas() >= _extractorTrickUnitType.gasPrice())
 			{
-				larva->morph(BWAPI::UnitTypes::Zerg_Drone);
-				_extractorTrickState = ExtractorTrick::DroneOrdered;
+				// We can build a unit now: The extractor started, or another unit died somewhere.
+				// Well, there is one more condition: We need a larva.
+				BWAPI::Unit larva = getClosestLarvaToPosition(BWAPI::Position(InformationManager::Instance().getMyMainBaseLocation()->getTilePosition()));
+				if (larva && _extractorTrickUnitType != BWAPI::UnitTypes::None)
+				{
+					if (_extractorTrickUnitType == BWAPI::UnitTypes::Zerg_Zergling &&
+						UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Zerg_Spawning_Pool) == 0)
+					{
+						// We want a zergling but don't have the tech.
+						// Give up by doing nothing and moving on.
+					}
+					else
+					{
+						larva->morph(_extractorTrickUnitType);
+					}
+					_extractorTrickState = ExtractorTrick::UnitOrdered;
+				}
+			}
+			else if (supplyAvail < -2)
+			{
+				// Uh oh, we must have lost an overlord or a hatchery. Give up by moving on.
+				_extractorTrickState = ExtractorTrick::UnitOrdered;
+			}
+			else if (WorkerManager::Instance().getNumMineralWorkers() <= 0)
+			{
+				// Drone massacre, or all drones pulled to fight. Give up by moving on.
+				_extractorTrickState = ExtractorTrick::UnitOrdered;
 			}
 		}
-		else if (supplyAvail < -2)
-		{
-			// Uh oh, we must have lost an overlord or a hatchery. Give up by moving on.
-			_extractorTrickState = ExtractorTrick::DroneOrdered;
-		}
-		else if (WorkerManager::Instance().getNumMineralWorkers() <= 0)
-		{
-			// Yow, there must have been a drone massacre. Give up by moving on.
-			_extractorTrickState = ExtractorTrick::DroneOrdered;
-		}
 	}
-	else if (_extractorTrickState == ExtractorTrick::DroneOrdered)
+	else if (_extractorTrickState == ExtractorTrick::UnitOrdered)
 	{
 		UAB_ASSERT(_extractorTrickBuilding, "no extractor to cancel");
 		BuildingManager::Instance().cancelBuilding(*_extractorTrickBuilding);
 		_extractorTrickState = ExtractorTrick::None;
+		_extractorTrickUnitType = BWAPI::UnitTypes::None;
 		_extractorTrickBuilding = nullptr;
+	}
+	else if (_extractorTrickState == ExtractorTrick::MakeUnitBypass)
+	{
+		// We did the extractor trick when we didn't need to, whether because the opening was
+		// miswritten or because units were lost before we got here.
+		// This special state lets us construct the unit we want anyway, bypassing the extractor.
+		BWAPI::Unit larva = getClosestLarvaToPosition(BWAPI::Position(InformationManager::Instance().getMyMainBaseLocation()->getTilePosition()));
+		if (larva &&
+			getFreeMinerals() >= _extractorTrickUnitType.mineralPrice() &&
+			getFreeGas() >= _extractorTrickUnitType.gasPrice())
+		{
+			larva->morph(_extractorTrickUnitType);
+			_extractorTrickState = ExtractorTrick::None;
+		}
 	}
 	else
 	{
 		UAB_ASSERT(false, "unexpected extractor trick state (possibly None)");
 	}
+}
+
+// The next item in the queue is a building that requires a worker to construct.
+// Addons and morphed buildings (e.g. lair) do not need a worker.
+bool ProductionManager::nextIsBuilding() const
+{
+	if (_queue.isEmpty())
+	{
+		return false;
+	}
+
+	const MacroAct & next = _queue.getHighestPriorityItem().macroAct;
+
+	return next.isUnit() &&
+		next.getUnitType().isBuilding() &&
+		!next.getUnitType().isAddon() &&
+		!UnitUtil::IsMorphedBuildingType(next.getUnitType());
 }
 
 // We have finished our book line, or are breaking out of it early.

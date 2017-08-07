@@ -67,7 +67,10 @@ void BOSSManager::startNewSearch(const std::vector<MetaPair> & goalUnits)
     }
     catch (const BOSS::BOSSException)
     {
-        BWAPI::BroodwarPtr->printf("Exception in BOSS::GameState constructor, will try again next frame");
+		if (Config::Debug::DrawBuildOrderSearchInfo)
+		{
+			BWAPI::BroodwarPtr->printf("Exception in BOSS::GameState constructor");
+		}
     }
 }
 
@@ -135,11 +138,12 @@ void BOSSManager::update(double timeLimit)
             // this will resume a search in progress or start a new search if not yet started
 			_smartSearch->search();
 		}
-        // catch any errors that might happen in the search
-		catch (const BOSS::BOSSException & exception)
+		catch (const BOSS::BOSSException)
         {
-            UAB_ASSERT_WARNING(false, "BOSS SmartSearch Exception: %s", exception.what());
-			BWAPI::Broodwar->drawTextScreen(0, 0, "Previous search didn't find a solution, resorting to Naive Build Order");
+			if (Config::Debug::DrawBuildOrderSearchInfo)
+			{
+				BWAPI::Broodwar->drawTextScreen(0, 0, "Search didn't find a solution, resorting to Naive Build Order");
+			}
             _previousStatus = "BOSSExeption";
             caughtException = true;
 		}
@@ -154,9 +158,9 @@ void BOSSManager::update(double timeLimit)
             bool solved = _smartSearch->getResults().solved && _smartSearch->getResults().solutionFound;
 
             // if we've found a solution, let us know
-            if (_smartSearch->getResults().solved && Config::Debug::DrawBuildOrderSearchInfo)
+			if (Config::Debug::DrawBuildOrderSearchInfo && _smartSearch->getResults().solved)
             {
-                //BWAPI::Broodwar->printf("Build order SOLVED in %d nodes", (int)_smartSearch->getResults().nodesExpanded);
+                BWAPI::Broodwar->printf("Build order SOLVED in %d nodes", (int)_smartSearch->getResults().nodesExpanded);
             }
 
             if (_smartSearch->getResults().solved)
@@ -217,14 +221,14 @@ void BOSSManager::update(double timeLimit)
 
 					return;
 				}
-                // and if that search doesn't work then we're out of luck, no build orders forus
-				catch (const BOSS::BOSSException & exception)
+                // and if that search doesn't work then we're out of luck, no build orders for us
+				catch (const BOSS::BOSSException)
                 {
-                    UAB_ASSERT_WARNING(false, "BOSS Timeout Naive Search Exception: %s", exception.what());
+                    //UAB_ASSERT_WARNING(false, "BOSS Timeout Naive Search Exception: %s", exception.what());
                     _previousStatus += "\x08Naive Exception";
                     if (Config::Debug::DrawBuildOrderSearchInfo)
                     {
-					    BWAPI::Broodwar->drawTextScreen(0, 20, "No legal BuildOrder found, returning empty Build Order");
+					    BWAPI::Broodwar->drawTextScreen(0, 20, "No BuildOrder found, returning empty BuildOrder");
                     }
 					_previousBuildOrder = BOSS::BuildOrder();
 					return;

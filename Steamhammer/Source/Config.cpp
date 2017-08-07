@@ -7,7 +7,7 @@ namespace Config
     {
         bool ConfigFileFound                = false;
         bool ConfigFileParsed               = false;
-        std::string ConfigFileLocation      = "bwapi-data/AI/Steamhammer_1.2.3.json";
+        std::string ConfigFileLocation      = "bwapi-data/AI/Steamhammer_1.3.json";
     }
 
     namespace Strategy
@@ -22,15 +22,6 @@ namespace Config
 		bool SurrenderWhenHopeIsLost        = true;
         bool UseEnemySpecificStrategy       = true;
         bool FoundEnemySpecificStrategy     = false;
-    }
-
-    namespace Modules							    
-    {
-        // the default tournament bot modules
-        bool UsingStrategyIO                = false;    // toggle the use of file io for strategy
-		
-        // extra things, don't enable unless you know what they are
-        bool UsingBuildOrderDemo            = false;
     }
 
     namespace BotInfo

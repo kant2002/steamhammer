@@ -11,7 +11,7 @@ namespace SquadOrderTypes
 		None,
 		Idle,      // workers, overlords with no other job
 		Attack,    // go attack
-		Defend,    // defend a base
+		Defend,    // defend a base (automatically disbanded when enemy is gone)
 		Hold,      // hold ground, stand ready to defend until needed (Drop squad)
 		Load,      // load into a transport (Drop squad)
 		Drop,      // go drop on the enemy (Drop squad)

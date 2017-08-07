@@ -23,6 +23,7 @@ class Squad
 {
     std::string         _name;
 	BWAPI::Unitset      _units;
+	bool				_combatSquad;
 	bool				_hasAir;
 	bool				_hasGround;
 	bool				_hasAntiAir;
@@ -69,8 +70,10 @@ public:
 	void                setSquadOrder(const SquadOrder & so);
 	void                addUnit(BWAPI::Unit u);
 	void                removeUnit(BWAPI::Unit u);
+	void				releaseWorkers();
     bool                containsUnit(BWAPI::Unit u) const;
-    bool                isEmpty() const;
+	bool                containsUnitType(BWAPI::UnitType t) const;
+	bool                isEmpty() const;
     void                clear();
     size_t              getPriority() const;
     void                setPriority(const size_t & priority);

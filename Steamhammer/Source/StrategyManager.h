@@ -51,9 +51,6 @@ class StrategyManager
     const BuildOrder                _emptyBuildOrder;
 	std::string						_openingGroup;
 
-	        void	                writeResults();
-	const	int					    getScore(BWAPI::Player player) const;
-	const	double				    getUCBValue(const size_t & strategy) const;
 	const	bool				    shouldExpandNow() const;
     const	MetaPairVector		    getProtossBuildOrderGoal();
 	const	MetaPairVector		    getTerranBuildOrderGoal();
@@ -72,9 +69,7 @@ public:
             void                    addStrategy(const std::string & name, Strategy & strategy);
 			void					setOpeningGroup();
 	const	std::string &			getOpeningGroup() const;
-            void                    setLearnedStrategy();
-            void	                readResults();
-	const	MetaPairVector		    getBuildOrderGoal();
+ 	const	MetaPairVector		    getBuildOrderGoal();
 	const	BuildOrder &            getOpeningBookBuildOrder() const;
 
 			void					handleUrgentProductionIssues(BuildOrderQueue & queue);

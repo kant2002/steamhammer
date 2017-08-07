@@ -10,7 +10,7 @@ MapGrid & MapGrid::Instance()
 }
 
 MapGrid::MapGrid() {}
-	
+
 MapGrid::MapGrid(int mapWidth, int mapHeight, int cellSize) 
 	: mapWidth(mapWidth)
 	, mapHeight(mapHeight)
@@ -124,7 +124,9 @@ void MapGrid::clearGrid() {
 	}
 }
 
-// populate the grid with units
+// Populate the grid with units.
+// Include all buildings, but others only if they are completed.
+// For the enemy, only include visible units (InformationManager remembers units which are out of sight).
 void MapGrid::update() 
 {
     if (Config::Debug::DrawMapGrid) 
@@ -155,17 +157,21 @@ void MapGrid::update()
 
 	//BWAPI::Broodwar->printf("MapGrid info: WH(%d, %d)  CS(%d)  RC(%d, %d)  C(%d)", mapWidth, mapHeight, cellSize, rows, cols, cells.size());
 
-	// add our units to the appropriate cell
-	for (auto & unit : BWAPI::Broodwar->self()->getUnits()) 
+	for (const auto unit : BWAPI::Broodwar->self()->getUnits()) 
 	{
-		getCell(unit).ourUnits.insert(unit);
-		getCell(unit).timeLastVisited = BWAPI::Broodwar->getFrameCount();
+		if (unit->isCompleted() || unit->getType().isBuilding())
+		{
+			getCell(unit).ourUnits.insert(unit);
+			getCell(unit).timeLastVisited = BWAPI::Broodwar->getFrameCount();
+		}
 	}
 
-	// add enemy units to the appropriate cell
-	for (auto & unit : BWAPI::Broodwar->enemy()->getUnits()) 
+	for (const auto unit : BWAPI::Broodwar->enemy()->getUnits()) 
 	{
-		if (unit->getHitPoints() > 0) 
+		if (unit->exists() &&
+			(unit->isCompleted() || unit->getType().isBuilding()) &&
+			unit->getHitPoints() > 0 &&
+			unit->getType() != BWAPI::UnitTypes::Unknown) 
 		{
 			getCell(unit).oppUnits.insert(unit);
 			getCell(unit).timeLastOpponentSeen = BWAPI::Broodwar->getFrameCount();

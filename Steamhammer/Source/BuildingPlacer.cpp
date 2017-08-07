@@ -35,7 +35,7 @@ void BuildingPlacer::computeResourceBox()
     BWAPI::Position start(InformationManager::Instance().getMyMainBaseLocation()->getPosition());
     BWAPI::Unitset unitsAroundNexus;
 
-    for (auto & unit : BWAPI::Broodwar->getAllUnits())
+    for (const auto unit : BWAPI::Broodwar->getAllUnits())
     {
         // if the units are less than 400 away add them if they are resources
         if (unit->getDistance(start) < 300 && unit->getType().isMineralField())
@@ -44,7 +44,7 @@ void BuildingPlacer::computeResourceBox()
         }
     }
 
-    for (auto & unit : unitsAroundNexus)
+    for (const auto unit : unitsAroundNexus)
     {
         int x = unit->getPosition().x;
         int y = unit->getPosition().y;
@@ -190,31 +190,22 @@ bool BuildingPlacer::canBuildHereWithSpace(BWAPI::TilePosition position,const Bu
 
 BWAPI::TilePosition BuildingPlacer::getBuildLocationNear(const Building & b,int buildDist,bool horizontalOnly) const
 {
-    SparCraft::Timer t;
-    t.start();
-
 	// BWAPI::Broodwar->printf("Building Placer seeks position near %d, %d", b.desiredPosition.x, b.desiredPosition.y);
 
 	// get the precomputed vector of tile positions which are sorted closest to this location
     const std::vector<BWAPI::TilePosition> & closestToBuilding = MapTools::Instance().getClosestTilesTo(BWAPI::Position(b.desiredPosition));
-
-    double ms1 = t.getElapsedTimeInMilliSec();
 
     // iterate through the list until we've found a suitable location
     for (size_t i(0); i < closestToBuilding.size(); ++i)
     {
         if (canBuildHereWithSpace(closestToBuilding[i],b,buildDist,horizontalOnly))
         {
-            double ms = t.getElapsedTimeInMilliSec();
             // BWAPI::Broodwar->printf("Building Placer took %d iterations, lasting %lf ms @ %lf iterations/ms, %lf setup ms", i, ms, (i / ms), ms1);
 			// BWAPI::Broodwar->printf("Building Placer took %d iterations, lasting %lf ms, finding %d, %d", i, ms, closestToBuilding[i].x, closestToBuilding[i].y);
 
             return closestToBuilding[i];
         }
     }
-
-    double ms = t.getElapsedTimeInMilliSec();
-    // BWAPI::Broodwar->printf("Building Placer took %lf ms, found nothing", ms);
 
     return  BWAPI::TilePositions::None;
 }
@@ -351,19 +342,8 @@ BWAPI::TilePosition BuildingPlacer::getRefineryPosition()
 
 	// NOTE In BWAPI 4.2.1 getStaticGeysers() has a bug affecting geysers whose refineries
 	// have been canceled or destroyed: They become inaccessible. https://github.com/bwapi/bwapi/issues/697
-	// TODO still trying to work around the bug
-	// TODO could rewrite this to use BWTA instead of BWAPI; would not need the slow nested loop
-	//      loop through our bases (from InfoMan), then pick a geyser at that base
-	// for (auto & geyser : BWAPI::Broodwar->getStaticGeysers())
-	// for (auto & geyser : BWAPI::Broodwar->getAllUnits())
-	for (auto & geyser : BWAPI::Broodwar->getGeysers())
+	for (const auto geyser : BWAPI::Broodwar->getGeysers())
 	{
-		//if (geyser->getType() != BWAPI::UnitTypes::Resource_Vespene_Geyser)
-        //{
-		//	continue;
-        //}
-		//BWAPI::Broodwar->printf("geyser (type %d) @ %d, %d", BWAPI::UnitTypes::Resource_Vespene_Geyser, geyser->getInitialTilePosition().x, geyser->getInitialTilePosition().y);
-
         // check to see if it's near one of our depots
         bool nearDepot = false;
         for (auto & unit : BWAPI::Broodwar->self()->getUnits())
@@ -378,12 +358,11 @@ BWAPI::TilePosition BuildingPlacer::getRefineryPosition()
         if (nearDepot)
         {
             int homeDistance = geyser->getDistance(homePosition);
-			//BWAPI::Broodwar->printf("our geyser @ %d, %d, dist %d", geyser->getInitialTilePosition().x, geyser->getInitialTilePosition().y, homeDistance);
 
             if (homeDistance < minGeyserDistanceFromHome)
             {
                 minGeyserDistanceFromHome = homeDistance;
-                closestGeyser = geyser->getInitialTilePosition();
+                closestGeyser = geyser->getTilePosition();      // BWAPI bug workaround by Arrak
             }
 		}
     }
