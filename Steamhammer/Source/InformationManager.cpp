@@ -1,6 +1,7 @@
-#include "Common.h"
 #include "InformationManager.h"
+
 #include "MapTools.h"
+#include "ProductionManager.h"
 #include "Random.h"
 #include "UnitUtil.h"
 
@@ -10,8 +11,10 @@ InformationManager::InformationManager()
     : _self(BWAPI::Broodwar->self())
     , _enemy(BWAPI::Broodwar->enemy())
 	, _enemyProxy(false)
-
+	
 	, _weHaveCombatUnits(false)
+	, _enemyHasCombatUnits(false)
+	, _enemyHasStaticAntiAir(false)
 	, _enemyHasAntiAir(false)
 	, _enemyHasAirTech(false)
 	, _enemyHasCloakTech(false)
@@ -182,8 +185,8 @@ void InformationManager::chooseNewMainBase()
 // With some probability, randomly choose a base as the new "main" base.
 void InformationManager::maybeChooseNewMainBase()
 {
-	// 1. Decide randomly whether to choose a new base.
-	if (Random::Instance().index(2) == 0)
+	// 1. If out of book, decide randomly whether to choose a new base.
+	if (ProductionManager::Instance().isOutOfBook() && Random::Instance().index(2) == 0)
 	{
 		// 2. List my bases.
 		std::vector<BWTA::BaseLocation *> myBases;
@@ -231,6 +234,7 @@ void InformationManager::update()
 {
 	updateUnitInfo();
 	updateBaseLocationInfo();
+	updateTheBases();
 }
 
 void InformationManager::updateUnitInfo() 
@@ -280,7 +284,7 @@ void InformationManager::updateBaseLocationInfo()
 				{
 					if (Config::Debug::DrawScoutInfo)
 					{
-						BWAPI::Broodwar->printf("Enemy base found by seeing it");
+						BWAPI::Broodwar->printf("Enemy base seen");
 					}
 
 					baseFound = true;
@@ -344,6 +348,33 @@ void InformationManager::updateBaseLocationInfo()
 		if (type.isBuilding()) 
 		{
 			updateOccupiedRegions(BWTA::getRegion(BWAPI::TilePosition(ui.lastPosition)), _self);
+		}
+	}
+}
+
+// _theBases is not always correctly updated by the event-driven methods.
+// Fix it.
+// TODO partially implemented; the finished part seems to work so far
+void InformationManager::updateTheBases()
+{
+	for (BWTA::BaseLocation * base : BWTA::getBaseLocations())
+	{
+		if (_theBases[base]->owner == _self)
+		{
+			BWAPI::Unit depot = _theBases[base]->resourceDepot;
+			if (!depot || !depot->exists())
+			{
+				baseLost(base->getTilePosition());
+			}
+		}
+		else if (_theBases[base]->owner == _enemy)
+		{
+			// TODO
+		}
+		else
+		{
+			// Thought to be neutral. Is it really?
+			// TODO
 		}
 	}
 }
@@ -881,30 +912,6 @@ void InformationManager::updateUnit(BWAPI::Unit unit)
 	}
 }
 
-bool InformationManager::isValidUnit(BWAPI::Unit unit) 
-{
-	// we only care about our units and enemy units
-	if (unit->getPlayer() != _self && unit->getPlayer() != _enemy) 
-	{
-		return false;
-	}
-
-	// if it's a weird unit, don't bother
-	if (unit->getType() == BWAPI::UnitTypes::None || unit->getType() == BWAPI::UnitTypes::Unknown ||
-		unit->getType() == BWAPI::UnitTypes::Zerg_Larva || unit->getType() == BWAPI::UnitTypes::Zerg_Egg) 
-	{
-		return false;
-	}
-
-	// if the position isn't valid throw it out
-	if (!unit->getPosition().isValid()) 
-	{
-		return false;	
-	}
-
-	return true;
-}
-
 void InformationManager::onUnitDestroy(BWAPI::Unit unit) 
 { 
 	if (unit->getPlayer() == _self || unit->getPlayer() == _enemy)
@@ -1020,6 +1027,58 @@ bool InformationManager::weHaveCombatUnits()
 	return false;
 }
 
+// Enemy has complated combat units (excluding workers).
+bool InformationManager::enemyHasCombatUnits()
+{
+	// Latch: Once they're known to have the tech, they always have it.
+	if (_enemyHasCombatUnits)
+	{
+		return true;
+	}
+
+	for (const auto & kv : getUnitData(_enemy).getUnits())
+	{
+		const UnitInfo & ui(kv.second);
+
+		if (!ui.type.isWorker() &&
+			!ui.type.isBuilding() &&
+			ui.completed &&
+			ui.type != BWAPI::UnitTypes::Zerg_Larva &&
+			ui.type != BWAPI::UnitTypes::Zerg_Overlord)
+		{
+			_enemyHasCombatUnits = true;
+			return true;
+		}
+	}
+
+	return false;
+}
+
+// Enemy has spore colonies, photon cannons, or turrets.
+bool InformationManager::enemyHasStaticAntiAir()
+{
+	// Latch: Once they're known to have the tech, they always have it.
+	if (_enemyHasStaticAntiAir)
+	{
+		return true;
+	}
+
+	for (const auto & kv : getUnitData(_enemy).getUnits())
+	{
+		const UnitInfo & ui(kv.second);
+
+		if (ui.type == BWAPI::UnitTypes::Terran_Missile_Turret ||
+			ui.type == BWAPI::UnitTypes::Protoss_Photon_Cannon ||
+			ui.type == BWAPI::UnitTypes::Zerg_Spore_Colony)
+		{
+			_enemyHasStaticAntiAir = true;
+			return true;
+		}
+	}
+
+	return false;
+}
+
 // Enemy has mobile units that can shoot up, or the tech to produce them.
 bool InformationManager::enemyHasAntiAir()
 {
@@ -1044,7 +1103,7 @@ bool InformationManager::enemyHasAntiAir()
 			||
 
 			// Otherwise, any mobile unit that has an air weapon.
-			(!ui.type.isBuilding() && ui.type.airWeapon() != BWAPI::WeaponTypes::None)
+			(!ui.type.isBuilding() && UnitUtil::TypeCanAttackAir(ui.type))
 
 			||
 
@@ -1207,7 +1266,8 @@ bool InformationManager::enemyHasOverlordHunters()
 }
 
 // Enemy has spore colonies, photon cannons, turrets, or spider mines.
-// Spider mines only catch cloaked ground units, so this routine is not ideal for countering wraiths.
+// It's the same as enemyHasStaticAntiAir() except for spider mines.
+// Spider mines only catch cloaked ground units, so this routine is not for countering wraiths.
 bool InformationManager::enemyHasStaticDetection()
 {
 	// Latch: Once they're known to have the tech, they always have it.
@@ -1216,14 +1276,17 @@ bool InformationManager::enemyHasStaticDetection()
 		return true;
 	}
 
+	if (enemyHasStaticAntiAir())
+	{
+		_enemyHasStaticDetection = true;
+		return true;
+	}
+
 	for (const auto & kv : getUnitData(_enemy).getUnits())
 	{
 		const UnitInfo & ui(kv.second);
 
-		if (ui.type == BWAPI::UnitTypes::Terran_Missile_Turret ||
-			ui.type == BWAPI::UnitTypes::Terran_Vulture_Spider_Mine ||
-			ui.type == BWAPI::UnitTypes::Protoss_Photon_Cannon ||
-			ui.type == BWAPI::UnitTypes::Zerg_Spore_Colony)
+		if (ui.type == BWAPI::UnitTypes::Terran_Vulture_Spider_Mine)
 		{
 			_enemyHasStaticDetection = true;
 			return true;

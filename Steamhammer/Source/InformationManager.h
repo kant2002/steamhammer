@@ -19,6 +19,8 @@ class InformationManager
 	bool			_enemyProxy;
 
 	bool			_weHaveCombatUnits;
+	bool			_enemyHasCombatUnits;
+	bool			_enemyHasStaticAntiAir;
 	bool			_enemyHasAntiAir;
 	bool			_enemyHasAirTech;
 	bool			_enemyHasCloakTech;
@@ -51,8 +53,8 @@ class InformationManager
 	void                    updateUnit(BWAPI::Unit unit);
     void                    updateUnitInfo();
     void                    updateBaseLocationInfo();
-    void                    updateOccupiedRegions(BWTA::Region * region,BWAPI::Player player);
-    bool                    isValidUnit(BWAPI::Unit unit);
+	void					updateTheBases();
+	void                    updateOccupiedRegions(BWTA::Region * region, BWAPI::Player player);
 
 public:
 
@@ -90,6 +92,8 @@ public:
 	int						getMyNumGeysers();
 	void					getMyGasCounts(int & nRefineries, int & nFreeGeysers);
 
+	bool					getEnemyProxy() { return _enemyProxy; };
+
 	void					maybeChooseNewMainBase();
 
 	bool					isBaseReserved(BWTA::BaseLocation * base);
@@ -101,6 +105,8 @@ public:
 
 	bool					weHaveCombatUnits();
 
+	bool					enemyHasCombatUnits();
+	bool					enemyHasStaticAntiAir();
 	bool					enemyHasAntiAir();
 	bool					enemyHasAirTech();
 	bool                    enemyHasCloakTech();

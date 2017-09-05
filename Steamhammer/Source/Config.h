@@ -19,11 +19,16 @@ namespace Config
         extern bool PrintInfoOnStart;
     }
 
-    namespace Strategy
+	namespace IO
+	{
+		extern std::string ReadDir;
+		extern std::string WriteDir;
+		extern bool UseOpponentModel;
+	}
+
+	namespace Strategy
     {
         extern std::string StrategyName;
-        extern std::string ReadDir;
-        extern std::string WriteDir;
         extern bool ScoutHarassEnemy;
 		extern bool SurrenderWhenHopeIsLost;
         extern bool UseEnemySpecificStrategy;

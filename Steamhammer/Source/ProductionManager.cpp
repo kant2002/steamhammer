@@ -583,18 +583,14 @@ void ProductionManager::executeCommand(MacroCommand command)
 {
 	MacroCommandType cmd = command.getType();
 
-	if (cmd == MacroCommandType::Scout)
+	if (cmd == MacroCommandType::Scout ||
+		cmd == MacroCommandType::ScoutIfNeeded||
+		cmd == MacroCommandType::ScoutLocation ||
+		cmd == MacroCommandType::ScoutOnceOnly ||
+		cmd == MacroCommandType::ScoutWhileSafe)
 	{
-		GameCommander::Instance().goScoutAlways();
-	}
-	else if (cmd == MacroCommandType::ScoutIfNeeded)
-	{
-		GameCommander::Instance().goScoutIfNeeded();
-	}
-	else if (cmd == MacroCommandType::ScoutLocation)
-	{
-		GameCommander::Instance().goScoutIfNeeded();
-		ScoutManager::Instance().setScoutLocationOnly();
+		GameCommander::Instance().goScout();
+		ScoutManager::Instance().setScoutCommand(cmd);
 	}
 	else if (cmd == MacroCommandType::StopGas)
 	{

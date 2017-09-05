@@ -200,9 +200,6 @@ BWAPI::TilePosition BuildingPlacer::getBuildLocationNear(const Building & b,int 
     {
         if (canBuildHereWithSpace(closestToBuilding[i],b,buildDist,horizontalOnly))
         {
-            // BWAPI::Broodwar->printf("Building Placer took %d iterations, lasting %lf ms @ %lf iterations/ms, %lf setup ms", i, ms, (i / ms), ms1);
-			// BWAPI::Broodwar->printf("Building Placer took %d iterations, lasting %lf ms, finding %d, %d", i, ms, closestToBuilding[i].x, closestToBuilding[i].y);
-
             return closestToBuilding[i];
         }
     }
@@ -269,7 +266,7 @@ bool BuildingPlacer::buildable(const Building & b,int x,int y) const
     }
 
 	// getUnitsOnTile() only returns visible units, even if they are buildings.
-    for (auto & unit : BWAPI::Broodwar->getUnitsOnTile(x,y))
+    for (const auto unit : BWAPI::Broodwar->getUnitsOnTile(x,y))
     {
         if ((b.builderUnit != nullptr) && (unit != b.builderUnit))
         {
@@ -346,7 +343,7 @@ BWAPI::TilePosition BuildingPlacer::getRefineryPosition()
 	{
         // check to see if it's near one of our depots
         bool nearDepot = false;
-        for (auto & unit : BWAPI::Broodwar->self()->getUnits())
+        for (const auto unit : BWAPI::Broodwar->self()->getUnits())
         {
             if (unit->getType().isResourceDepot() && unit->getDistance(geyser) < 300)
             {
@@ -381,4 +378,3 @@ bool BuildingPlacer::isReserved(int x, int y) const
 
     return _reserveMap[x][y];
 }
-

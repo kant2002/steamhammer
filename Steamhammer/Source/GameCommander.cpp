@@ -1,5 +1,6 @@
 #include "Common.h"
 #include "GameCommander.h"
+#include "OpponentModel.h"
 #include "UnitUtil.h"
 
 using namespace UAlbertaBot;
@@ -7,8 +8,7 @@ using namespace UAlbertaBot;
 GameCommander::GameCommander() 
 	: _combatCommander(CombatCommander::Instance())
     , _initialScoutSet(false)
-	, _scoutAlways(false)
-	, _scoutIfNeeded(false)
+	, _goScout(false)
 	, _surrenderTime(0)
 {
 }
@@ -67,6 +67,9 @@ void GameCommander::update()
 	_timerManager.startTimer(TimerManager::Scout);
     ScoutManager::Instance().update();
 	_timerManager.stopTimer(TimerManager::Scout);
+
+	// Should use a trivial amount of time.
+	OpponentModel::Instance().update();
 	
 	_timerManager.stopTimer(TimerManager::All);
 
@@ -216,12 +219,11 @@ void GameCommander::setScoutUnits()
     // Send a scout if we haven't yet and should.
 	if (!_initialScoutSet && _scoutUnits.empty())
     {
-		if (_scoutAlways ||
-			(_scoutIfNeeded && !InformationManager::Instance().getMainBaseLocation(BWAPI::Broodwar->enemy())))
+		if (_goScout && ScoutManager::Instance().shouldScout())
 		{
 			BWAPI::Unit workerScout = getAnyFreeWorker();
 
-			// if we find a worker (which we should) add it to the scout units
+			// If we find a worker (which we should), make it the scout unit.
 			if (workerScout)
 			{
                 ScoutManager::Instance().setWorkerScout(workerScout);
@@ -245,15 +247,9 @@ void GameCommander::setCombatUnits()
 }
 
 // Call when the strategy wants an unconditional worker scout.
-void GameCommander::goScoutAlways()
+void GameCommander::goScout()
 {
-	_scoutAlways = true;
-}
-
-// Call when the strategy wants a worker scout provided the enemy is not yet located.
-void GameCommander::goScoutIfNeeded()
-{
-	_scoutIfNeeded = true;
+	_goScout = true;
 }
 
 void GameCommander::onUnitShow(BWAPI::Unit unit)			

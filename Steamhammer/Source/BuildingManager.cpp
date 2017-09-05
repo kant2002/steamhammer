@@ -7,13 +7,12 @@
 using namespace UAlbertaBot;
 
 BuildingManager::BuildingManager()
-    : _debugMode(false)
-    , _reservedMinerals(0)
+    : _reservedMinerals(0)
     , _reservedGas(0)
 {
 }
 
-// gets called every frame from GameCommander
+// Called every frame from GameCommander.
 void BuildingManager::update()
 {
     validateWorkersAndBuildings();          // check to see if assigned workers have died en route or while constructing
@@ -32,18 +31,22 @@ void BuildingManager::validateWorkersAndBuildings()
     // find any buildings which have become obsolete
     for (auto & b : _buildings)
     {
-        if (b.status != BuildingStatus::UnderConstruction)
-        {
-            continue;
-        }
-
-		if (!b.buildingUnit ||
-			!b.buildingUnit->exists() ||
-			b.buildingUnit->getHitPoints() <= 0 ||
-			!b.buildingUnit->getType().isBuilding())
-        {
+		if (BWAPI::Broodwar->getFrameCount() - b.startFrame > 60 * 24 ||
+			b.buildersSent > 3)
+		{
+			// Too much time or too many attempts. Give up.
 			toRemove.push_back(b);
-        }
+		}
+		else if (b.status == BuildingStatus::UnderConstruction)
+		{
+			if (!b.buildingUnit ||
+				!b.buildingUnit->exists() ||
+				b.buildingUnit->getHitPoints() <= 0 ||
+				!b.buildingUnit->getType().isBuilding())
+			{
+				toRemove.push_back(b);
+			}
+		}
     }
 
     undoBuildings(toRemove);
@@ -77,6 +80,8 @@ void BuildingManager::assignWorkersToUnassignedBuildings()
 		{
 			continue;
 		}
+
+		++b.buildersSent;    // count workers ever assigned to build it
 
         // reserve this building's space
         BuildingPlacer::Instance().reserveTiles(b.finalPosition,b.type.tileWidth(),b.type.tileHeight());
@@ -595,6 +600,12 @@ void BuildingManager::undoBuildings(const std::vector<Building> & toRemove)
 		if (b.type.isResourceDepot() && b.macroLocation != MacroLocation::Macro && b.finalPosition.isValid())
 		{
 			InformationManager::Instance().unreserveBase(b.finalPosition);
+		}
+
+		// Release the worker, if necessary.
+		if (b.builderUnit && b.builderUnit->exists() && b.builderUnit->getType().isWorker())
+		{
+			WorkerManager::Instance().finishedWithWorker(b.builderUnit);
 		}
 	}
 

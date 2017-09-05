@@ -804,7 +804,7 @@ void CombatCommander::drawSquadInformation(int x, int y)
 // Choose a point of attack for the given squad (which may be null).
 BWAPI::Position CombatCommander::getMainAttackLocation(const Squad * squad)
 {
-	// If we're defensive, try to find a front line to hold.
+	// If we're defensive, instead look for a front line to hold.
 	if (!_goAggressive)
 	{
 		// We are guaranteed to always have a main base location, even if it has been destroyed.

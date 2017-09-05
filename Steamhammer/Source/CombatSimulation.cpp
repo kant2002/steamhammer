@@ -23,43 +23,25 @@ void CombatSimulation::setCombatUnits(const BWAPI::Position & center, const int 
 	BWAPI::Unitset ourCombatUnits;
 	std::vector<UnitInfo> enemyCombatUnits;
 
-	// Both of these return only completed units, so we don't need to check that later.
 	MapGrid::Instance().GetUnits(ourCombatUnits, center, Config::Micro::CombatRegroupRadius, true, false);
 	InformationManager::Instance().getNearbyForce(enemyCombatUnits, center, BWAPI::Broodwar->enemy(), Config::Micro::CombatRegroupRadius);
-
-	// Add enemy units first.
-	for (const UnitInfo & ui : enemyCombatUnits)
-	{
-		if (ui.type.isWorker() || ui.lastHealth == 0 || ui.type == BWAPI::UnitTypes::Unknown)
-		{
-			continue;
-		}
-
-		// Skip uncompleted or unpowered static defense.
-		if (ui.type.isBuilding() && ui.unit->exists() && (!ui.unit->isCompleted() || !ui.unit->isPowered()))
-		{
-			continue;
-		}
-
-		fap.addIfCombatUnitPlayer2(ui);
-	}
 
 	// Add our units.
 	for (const auto unit : ourCombatUnits)
 	{
-		bool include =
-			unit->getHitPoints() > 0 &&
-			UnitUtil::IsCombatSimUnit(unit->getType());
-
-		// Skip uncompleted or unpowered static defense.
-		if (unit->getType().isBuilding() && (!unit->isCompleted() || !unit->isPowered()))
-		{
-			include = false;
-		}
-
-		if (include)
+		if (UnitUtil::IsCombatSimUnit(unit))
 		{
 			fap.addIfCombatUnitPlayer1(unit);
+		}
+	}
+
+	// Add enemy units.
+	for (const UnitInfo & ui : enemyCombatUnits)
+	{
+		if (ui.lastHealth > 0 &&
+			(ui.unit->exists() ? UnitUtil::IsCombatSimUnit(ui.unit) : UnitUtil::IsCombatSimUnit(ui.type)))
+		{
+			fap.addIfCombatUnitPlayer2(ui);
 		}
 	}
 }

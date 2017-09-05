@@ -13,9 +13,40 @@ bool UnitUtil::IsMorphedBuildingType(BWAPI::UnitType type)
 		type == BWAPI::UnitTypes::Zerg_Greater_Spire;
 }
 
+// Unit morphed from another, not spawned from a drone.
+bool UnitUtil::IsMorphedUnitType(BWAPI::UnitType type)
+{
+	return
+		type == BWAPI::UnitTypes::Zerg_Lurker ||
+		type == BWAPI::UnitTypes::Zerg_Guardian ||
+		type == BWAPI::UnitTypes::Zerg_Devourer;
+}
+
 // This is a combat unit for purposes of combat simulation.
-// The combat simulation does not support spellcasters other than medics.
-// It does not support bunkers, reavers, or carriers--but we fake bunkers.
+bool UnitUtil::IsCombatSimUnit(BWAPI::Unit unit)
+{
+	if (!unit->isCompleted() || !unit->isPowered() || unit->getHitPoints() == 0)
+	{
+		return false;
+	}
+
+	// A worker counts as a combat unit if it has been given an order to attack.
+	if (unit->getType().isWorker())
+	{
+		return
+			unit->getOrder() == BWAPI::Orders::AttackMove ||
+			unit->getOrder() == BWAPI::Orders::AttackTile ||
+			unit->getOrder() == BWAPI::Orders::AttackUnit;
+	}
+
+	return IsCombatSimUnit(unit->getType());
+}
+
+// This is a combat unit type for purposes of combat simulation.
+// Treat workers as non-combat units (overridden above for some workers).
+// The combat simulation does not support spells other than medic healing and stim,
+// and it does not understand detectors.
+// The combat sim treats carriers as the attack unit, not their interceptors (bftjoe).
 bool UnitUtil::IsCombatSimUnit(BWAPI::UnitType type)
 {
 	if (type.isWorker())
@@ -23,10 +54,15 @@ bool UnitUtil::IsCombatSimUnit(BWAPI::UnitType type)
 		return false;
 	}
 
+	if (type == BWAPI::UnitTypes::Protoss_Interceptor)
+	{
+		return false;
+	}
+
 	return
-		type.canAttack() ||            // includes static defense except bunkers, excludes spellcasters
-		type == BWAPI::UnitTypes::Terran_Medic ||
-		type.isDetector();
+		TypeCanAttackAir(type) ||
+		TypeCanAttackGround(type) ||
+		type == BWAPI::UnitTypes::Terran_Medic;
 }
 
 bool UnitUtil::IsCombatUnit(BWAPI::UnitType type)
@@ -63,6 +99,8 @@ bool UnitUtil::IsCombatUnit(BWAPI::Unit unit)
 	return IsCombatUnit(unit->getType());
 }
 
+// Check whether a unit variable points to a unit we control.
+// This is called only on units that we believe are ours.
 bool UnitUtil::IsValidUnit(BWAPI::Unit unit)
 {
 	return unit
@@ -70,7 +108,8 @@ bool UnitUtil::IsValidUnit(BWAPI::Unit unit)
 		&& (unit->isCompleted() || IsMorphedBuildingType(unit->getType()))
 		&& unit->getHitPoints() > 0
 		&& unit->getType() != BWAPI::UnitTypes::Unknown
-		&& unit->getPosition().isValid();
+		&& (unit->getPosition().isValid() || unit->isLoaded())     // position is invalid if loaded in transport or bunker
+		&& unit->getPlayer() == BWAPI::Broodwar->self();           // catches mind controlled units
 }
 
 bool UnitUtil::CanAttack(BWAPI::Unit attacker, BWAPI::Unit target)
@@ -294,23 +333,37 @@ int UnitUtil::GetAllUnitCount(BWAPI::UnitType type)
         // trivial case: unit which exists matches the type
         if (unit->getType() == type)
         {
-            count++;
+            ++count;
         }
 
-        // case where a zerg egg contains the unit type
-        if (unit->getType() == BWAPI::UnitTypes::Zerg_Egg && unit->getBuildType() == type)
+        // Units in the egg.
+        else if (unit->getType() == BWAPI::UnitTypes::Zerg_Egg && unit->getBuildType() == type)
         {
             count += type.isTwoUnitsInOneEgg() ? 2 : 1;
         }
 
+		// Lurkers in the egg.
+		else if (unit->getType() == BWAPI::UnitTypes::Zerg_Lurker_Egg && type == BWAPI::UnitTypes::Zerg_Lurker)
+		{
+			++count;
+		}
+
+		// Guardians or devourers in the cocoon.
+		else if (unit->getType() == BWAPI::UnitTypes::Zerg_Cocoon && unit->getBuildType() == type)
+		{
+			++count;
+		}
+
         // case where a building has started constructing a unit but it doesn't yet have a unit associated with it
-        if (unit->getRemainingTrainTime() > 0)
+        else if (unit->getRemainingTrainTime() > 0)
         {
             BWAPI::UnitType trainType = unit->getLastCommand().getUnitType();
 
+			// NOTE Comparing the time like this could lead to miscounts if units start simultaneously.
+			//      But the original UAlbertaBot production system does not start units simultaneously.
             if (trainType == type && unit->getRemainingTrainTime() == trainType.buildTime())
             {
-                count++;
+                ++count;
             }
         }
     }
@@ -326,7 +379,7 @@ int UnitUtil::GetCompletedUnitCount(BWAPI::UnitType type)
 	{
 		if (unit->getType() == type && unit->isCompleted())
 		{
-			count++;
+			++count;
 		}
 	}
 

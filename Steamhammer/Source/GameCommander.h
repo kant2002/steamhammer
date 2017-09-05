@@ -40,8 +40,7 @@ class GameCommander
 	int						_surrenderTime;    // for giving up early
 
     bool                    _initialScoutSet;
-	bool					_scoutAlways;
-	bool					_scoutIfNeeded;
+	bool					_goScout;
 
     void                    assignUnit(BWAPI::Unit unit, BWAPI::Unitset & set);
 	bool                    isAssigned(BWAPI::Unit unit) const;
@@ -60,8 +59,7 @@ public:
 	void setScoutUnits();
 	void setCombatUnits();
 
-	void goScoutAlways();
-	void goScoutIfNeeded();
+	void goScout();
 
 	void drawDebugInterface();
     void drawGameInformation(int x, int y);

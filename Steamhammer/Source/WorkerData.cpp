@@ -159,7 +159,7 @@ void WorkerData::setWorkerJob(BWAPI::Unit unit, WorkerJob job, BWAPI::UnitType j
 
 	if (workerJobMap[unit] != Build)
 	{
-		BWAPI::Broodwar->printf("Something went horribly wrong");
+		//BWAPI::Broodwar->printf("Something went horribly wrong");
 	}
 }
 
@@ -177,7 +177,7 @@ void WorkerData::setWorkerJob(BWAPI::Unit unit, WorkerJob job, WorkerMoveData wm
 
 	if (workerJobMap[unit] != Move)
 	{
-		BWAPI::Broodwar->printf("Something went horribly wrong");
+		//BWAPI::Broodwar->printf("Something went horribly wrong");
 	}
 }
 
@@ -539,7 +539,7 @@ void WorkerData::getGasWorkers(std::set<BWAPI::Unit> & mw)
 
 void WorkerData::drawDepotDebugInfo()
 {
-	for (auto & depot : depots)
+	for (const auto depot : depots)
 	{
 		int x = depot->getPosition().x - 64;
 		int y = depot->getPosition().y - 32;
@@ -549,7 +549,7 @@ void WorkerData::drawDepotDebugInfo()
 
         BWAPI::Unitset minerals = getMineralPatchesNearDepot(depot);
 
-        for (auto & mineral : minerals)
+        for (const auto mineral : minerals)
         {
             int x = mineral->getPosition().x;
 		    int y = mineral->getPosition().y;

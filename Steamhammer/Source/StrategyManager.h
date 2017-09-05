@@ -64,8 +64,6 @@ public:
     
 	static	StrategyManager &	    Instance();
 
-			void				    onEnd(const bool isWinner);
-
             void                    addStrategy(const std::string & name, Strategy & strategy);
 			void					setOpeningGroup();
 	const	std::string &			getOpeningGroup() const;
