@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Common.h"
+#include "MacroCommand.h"
 #include "MicroManager.h"
 #include "InformationManager.h"
 
@@ -11,7 +12,7 @@ class ScoutManager
 	BWAPI::Unit						_workerScout;
     std::string                     _scoutStatus;
     std::string                     _gasStealStatus;
-	bool							_scoutLocationOnly;
+	MacroCommandType				_scoutCommand;
 	bool			                _scoutUnderAttack;
 	bool							_tryGasSteal;
     bool                            _didGasSteal;
@@ -39,9 +40,12 @@ public:
 
 	void update();
 
+	bool shouldScout();
+	
     void setWorkerScout(BWAPI::Unit unit);
 	void releaseWorkerScout();
+
 	void setGasSteal();
-	void setScoutLocationOnly();
+	void setScoutCommand(MacroCommandType cmd);
 };
 }

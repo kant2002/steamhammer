@@ -2,6 +2,7 @@
 
 #include "BuildOrder.h"
 #include "BuildOrderQueue.h"
+#include "GameRecord.h"
 
 namespace UAlbertaBot
 {
@@ -143,10 +144,11 @@ class StrategyBossZerg
 	void resetTechScores();
 	void setAvailableTechUnits(std::array<bool, int(TechUnit::Size)> & available);
 
-	void vProtossTechScores();
-	void vTerranTechScores();
-	void vZergTechScores();
-	void calculateTechScores();
+	void vProtossTechScores(const PlayerSnapshot & snap);
+	void vTerranTechScores(const PlayerSnapshot & snap);
+	void vZergTechScores(const PlayerSnapshot & snap);
+
+	void calculateTechScores(int lookaheadFrames);
 	void chooseTechTarget();
 	void chooseUnitMix();
 	void chooseAuxUnit();

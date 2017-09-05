@@ -1,12 +1,15 @@
 /* 
  *----------------------------------------------------------------------
- * Steamhammer
+ * Steamhammer entry point.
  *----------------------------------------------------------------------
  */
 
-#include "Common.h"
-#include "UAlbertaBotModule.h"
 #include "JSONTools.h"
+
+#include "UAlbertaBotModule.h"
+
+#include "Common.h"
+#include "OpponentModel.h"
 #include "ParseUtils.h"
 #include "UnitUtil.h"
 
@@ -43,25 +46,23 @@ void UAlbertaBotModule::onStart()
         BWAPI::Broodwar->enableFlag(BWAPI::Flag::UserInput);
     }
 
+	OpponentModel::Instance().read();
+	StrategyManager::Instance().setOpeningGroup();    // may depend on config and/or opponent model
+
     if (Config::BotInfo::PrintInfoOnStart)
     {
         BWAPI::Broodwar->printf("%s by %s, based on UAlbertaBot.", Config::BotInfo::BotName.c_str(), Config::BotInfo::Authors.c_str());
-    }
-
-	StrategyManager::Instance().setOpeningGroup();
+	}
 }
 
-void UAlbertaBotModule::onEnd(bool isWinner) 
+void UAlbertaBotModule::onEnd(bool isWinner)
 {
-	StrategyManager::Instance().onEnd(isWinner);
+	OpponentModel::Instance().setWin(isWinner);
+	OpponentModel::Instance().write();
 }
 
 void UAlbertaBotModule::onFrame()
 {
-    char red = '\x08';
-    char green = '\x07';
-    char white = '\x04';
-
     if (!Config::ConfigFile::ConfigFileFound)
     {
         BWAPI::Broodwar->drawBoxScreen(0,0,450,100, BWAPI::Colors::Black, true);
@@ -86,7 +87,7 @@ void UAlbertaBotModule::onFrame()
         return;
     }
 
-	GameCommander::Instance().update(); 
+	GameCommander::Instance().update();
 }
 
 void UAlbertaBotModule::onUnitDestroy(BWAPI::Unit unit)

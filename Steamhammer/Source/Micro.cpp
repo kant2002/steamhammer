@@ -38,7 +38,7 @@ void Micro::SmartAttackUnit(BWAPI::Unit attacker, BWAPI::Unit target)
 	if (!attacker || !attacker->exists() || attacker->getPlayer() != BWAPI::Broodwar->self() ||
 		!target || !target->exists())
     {
-		UAB_ASSERT(false,"bad arg");
+		UAB_ASSERT(false, "bad arg");
         return;
     }
 

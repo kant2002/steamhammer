@@ -26,7 +26,7 @@ void BuildingData::addBuilding(const Building & b)
     _buildings.push_back(b);
 }
 
-bool BuildingData::isBeingBuilt(BWAPI::UnitType type)
+bool BuildingData::isBeingBuilt(BWAPI::UnitType type) const
 {
     for (auto & b : _buildings)
     {

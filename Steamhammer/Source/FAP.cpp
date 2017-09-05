@@ -107,9 +107,9 @@ namespace UAlbertaBot {
 
 		if (damageType == BWAPI::DamageTypes::Concussive) {
 			if(fu.unitSize == BWAPI::UnitSizeTypes::Large)
-				damage = damage / 2;
+				damage = damage / 4;
 			else if(fu.unitSize == BWAPI::UnitSizeTypes::Medium)
-				damage = (damage * 3) / 4;
+				damage = damage / 2;
 		}
 		else if (damageType == BWAPI::DamageTypes::Explosive) {
 			if (fu.unitSize == BWAPI::UnitSizeTypes::Small)
@@ -118,17 +118,7 @@ namespace UAlbertaBot {
 				damage = (damage * 3) / 4;
 		}
 
-#ifdef _DEBUG
-
-		damage = MAX(1, damage - fu.armor);
-		fu.damageTaken += damage;
-		fu.health -= damage;
-
-#else
-
 		fu.health -= std::max(1, damage - fu.armor);
-
-#endif
 	}
 
 	int inline FastAPproximation::distButNotReally(const FastAPproximation::FAPUnit &u1, const FastAPproximation::FAPUnit &u2) const {

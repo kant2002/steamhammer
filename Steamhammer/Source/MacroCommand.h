@@ -10,6 +10,8 @@ enum class MacroCommandType
 	, Scout
 	, ScoutIfNeeded
 	, ScoutLocation
+	, ScoutOnceOnly
+	, ScoutWhileSafe   // TODO unimplemented
 	, StartGas
 	, StopGas
 	, GasUntil
@@ -36,6 +38,8 @@ public:
 			{ MacroCommandType::Scout
 			, MacroCommandType::ScoutIfNeeded
 			, MacroCommandType::ScoutLocation
+			, MacroCommandType::ScoutOnceOnly
+			, MacroCommandType::ScoutWhileSafe
 			, MacroCommandType::StartGas
 			, MacroCommandType::StopGas
 			, MacroCommandType::GasUntil
@@ -103,6 +107,14 @@ public:
 		if (t == MacroCommandType::ScoutLocation)
 		{
 			return "go scout location";
+		}
+		if (t == MacroCommandType::ScoutOnceOnly)
+		{
+			return "go scout once around";
+		}
+		if (t == MacroCommandType::ScoutWhileSafe)
+		{
+			return "go scout while safe";
 		}
 		if (t == MacroCommandType::StartGas)
 		{

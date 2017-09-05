@@ -503,10 +503,6 @@ const MetaPairVector StrategyManager::getZergBuildOrderGoal() const
 
 	return goal;
 }
-void StrategyManager::onEnd(const bool isWinner)
-{
-	// Nothing here for now.
-}
 
 void StrategyManager::handleUrgentProductionIssues(BuildOrderQueue & queue)
 {

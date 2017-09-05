@@ -26,6 +26,9 @@ public:
 	bool                    buildCommandGiven;
 	bool                    underConstruction;
 
+	int						startFrame;			// when this building record was first created
+	int						buildersSent;		// count workers lost in construction
+
 	Building() 
 		: macroLocation		(MacroLocation::Anywhere)
 		, desiredPosition	(0, 0)
@@ -37,6 +40,8 @@ public:
         , buildCommandGiven (false)
         , underConstruction (false) 
         , isGasSteal        (false)
+		, startFrame		(BWAPI::Broodwar->getFrameCount())
+		, buildersSent		(0)
     {} 
 
 	// constructor we use most often
@@ -51,9 +56,10 @@ public:
         , buildCommandGiven (false)
         , underConstruction (false) 
         , isGasSteal        (false)
-    {}
+		, startFrame		(BWAPI::Broodwar->getFrameCount())
+		, buildersSent		(0)
+	{}
 
-	// equals operator
 	bool operator==(const Building & b) 
     {
 		// buildings are equal if their worker unit or building unit are equal
@@ -74,6 +80,6 @@ public:
 	void        addBuilding(const Building & b);
 	void        removeBuilding(const Building & b);
     void        removeBuildings(const std::vector<Building> & buildings);
-	bool        isBeingBuilt(BWAPI::UnitType type);
+	bool        isBeingBuilt(BWAPI::UnitType type) const;
 };
 }

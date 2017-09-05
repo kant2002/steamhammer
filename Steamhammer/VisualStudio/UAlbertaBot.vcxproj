@@ -105,7 +105,7 @@
       <LinkLibraryDependencies>true</LinkLibraryDependencies>
     </ProjectReference>
     <Link>
-      <AdditionalDependencies>$(BWAPI_DIR)/lib/BWAPI.lib;$(Configuration)/SparCraft/SparCraft.lib;../../BOSS/bin/BOSS.lib;$(BWTA_DIR)/lib/BWTA.lib;$(BWTA_DIR)/lib/libboost_system-vc120-mt-1_56.lib;$(BWTA_DIR)/lib/libboost_thread-vc120-mt-1_56.lib;$(BWTA_DIR)/lib/libCGAL-vc120-mt-4.4.lib;$(BWTA_DIR)/lib/libgmp-10.lib;$(BWTA_DIR)/lib/libmpfr-4.lib;$(BWTA_DIR)/lib/libboost_filesystem-vc120-mt-1_56.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>$(BWAPI_DIR)/lib/BWAPI.lib;../../BOSS/bin/BOSS.lib;$(BWTA_DIR)/lib/BWTA.lib;$(BWTA_DIR)/lib/libboost_system-vc120-mt-1_56.lib;$(BWTA_DIR)/lib/libboost_thread-vc120-mt-1_56.lib;$(BWTA_DIR)/lib/libCGAL-vc120-mt-4.4.lib;$(BWTA_DIR)/lib/libgmp-10.lib;$(BWTA_DIR)/lib/libmpfr-4.lib;$(BWTA_DIR)/lib/libboost_filesystem-vc120-mt-1_56.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Windows</SubSystem>
       <OptimizeReferences>true</OptimizeReferences>
@@ -128,6 +128,7 @@
     <ClCompile Include="..\Source\Dll.cpp" />
     <ClCompile Include="..\Source\FAP.cpp" />
     <ClCompile Include="..\Source\GameCommander.cpp" />
+    <ClCompile Include="..\Source\GameRecord.cpp" />
     <ClCompile Include="..\Source\InformationManager.cpp" />
     <ClCompile Include="..\source\JSONTools.cpp" />
     <ClCompile Include="..\Source\Logger.cpp" />
@@ -145,7 +146,9 @@
     <ClCompile Include="..\Source\MicroRanged.cpp" />
     <ClCompile Include="..\Source\MicroTanks.cpp" />
     <ClCompile Include="..\Source\MicroTransports.cpp" />
+    <ClCompile Include="..\Source\OpponentModel.cpp" />
     <ClCompile Include="..\Source\ParseUtils.cpp" />
+    <ClCompile Include="..\Source\PlayerSnapshot.cpp" />
     <ClCompile Include="..\source\ProductionManager.cpp" />
     <ClCompile Include="..\Source\Random.cpp" />
     <ClCompile Include="..\source\ScoutManager.cpp" />
@@ -175,6 +178,7 @@
     <ClInclude Include="..\Source\DistanceMap.hpp" />
     <ClInclude Include="..\Source\FAP.h" />
     <ClInclude Include="..\Source\GameCommander.h" />
+    <ClInclude Include="..\Source\GameRecord.h" />
     <ClInclude Include="..\Source\InformationManager.h" />
     <ClInclude Include="..\source\JSONTools.h" />
     <ClInclude Include="..\Source\Logger.h" />
@@ -193,7 +197,9 @@
     <ClInclude Include="..\Source\MicroRanged.h" />
     <ClInclude Include="..\Source\MicroTanks.h" />
     <ClInclude Include="..\Source\MicroTransports.h" />
+    <ClInclude Include="..\Source\OpponentModel.h" />
     <ClInclude Include="..\Source\ParseUtils.h" />
+    <ClInclude Include="..\Source\PlayerSnapshot.h" />
     <ClInclude Include="..\source\ProductionManager.h" />
     <ClInclude Include="..\Source\Random.h" />
     <ClInclude Include="..\source\ScoutManager.h" />

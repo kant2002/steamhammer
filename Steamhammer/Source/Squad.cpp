@@ -345,6 +345,7 @@ bool Squad::needsToRegroup()
 		return false;
 	}
 
+	/* - simplification and supposed improvement suggested by bftjoe - remove this section
 	std::vector<UnitInfo> enemyCombatUnits;
     const auto & enemyUnitInfo = InformationManager::Instance().getUnitInfo(BWAPI::Broodwar->enemy());
 
@@ -395,9 +396,10 @@ bool Squad::needsToRegroup()
         _regroupStatus = std::string("No enemy units in range");
         return false;
     }
+	/* END proposed removal */
 
 	// If we most recently retreated, don't attack again until retreatDuration frames have passed.
-	const int retreatDuration = 3 * 24;
+	const int retreatDuration = 2 * 24;
 	bool retreat = _lastRetreatSwitchVal && (BWAPI::Broodwar->getFrameCount() - _lastRetreatSwitch < retreatDuration);
 
 	if (!retreat)

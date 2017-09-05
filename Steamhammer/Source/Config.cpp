@@ -7,17 +7,22 @@ namespace Config
     {
         bool ConfigFileFound                = false;
         bool ConfigFileParsed               = false;
-        std::string ConfigFileLocation      = "bwapi-data/AI/Steamhammer_1.3.json";
+        std::string ConfigFileLocation      = "bwapi-data/AI/Steamhammer_1.3.1.json";
     }
 
-    namespace Strategy
+	namespace IO
+	{
+		std::string ReadDir = "bwapi-data/read/";
+		std::string WriteDir = "bwapi-data/write/";
+		bool UseOpponentModel = true;
+	}
+
+	namespace Strategy
     {
         std::string ProtossStrategyName     = "1ZealotCore";			// default
         std::string TerranStrategyName      = "11Rax";					// default
         std::string ZergStrategyName        = "9PoolSpeed";				// default
         std::string StrategyName            = "9PoolSpeed";
-        std::string ReadDir                 = "bwapi-data/read/";
-        std::string WriteDir                = "bwapi-data/write/";
         bool ScoutHarassEnemy               = true;
 		bool SurrenderWhenHopeIsLost        = true;
         bool UseEnemySpecificStrategy       = true;

@@ -143,6 +143,9 @@
     <ClCompile Include="..\Source\Random.cpp" />
     <ClCompile Include="..\Source\Base.cpp" />
     <ClCompile Include="..\Source\FAP.cpp" />
+    <ClCompile Include="..\Source\GameRecord.cpp" />
+    <ClCompile Include="..\Source\OpponentModel.cpp" />
+    <ClCompile Include="..\Source\PlayerSnapshot.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Source\CombatCommander.h">
@@ -256,5 +259,8 @@
     <ClInclude Include="..\Source\Random.h" />
     <ClInclude Include="..\Source\Base.h" />
     <ClInclude Include="..\Source\FAP.h" />
+    <ClInclude Include="..\Source\GameRecord.h" />
+    <ClInclude Include="..\Source\OpponentModel.h" />
+    <ClInclude Include="..\Source\PlayerSnapshot.h" />
   </ItemGroup>
 </Project>

@@ -8,7 +8,9 @@ namespace UAlbertaBot
 namespace UnitUtil
 {      
 	bool IsMorphedBuildingType(BWAPI::UnitType unitType);
-	
+	bool IsMorphedUnitType(BWAPI::UnitType unitType);
+
+	bool IsCombatSimUnit(BWAPI::Unit unit);
 	bool IsCombatSimUnit(BWAPI::UnitType type);
 	bool IsCombatUnit(BWAPI::UnitType type);
 	bool IsCombatUnit(BWAPI::Unit unit);

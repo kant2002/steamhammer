@@ -153,7 +153,18 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
         JSONTools::ReadInt("MapGridSize", tool, Config::Tools::MAP_GRID_SIZE);
     }
 
-    // Parse the Strategy Options
+	// Parse the IO options.
+	if (doc.HasMember("IO") && doc["IO"].IsObject())
+	{
+		const rapidjson::Value & io = doc["IO"];
+
+		JSONTools::ReadString("ReadDirectory", io, Config::IO::ReadDir);
+		JSONTools::ReadString("WriteDirectory", io, Config::IO::WriteDir);
+
+		Config::IO::UseOpponentModel = GetBoolByRace("UseOpponentModel", io);
+	}
+
+    // Parse the Strategy options.
     if (doc.HasMember("Strategy") && doc["Strategy"].IsObject())
     {
         const rapidjson::Value & strategy = doc["Strategy"];
@@ -166,9 +177,6 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
 
 		Config::Strategy::ScoutHarassEnemy = GetBoolByRace("ScoutHarassEnemy", strategy);
 		Config::Strategy::SurrenderWhenHopeIsLost = GetBoolByRace("SurrenderWhenHopeIsLost", strategy);
-
-        JSONTools::ReadString("ReadDirectory", strategy, Config::Strategy::ReadDir);
-        JSONTools::ReadString("WriteDirectory", strategy, Config::Strategy::WriteDir);
 
 		// check if we are using an enemy specific strategy
 		JSONTools::ReadBool("UseEnemySpecificStrategy", strategy, Config::Strategy::UseEnemySpecificStrategy);

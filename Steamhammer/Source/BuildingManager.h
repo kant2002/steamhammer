@@ -14,7 +14,6 @@ class BuildingManager
 
     std::vector<Building> _buildings;
 
-    bool            _debugMode;
     int             _reservedMinerals;				// minerals reserved for planned buildings
     int             _reservedGas;					// gas reserved for planned buildings
 

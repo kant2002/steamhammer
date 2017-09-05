@@ -7,8 +7,8 @@ ScoutManager::ScoutManager()
     : _workerScout(nullptr)
 	, _scoutStatus("None")
 	, _gasStealStatus("None")
-	, _scoutLocationOnly(false)
-    , _scoutUnderAttack(false)
+	, _scoutCommand(MacroCommandType::None)
+	, _scoutUnderAttack(false)
 	, _tryGasSteal(false)
     , _didGasSteal(false)
     , _gasStealFinished(false)
@@ -21,6 +21,25 @@ ScoutManager & ScoutManager::Instance()
 {
 	static ScoutManager instance;
 	return instance;
+}
+
+// Should we send out a scout when it's time? Usually, but not always.
+bool ScoutManager::shouldScout()
+{
+	// Called by GameCommander only when scouting is asked for, so the command should never be None.
+	// We check anyway.
+	if (_scoutCommand == MacroCommandType::None)
+	{
+		return false;
+	}
+
+	if ((_scoutCommand == MacroCommandType::ScoutIfNeeded || _scoutCommand == MacroCommandType::ScoutLocation) &&
+		!_tryGasSteal)
+	{
+		return !InformationManager::Instance().getEnemyMainBaseLocation();
+	}
+
+	return true;
 }
 
 void ScoutManager::update()
@@ -40,7 +59,7 @@ void ScoutManager::update()
 	}
 
 	// If we only want to locate the enemy base and we have, release the scout worker.
-	if (_scoutLocationOnly && InformationManager::Instance().getEnemyMainBaseLocation())
+	if (_scoutCommand == MacroCommandType::ScoutLocation && InformationManager::Instance().getEnemyMainBaseLocation())
 	{
 		releaseWorkerScout();
 		return;
@@ -80,9 +99,16 @@ void ScoutManager::setGasSteal()
 	_tryGasSteal = true;
 }
 
-void ScoutManager::setScoutLocationOnly()
+void ScoutManager::setScoutCommand(MacroCommandType cmd)
 {
-	_scoutLocationOnly = true;
+	UAB_ASSERT(
+		cmd == MacroCommandType::Scout ||
+		cmd == MacroCommandType::ScoutIfNeeded ||
+		cmd == MacroCommandType::ScoutLocation ||
+		cmd == MacroCommandType::ScoutOnceOnly,
+		"bad scout command");
+
+	_scoutCommand = cmd;
 }
 
 void ScoutManager::drawScoutInformation(int x, int y)
@@ -92,8 +118,24 @@ void ScoutManager::drawScoutInformation(int x, int y)
         return;
     }
 
-    BWAPI::Broodwar->drawTextScreen(x, y, "ScoutInfo: %s", _scoutStatus.c_str());
-    BWAPI::Broodwar->drawTextScreen(x, y+10, "GasSteal: %s", _gasStealStatus.c_str());
+    BWAPI::Broodwar->drawTextScreen(x, y, "Scout info: %s", _scoutStatus.c_str());
+    BWAPI::Broodwar->drawTextScreen(x, y+10, "Gas steal: %s", _gasStealStatus.c_str());
+	std::string more = "and stay in the enemy base";
+	if (_scoutCommand == MacroCommandType::ScoutLocation)
+	{
+		more = "location";
+	}
+	else if (_scoutCommand == MacroCommandType::ScoutOnceOnly)
+	{
+		more = "once around";
+	}
+	else if (_scoutCommand == MacroCommandType::ScoutWhileSafe)
+	{
+		more = "while safe";
+	}
+	// NOTE "go scout if needed" doesn't need to be represented here.
+	BWAPI::Broodwar->drawTextScreen(x, y + 20, "Go scout: %s", more.c_str());
+
     for (size_t i(0); i < _enemyRegionVertices.size(); ++i)
     {
         BWAPI::Broodwar->drawCircleMap(_enemyRegionVertices[i], 4, BWAPI::Colors::Green, false);
@@ -179,7 +221,7 @@ void ScoutManager::moveScout()
 		}
 		else
 		{
-            _scoutStatus = "Enemy region known, going there";
+            _scoutStatus = "Enemy located, going there";
 
 			// move to the enemy region
 			followPerimeter();
@@ -190,7 +232,7 @@ void ScoutManager::moveScout()
 	// for each start location in the level
 	if (!enemyBaseLocation)
 	{
-        _scoutStatus = "Enemy base unknown, exploring";
+        _scoutStatus = "Seeking enemy base";
 
 		for (BWTA::BaseLocation * startLocation : BWTA::getStartLocations()) 
 		{
@@ -209,12 +251,25 @@ void ScoutManager::moveScout()
 
 void ScoutManager::followPerimeter()
 {
+	int previousIndex = _currentRegionVertexIndex;
+
     BWAPI::Position fleeTo = getFleePosition();
 
-    if (Config::Debug::DrawScoutInfo)
-    {
-        BWAPI::Broodwar->drawCircleMap(fleeTo, 5, BWAPI::Colors::Red, true);
-    }
+	if (Config::Debug::DrawScoutInfo)
+	{
+		BWAPI::Broodwar->drawCircleMap(fleeTo, 5, BWAPI::Colors::Red, true);
+	}
+
+	// We've been told to circle the enemy base only once.
+	if (_scoutCommand == MacroCommandType::ScoutOnceOnly)
+	{
+		// NOTE previousIndex may be -1 if we're just starting the loop.
+		if (_currentRegionVertexIndex < previousIndex)
+		{
+			releaseWorkerScout();
+			return;
+		}
+	}
 
 	Micro::SmartMove(_workerScout, fleeTo);
 }
@@ -223,7 +278,7 @@ void ScoutManager::gasSteal()
 {
     if (!_tryGasSteal)
     {
-        _gasStealStatus = "Not using gas steal";
+        _gasStealStatus = "Not planned";
         return;
     }
 
@@ -241,7 +296,7 @@ void ScoutManager::gasSteal()
     BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getEnemyMainBaseLocation();
     if (!enemyBaseLocation)
     {
-        _gasStealStatus = "No enemy base location found";
+        _gasStealStatus = "Enemy base not found";
         return;
     }
 
@@ -380,6 +435,10 @@ BWAPI::Position ScoutManager::getFleePosition()
     return _enemyRegionVertices[_currentRegionVertexIndex];
 }
 
+// NOTE This algorithm sometimes produces bizarre paths when unbuildable tiles
+//      are found deep inside the enemy base.
+// TODO Eventually replace with real-time pathing that tries to see as much as possible
+//      while remaining safe.
 void ScoutManager::calculateEnemyRegionVertices()
 {
     BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getEnemyMainBaseLocation();
@@ -411,20 +470,17 @@ void ScoutManager::calculateEnemyRegionVertices()
 			continue;
 		}
 
-		// a tile is 'surrounded' if
+		// a tile is 'on an edge' unless
 		// 1) in all 4 directions there's a tile position in the current region
 		// 2) in all 4 directions there's a buildable tile
-		bool surrounded = true;
-		if (BWTA::getRegion(BWAPI::TilePosition(tp.x + 1, tp.y)) != enemyRegion || !BWAPI::Broodwar->isBuildable(BWAPI::TilePosition(tp.x + 1, tp.y))
+		bool edge =
+			   BWTA::getRegion(BWAPI::TilePosition(tp.x + 1, tp.y)) != enemyRegion || !BWAPI::Broodwar->isBuildable(BWAPI::TilePosition(tp.x + 1, tp.y))
 			|| BWTA::getRegion(BWAPI::TilePosition(tp.x, tp.y + 1)) != enemyRegion || !BWAPI::Broodwar->isBuildable(BWAPI::TilePosition(tp.x, tp.y + 1))
 			|| BWTA::getRegion(BWAPI::TilePosition(tp.x - 1, tp.y)) != enemyRegion || !BWAPI::Broodwar->isBuildable(BWAPI::TilePosition(tp.x - 1, tp.y))
-			|| BWTA::getRegion(BWAPI::TilePosition(tp.x, tp.y - 1)) != enemyRegion || !BWAPI::Broodwar->isBuildable(BWAPI::TilePosition(tp.x, tp.y - 1)))
-		{
-			surrounded = false;
-		}
+			|| BWTA::getRegion(BWAPI::TilePosition(tp.x, tp.y - 1)) != enemyRegion || !BWAPI::Broodwar->isBuildable(BWAPI::TilePosition(tp.x, tp.y - 1));
 
 		// push the tiles that aren't surrounded
-		if (!surrounded && BWAPI::Broodwar->isBuildable(tp))
+		if (edge && BWAPI::Broodwar->isBuildable(tp))
 		{
 			if (Config::Debug::DrawScoutInfo)
 			{
