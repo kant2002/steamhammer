@@ -12,10 +12,10 @@ enum class MacroCommandType
 	, ScoutLocation
 	, ScoutOnceOnly
 	, ScoutWhileSafe   // TODO unimplemented
+	, StealGas
 	, StartGas
 	, StopGas
 	, GasUntil
-	, StealGas
 	, ExtractorTrickDrone
 	, ExtractorTrickZergling
 	, Aggressive
@@ -23,6 +23,7 @@ enum class MacroCommandType
 	, PullWorkers
 	, PullWorkersLeaving
 	, ReleaseWorkers
+	, Nonadaptive
 	};
 
 class MacroCommand
@@ -51,6 +52,7 @@ public:
 			, MacroCommandType::PullWorkers
 			, MacroCommandType::PullWorkersLeaving
 			, MacroCommandType::ReleaseWorkers
+			, MacroCommandType::Nonadaptive
 		};
 	}
 
@@ -160,7 +162,11 @@ public:
 		{
 			return "go release workers";
 		}
-
+		if (t == MacroCommandType::Nonadaptive)
+		{
+			return "go nonadaptive";
+		}
+		
 		UAB_ASSERT(t == MacroCommandType::None, "unrecognized MacroCommandType");
 		return "go none";
 	}

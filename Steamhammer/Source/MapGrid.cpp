@@ -23,9 +23,22 @@ MapGrid::MapGrid(int mapWidth, int mapHeight, int cellSize)
 	calculateCellCenters();
 }
 
-//  The least-recently explored cell accessible by land.
+// Return the first of:
+// 1. Any starting base location that has not been explored.
+// 2. The least-recently explored cell accessible by land.
+// Item 1 ensures that, if early game scouting failed, we scout with force.
 BWAPI::Position MapGrid::getLeastExplored() 
 {
+	// 1. Any starting location that has not been explored.
+	for (BWAPI::TilePosition tile : BWAPI::Broodwar->getStartLocations())
+	{
+		if (!BWAPI::Broodwar->isExplored(tile))
+		{
+			return BWAPI::Position(tile);
+		}
+	}
+
+	// 2. The most distant of the least-recently explored tiles.
 	int minSeen = 1000000;
 	double minSeenDist = 0;
 	int leastRow(0), leastCol(0);
@@ -125,7 +138,7 @@ void MapGrid::clearGrid() {
 }
 
 // Populate the grid with units.
-// Include all buildings, but others only if they are completed.
+// Include all buildings, but other units only if they are completed.
 // For the enemy, only include visible units (InformationManager remembers units which are out of sight).
 void MapGrid::update() 
 {
@@ -179,7 +192,7 @@ void MapGrid::update()
 	}
 }
 
-void MapGrid::GetUnits(BWAPI::Unitset & units, BWAPI::Position center, int radius, bool ourUnits, bool oppUnits)
+void MapGrid::getUnits(BWAPI::Unitset & units, BWAPI::Position center, int radius, bool ourUnits, bool oppUnits)
 {
 	const int x0(std::max( (center.x - radius) / cellSize, 0));
 	const int x1(std::min( (center.x + radius) / cellSize, cols-1));

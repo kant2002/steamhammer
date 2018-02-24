@@ -8,7 +8,7 @@ size_t TotalCommands = 0;
 
 const int dotRadius = 2;
 
-void Micro::SmartStop(BWAPI::Unit unit)
+void Micro::Stop(BWAPI::Unit unit)
 {
 	if (!unit || !unit->exists() || unit->getPlayer() != BWAPI::Broodwar->self())
 	{
@@ -33,7 +33,7 @@ void Micro::SmartStop(BWAPI::Unit unit)
 	TotalCommands++;
 }
 
-void Micro::SmartAttackUnit(BWAPI::Unit attacker, BWAPI::Unit target)
+void Micro::AttackUnit(BWAPI::Unit attacker, BWAPI::Unit target)
 {
 	if (!attacker || !attacker->exists() || attacker->getPlayer() != BWAPI::Broodwar->self() ||
 		!target || !target->exists())
@@ -42,8 +42,11 @@ void Micro::SmartAttackUnit(BWAPI::Unit attacker, BWAPI::Unit target)
         return;
     }
 
-    // if we have issued a command to this unit already this frame, ignore this one
-    if (attacker->getLastCommandFrame() >= BWAPI::Broodwar->getFrameCount() || attacker->isAttackFrame())
+	// Do nothing if we've already issued a command this frame, or the unit is busy attacking.
+	// NOTE A lurker attacking a fixed target is ALWAYS on an attack frame.
+	//      According to Arrak, sunken colonies behave the same.
+    if (attacker->getLastCommandFrame() >= BWAPI::Broodwar->getFrameCount() ||
+		(attacker->isAttackFrame() && attacker->getType() != BWAPI::UnitTypes::Zerg_Lurker))
     {
 		return;
     }
@@ -69,7 +72,7 @@ void Micro::SmartAttackUnit(BWAPI::Unit attacker, BWAPI::Unit target)
     }
 }
 
-void Micro::SmartAttackMove(BWAPI::Unit attacker, const BWAPI::Position & targetPosition)
+void Micro::AttackMove(BWAPI::Unit attacker, const BWAPI::Position & targetPosition)
 {
 	if (!attacker || !attacker->exists() || attacker->getPlayer() != BWAPI::Broodwar->self() || !targetPosition.isValid())
     {
@@ -77,7 +80,7 @@ void Micro::SmartAttackMove(BWAPI::Unit attacker, const BWAPI::Position & target
 		return;
     }
 
-    // if we have issued a command to this unit already this frame, ignore this one
+	// if we have issued a command to this unit already this frame, ignore this one
     if (attacker->getLastCommandFrame() >= BWAPI::Broodwar->getFrameCount() || attacker->isAttackFrame())
     {
         return;
@@ -92,8 +95,8 @@ void Micro::SmartAttackMove(BWAPI::Unit attacker, const BWAPI::Position & target
 		return;
 	}
 
-    // if nothing prevents it, attack the target
-    attacker->attack(targetPosition);
+	// if nothing prevents it, attack the target
+	attacker->attack(targetPosition);
     TotalCommands++;
 
     if (Config::Debug::DrawUnitTargetInfo) 
@@ -104,7 +107,7 @@ void Micro::SmartAttackMove(BWAPI::Unit attacker, const BWAPI::Position & target
     }
 }
 
-void Micro::SmartMove(BWAPI::Unit attacker, const BWAPI::Position & targetPosition)
+void Micro::Move(BWAPI::Unit attacker, const BWAPI::Position & targetPosition)
 {
 	// -- -- TODO temporary extra debugging to solve 2 bugs
 	/*
@@ -148,7 +151,7 @@ void Micro::SmartMove(BWAPI::Unit attacker, const BWAPI::Position & targetPositi
     }
 
     // if nothing prevents it, move the target position
-    attacker->move(targetPosition);
+	attacker->move(targetPosition);
     TotalCommands++;
 
     if (Config::Debug::DrawUnitTargetInfo) 
@@ -159,7 +162,7 @@ void Micro::SmartMove(BWAPI::Unit attacker, const BWAPI::Position & targetPositi
     }
 }
 
-void Micro::SmartRightClick(BWAPI::Unit unit, BWAPI::Unit target)
+void Micro::RightClick(BWAPI::Unit unit, BWAPI::Unit target)
 {
 	if (!unit || !unit->exists() || unit->getPlayer() != BWAPI::Broodwar->self() ||
 		!target || !target->exists())
@@ -167,7 +170,6 @@ void Micro::SmartRightClick(BWAPI::Unit unit, BWAPI::Unit target)
 		UAB_ASSERT(false, "bad arg");
 		return;
 	}
-
 
     // if we have issued a command to this unit already this frame, ignore this one
     if (unit->getLastCommandFrame() >= BWAPI::Broodwar->getFrameCount() || unit->isAttackFrame())
@@ -178,7 +180,7 @@ void Micro::SmartRightClick(BWAPI::Unit unit, BWAPI::Unit target)
     // get the unit's current command
     BWAPI::UnitCommand currentCommand(unit->getLastCommand());
 
-    // if we've already told this unit to move to this position, ignore this command
+    // if we've already told this unit to right-click this target, ignore this command
     if ((currentCommand.getType() == BWAPI::UnitCommandTypes::Right_Click_Unit) && (currentCommand.getTargetPosition() == target->getPosition()))
     {
         return;
@@ -196,7 +198,7 @@ void Micro::SmartRightClick(BWAPI::Unit unit, BWAPI::Unit target)
     }
 }
 
-void Micro::SmartLaySpiderMine(BWAPI::Unit unit, BWAPI::Position pos)
+void Micro::LaySpiderMine(BWAPI::Unit unit, BWAPI::Position pos)
 {
 	if (!unit || !unit->exists() || unit->getPlayer() != BWAPI::Broodwar->self() || !pos.isValid())
 	{
@@ -220,7 +222,7 @@ void Micro::SmartLaySpiderMine(BWAPI::Unit unit, BWAPI::Position pos)
     unit->canUseTechPosition(BWAPI::TechTypes::Spider_Mines, pos);
 }
 
-void Micro::SmartRepair(BWAPI::Unit unit, BWAPI::Unit target)
+void Micro::Repair(BWAPI::Unit unit, BWAPI::Unit target)
 {
 	if (!unit || !unit->exists() || unit->getPlayer() != BWAPI::Broodwar->self() ||
 		!target || !target->exists())
@@ -259,7 +261,7 @@ void Micro::SmartRepair(BWAPI::Unit unit, BWAPI::Unit target)
 // Perform a comsat scan at the given position if possible and necessary.
 // If it's not possible, or we already scanned there, do nothing.
 // Return whether the scan occurred.
-bool Micro::SmartScan(const BWAPI::Position & targetPosition)
+bool Micro::Scan(const BWAPI::Position & targetPosition)
 {
 	UAB_ASSERT(targetPosition.isValid(), "bad position");
 
@@ -295,7 +297,7 @@ bool Micro::SmartScan(const BWAPI::Position & targetPosition)
 
 // Stim the given marine or firebat, if possible; otherwise, do nothing.
 // Return whether the stim occurred.
-bool Micro::SmartStim(BWAPI::Unit unit)
+bool Micro::Stim(BWAPI::Unit unit)
 {
 	if (!unit ||
 		unit->getType() != BWAPI::UnitTypes::Terran_Marine && unit->getType() != BWAPI::UnitTypes::Terran_Firebat ||
@@ -330,7 +332,7 @@ bool Micro::SmartStim(BWAPI::Unit unit)
 
 // Merge the 2 given high templar into an archon.
 // TODO Check whether the 2 templar can reach each other: Is there a ground path between them?
-bool Micro::SmartMergeArchon(BWAPI::Unit templar1, BWAPI::Unit templar2)
+bool Micro::MergeArchon(BWAPI::Unit templar1, BWAPI::Unit templar2)
 {
 	if (!templar1 || !templar2 ||
 		templar1->getPlayer() != BWAPI::Broodwar->self() ||
@@ -354,7 +356,7 @@ bool Micro::SmartMergeArchon(BWAPI::Unit templar1, BWAPI::Unit templar2)
 	return templar1->useTech(BWAPI::TechTypes::Archon_Warp, templar2);
 }
 
-void Micro::SmartReturnCargo(BWAPI::Unit worker)
+void Micro::ReturnCargo(BWAPI::Unit worker)
 {
 	if (!worker || !worker->exists() || worker->getPlayer() != BWAPI::Broodwar->self() ||
 		!worker->getType().isWorker())
@@ -387,7 +389,7 @@ void Micro::SmartReturnCargo(BWAPI::Unit worker)
 	TotalCommands++;
 }
 
-void Micro::SmartKiteTarget(BWAPI::Unit rangedUnit, BWAPI::Unit target)
+void Micro::KiteTarget(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 {
 	if (!rangedUnit || !rangedUnit->exists() || rangedUnit->getPlayer() != BWAPI::Broodwar->self() ||
 		!target || !target->exists())
@@ -443,12 +445,12 @@ void Micro::SmartKiteTarget(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 		{
 			BWAPI::Broodwar->drawLineMap(rangedUnit->getPosition(), fleePosition, BWAPI::Colors::Cyan);
 		}
-		Micro::SmartMove(rangedUnit, fleePosition);
+		Micro::Move(rangedUnit, fleePosition);
 	}
 	else
 	{
 		// Shoot.
-		Micro::SmartAttackUnit(rangedUnit, target);
+		Micro::AttackUnit(rangedUnit, target);
 	}
 }
 

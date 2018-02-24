@@ -37,12 +37,12 @@ class MacroAct
 
 public:
 
-	MacroAct ();
-    MacroAct (const std::string & name);
-	MacroAct (BWAPI::UnitType t);
+	MacroAct();
+    MacroAct(const std::string & name);
+	MacroAct(BWAPI::UnitType t);
 	MacroAct(BWAPI::UnitType t, MacroLocation loc);
 	MacroAct(BWAPI::TechType t);
-	MacroAct (BWAPI::UpgradeType t);
+	MacroAct(BWAPI::UpgradeType t);
 	MacroAct(MacroCommandType t);
 	MacroAct(MacroCommandType t, int amount);
 

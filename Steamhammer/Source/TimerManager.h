@@ -12,11 +12,15 @@ class TimerManager
 	std::vector<BOSS::Timer> _timers;
 	std::vector<std::string> _timerNames;
 
+	int _count;
+	double _maxMilliseconds;
+	double _totalMilliseconds;
+
 	int _barWidth;
 
 public:
 
-	enum Type { All, Worker, Production, Building, Combat, Scout, InformationManager, MapGrid, Search, NumTypes };
+	enum Type { Total, Worker, Production, Building, Combat, Scout, InformationManager, MapGrid, Search, OpponentModel, NumTypes };
 
 	TimerManager();
 
@@ -24,7 +28,9 @@ public:
 
 	void stopTimer(const TimerManager::Type t);
 
-	double getTotalElapsed();
+	double getMilliseconds();      // for this frame
+	double getMaxMilliseconds();   // over all frames
+	double getMeanMilliseconds();  // over all frames
 
 	void displayTimers(int x, int y);
 };

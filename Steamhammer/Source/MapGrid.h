@@ -52,7 +52,7 @@ public:
 	static MapGrid &	Instance();
 
 	void				update();
-	void				GetUnits(BWAPI::Unitset & units, BWAPI::Position center, int radius, bool ourUnits, bool oppUnits);
+	void				getUnits(BWAPI::Unitset & units, BWAPI::Position center, int radius, bool ourUnits, bool oppUnits);
 	BWAPI::Position		getLeastExplored();
 
 	GridCell & getCellByIndex(int r, int c)		{ return cells[r*cols + c]; }

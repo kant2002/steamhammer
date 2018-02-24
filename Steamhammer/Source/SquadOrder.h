@@ -12,11 +12,10 @@ namespace SquadOrderTypes
 		Idle,      // workers, overlords with no other job
 		Attack,    // go attack
 		Defend,    // defend a base (automatically disbanded when enemy is gone)
-		Hold,      // hold ground, stand ready to defend until needed (Drop squad)
+		Hold,      // hold ground, stand ready to defend until needed
 		Load,      // load into a transport (Drop squad)
 		Drop,      // go drop on the enemy (Drop squad)
-		Survey,    // scout around (barely implemented)
-		SquadOrderTypes };
+	};
 }
 
 class SquadOrder
@@ -73,7 +72,6 @@ public:
 			case SquadOrderTypes::Hold:    return 'H';
 			case SquadOrderTypes::Load:    return 'L';
 			case SquadOrderTypes::Drop:    return 'D';
-			case SquadOrderTypes::Survey:  return 'S';
 		}
 		return '?';
 	}

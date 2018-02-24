@@ -20,8 +20,6 @@ class BuildingPlacer
     int	    _boxLeft;
     int	    _boxRight;
 
-    void    computeBuildableTileDistance(BWAPI::TilePosition tp);
-
 public:
 
     static BuildingPlacer & Instance();

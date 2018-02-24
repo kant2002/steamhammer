@@ -47,7 +47,7 @@ void MicroDetectors::executeMicro(const BWAPI::Unitset & targets)
 		// Move the detector toward the squadmate closest to the enemy.
 		if (unitClosestToEnemy && unitClosestToEnemy->getPosition().isValid())
 		{
-			Micro::SmartMove(detectorUnit, unitClosestToEnemy->getPosition());
+			Micro::Move(detectorUnit, unitClosestToEnemy->getPosition());
 		}
 		// otherwise there is no unit closest to enemy so we don't want our detectorUnit to die
 		// send it to scout around the map
@@ -55,7 +55,7 @@ void MicroDetectors::executeMicro(const BWAPI::Unitset & targets)
 		else
 		{
 			BWAPI::Position explorePosition = MapGrid::Instance().getLeastExplored();
-			Micro::SmartMove(detectorUnit, explorePosition);
+			Micro::Move(detectorUnit, explorePosition);
 		}
 		*/
 	}

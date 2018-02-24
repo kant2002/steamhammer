@@ -61,8 +61,12 @@ struct Rect
 };
 */
 
+double UCB1_bound(int tries, int total);
+
 int GetIntFromString(const std::string & s);
 std::string TrimRaceName(const std::string & s);
+char RaceChar(BWAPI::Race race);
+std::string NiceMacroActName(const std::string & s);
 std::string UnitTypeName(BWAPI::UnitType type);
 
 // Short color codes for drawing text on the screen.

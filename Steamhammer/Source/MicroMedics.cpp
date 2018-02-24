@@ -68,7 +68,7 @@ void MicroMedics::update(const BWAPI::Position & center)
     // the remaining medics should head toward the middle of the squad
     for (const auto medic : availableMedics)
     {
-        Micro::SmartAttackMove(medic, center);
+        Micro::AttackMove(medic, center);
     }
 }
 

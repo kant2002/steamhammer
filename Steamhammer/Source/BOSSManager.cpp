@@ -18,7 +18,6 @@ BOSSManager::BOSSManager()
     , _searchInProgress(false)
     , _previousStatus("No Searches")
 {
-	
 }
 
 void BOSSManager::reset()
@@ -65,7 +64,7 @@ void BOSSManager::startNewSearch(const std::vector<MetaPair> & goalUnits)
         _totalPreviousSearchTime = 0;
         _previousGoalUnits = goalUnits;
     }
-    catch (const BOSS::BOSSException)
+    catch (const BOSS::BOSSException &)
     {
 		if (Config::Debug::DrawBuildOrderSearchInfo)
 		{
@@ -138,7 +137,7 @@ void BOSSManager::update(double timeLimit)
             // this will resume a search in progress or start a new search if not yet started
 			_smartSearch->search();
 		}
-		catch (const BOSS::BOSSException)
+		catch (const BOSS::BOSSException &)
         {
 			if (Config::Debug::DrawBuildOrderSearchInfo)
 			{
@@ -222,7 +221,7 @@ void BOSSManager::update(double timeLimit)
 					return;
 				}
                 // and if that search doesn't work then we're out of luck, no build orders for us
-				catch (const BOSS::BOSSException)
+				catch (const BOSS::BOSSException &)
                 {
                     //UAB_ASSERT_WARNING(false, "BOSS Timeout Naive Search Exception: %s", exception.what());
                     _previousStatus += "\x08Naive Exception";

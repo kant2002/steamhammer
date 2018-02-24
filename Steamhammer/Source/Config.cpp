@@ -1,20 +1,26 @@
 #include "Config.h"
 #include "UABAssert.h"
 
+// Most values here are default values that apply if the configuration entry
+// is missing from the config file, or is invalid.
+
+// The ConfigFile record tells where to find the config file, so it's different.
+
 namespace Config
 {
     namespace ConfigFile
     {
         bool ConfigFileFound                = false;
         bool ConfigFileParsed               = false;
-        std::string ConfigFileLocation      = "bwapi-data/AI/Steamhammer_1.3.1.json";
+        std::string ConfigFileLocation      = "bwapi-data/AI/Steamhammer_1.4.json";
     }
 
 	namespace IO
 	{
-		std::string ReadDir = "bwapi-data/read/";
-		std::string WriteDir = "bwapi-data/write/";
-		bool UseOpponentModel = true;
+		std::string ReadDir					= "bwapi-data/read/";
+		std::string WriteDir				= "bwapi-data/write/";
+		bool ReadOpponentModel				= false;
+		bool WriteOpponentModel				= false;
 	}
 
 	namespace Strategy
@@ -24,6 +30,8 @@ namespace Config
         std::string ZergStrategyName        = "9PoolSpeed";				// default
         std::string StrategyName            = "9PoolSpeed";
         bool ScoutHarassEnemy               = true;
+		bool AutoGasSteal                   = true;
+		double RandomGasStealRate           = 0.0;
 		bool SurrenderWhenHopeIsLost        = true;
         bool UseEnemySpecificStrategy       = true;
         bool FoundEnemySpecificStrategy     = false;
@@ -43,13 +51,13 @@ namespace Config
         bool EnableUserInput                = true;
         bool EnableCompleteMapInformation   = false;
     }
-    
-    namespace Tournament						
+
+    namespace Tournament
     {
-        int GameEndFrame                    = 86400;	
+        int GameEndFrame                    = 86400;
     }
-    
-    namespace Debug								
+
+    namespace Debug
     {
         bool DrawGameInfo                   = true;
         bool DrawUnitHealthBars             = false;
@@ -83,14 +91,14 @@ namespace Config
         BWAPI::Color ColorUnitNotNearEnemy  = BWAPI::Colors::Green;
     }
 
-    namespace Micro								
+    namespace Micro
     {
         bool KiteWithRangedUnits            = true;
         std::set<BWAPI::UnitType> KiteLongerRangedUnits;
-        bool WorkersDefendRush              = false; 
+        bool WorkersDefendRush              = false;
 		int RetreatMeleeUnitShields         = 0;
         int RetreatMeleeUnitHP              = 0;
-        int CombatRegroupRadius             = 300;      // radius of units around frontmost unit for combat sim
+		int CombatSimRadius					= 300;      // radius of units around frontmost unit for combat sim
         int UnitNearEnemyRadius             = 600;      // radius to consider a unit 'near' to an enemy unit
 		int ScoutDefenseRadius				= 600;		// radius to chase enemy scout worker
     }
@@ -104,9 +112,10 @@ namespace Config
         int BuildingSpacing                 = 1;
         int PylonSpacing                    = 3;
 		int ProductionJamFrameLimit			= 360;
+		bool ExpandToIslands				= false;
     }
 
-    namespace Tools								
+    namespace Tools
     {
         extern int MAP_GRID_SIZE            = 320;      // size of grid spacing in MapGrid
     }

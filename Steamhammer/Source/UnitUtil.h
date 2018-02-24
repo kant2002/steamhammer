@@ -7,8 +7,10 @@ namespace UAlbertaBot
 {
 namespace UnitUtil
 {      
-	bool IsMorphedBuildingType(BWAPI::UnitType unitType);
-	bool IsMorphedUnitType(BWAPI::UnitType unitType);
+	bool IsMorphedBuildingType(BWAPI::UnitType type);
+	bool IsMorphedUnitType(BWAPI::UnitType type);
+
+	bool IsStaticDefense(BWAPI::UnitType type);
 
 	bool IsCombatSimUnit(BWAPI::Unit unit);
 	bool IsCombatSimUnit(BWAPI::UnitType type);
@@ -28,8 +30,11 @@ namespace UnitUtil
 	BWAPI::WeaponType GetWeapon(BWAPI::UnitType attacker, BWAPI::UnitType target);
 	int GetAttackRange(BWAPI::Unit attacker, BWAPI::Unit target);
 	int GetAttackRangeAssumingUpgrades(BWAPI::UnitType attacker, BWAPI::UnitType target);
-	
+	int GetMaxAttackRange(BWAPI::UnitType attacker);    // air or ground
+	int GetWeaponDamageToWorker(BWAPI::Unit attacker);
+
 	int GetAllUnitCount(BWAPI::UnitType type);
 	int GetCompletedUnitCount(BWAPI::UnitType type);
+	int GetUncompletedUnitCount(BWAPI::UnitType type);
 };
 }

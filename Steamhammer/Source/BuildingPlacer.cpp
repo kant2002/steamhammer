@@ -66,11 +66,6 @@ void BuildingPlacer::computeResourceBox()
 // makes final checks to see if a building can be built at a certain location
 bool BuildingPlacer::canBuildHere(BWAPI::TilePosition position,const Building & b) const
 {
-    /*if (!b.type.isRefinery() && !InformationManager::Instance().tileContainsUnit(position))
-    {
-    return false;
-    }*/
-
     if (!BWAPI::Broodwar->canBuildHere(position,b.type,b.builderUnit))
     {
         return false;
@@ -99,7 +94,6 @@ bool BuildingPlacer::canBuildHere(BWAPI::TilePosition position,const Building & 
 
 bool BuildingPlacer::tileBlocksAddon(BWAPI::TilePosition position) const
 {
-
     for (int i=0; i<=2; ++i)
     {
         for (auto unit : BWAPI::Broodwar->getUnitsOnTile(position.x - i,position.y))
@@ -117,7 +111,7 @@ bool BuildingPlacer::tileBlocksAddon(BWAPI::TilePosition position) const
     return false;
 }
 
-// Can we build this building here with the specified amount of space?
+// Can we build this building here with the specified amount of space around it?
 // Space value is buildDist. horizontalOnly means only horizontal spacing.
 bool BuildingPlacer::canBuildHereWithSpace(BWAPI::TilePosition position,const Building & b,int buildDist,bool horizontalOnly) const
 {
@@ -165,7 +159,7 @@ bool BuildingPlacer::canBuildHereWithSpace(BWAPI::TilePosition position,const Bu
     }
 
     // if this rectangle doesn't fit on the map we can't build here
-    if (startx < 0 || starty < 0 || endx > BWAPI::Broodwar->mapWidth() || endx < position.x + width || endy > BWAPI::Broodwar->mapHeight())
+    if (startx < 0 || starty < 0 || endx > BWAPI::Broodwar->mapWidth() || endy > BWAPI::Broodwar->mapHeight())
     {
         return false;
     }
@@ -177,7 +171,9 @@ bool BuildingPlacer::canBuildHereWithSpace(BWAPI::TilePosition position,const Bu
         {
             if (!b.type.isRefinery())
             {
-                if (!buildable(b,x,y) || _reserveMap[x][y] || ((b.type != BWAPI::UnitTypes::Protoss_Photon_Cannon) && isInResourceBox(x,y)))
+                if (!buildable(b,x,y) ||
+					_reserveMap[x][y] ||
+					(b.type != BWAPI::UnitTypes::Protoss_Photon_Cannon && isInResourceBox(x,y)))
                 {
                     return false;
                 }
@@ -268,7 +264,7 @@ bool BuildingPlacer::buildable(const Building & b,int x,int y) const
 	// getUnitsOnTile() only returns visible units, even if they are buildings.
     for (const auto unit : BWAPI::Broodwar->getUnitsOnTile(x,y))
     {
-        if ((b.builderUnit != nullptr) && (unit != b.builderUnit))
+        if (b.builderUnit != nullptr && unit != b.builderUnit)
         {
             return false;
         }
@@ -331,6 +327,7 @@ void BuildingPlacer::freeTiles(BWAPI::TilePosition position, int width, int heig
     }
 }
 
+// NOTE This allows building only on accessible geysers.
 BWAPI::TilePosition BuildingPlacer::getRefineryPosition()
 {
     BWAPI::TilePosition closestGeyser = BWAPI::TilePositions::None;

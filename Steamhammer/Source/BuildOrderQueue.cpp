@@ -36,6 +36,15 @@ void BuildOrderQueue::doneWithHighestPriorityItem()
 	queue.pop_back();
 }
 
+void BuildOrderQueue::pullToTop(size_t i)
+{
+	UAB_ASSERT(i >= 0 && i < queue.size()-1, "bad index");
+
+	BuildOrderItem item = queue[i];								// copy it
+	queue.erase(queue.begin() + i);
+	queueAsHighestPriority(item.macroAct, item.isGasSteal);		// this sets modified = true
+}
+
 size_t BuildOrderQueue::size() const
 {
 	return queue.size();
@@ -113,6 +122,21 @@ bool BuildOrderQueue::anyInQueue(BWAPI::UnitType type) const
 	return false;
 }
 
+// Are there any of these in the next N items in the queue?
+bool BuildOrderQueue::anyInNextN(BWAPI::UnitType type, int n) const
+{
+	for (int i = queue.size() - 1; i >= std::max(0, int(queue.size()) - 1 - n); --i)
+	{
+		const MacroAct & act = queue[i].macroAct;
+		if (act.isUnit() && act.getUnitType() == type)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
 size_t BuildOrderQueue::numInQueue(BWAPI::UnitType type) const
 {
 	size_t count = 0;
@@ -135,6 +159,18 @@ void BuildOrderQueue::totalCosts(int & minerals, int & gas) const
 		minerals += item.macroAct.mineralPrice();
 		gas += item.macroAct.gasPrice();
 	}
+}
+
+bool BuildOrderQueue::isGasStealInQueue() const
+{
+	for (const auto & item : queue)
+	{
+		if (item.isGasSteal)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 void BuildOrderQueue::drawQueueInformation(int x, int y, bool outOfBook) 
@@ -185,7 +221,7 @@ void BuildOrderQueue::drawQueueInformation(int x, int y, bool outOfBook)
 			prefix = white;
 		}
 
-		BWAPI::Broodwar->drawTextScreen(x, y, " %c%s", prefix, TrimRaceName(act.getName()).c_str());
+		BWAPI::Broodwar->drawTextScreen(x, y, " %c%s", prefix, NiceMacroActName(act.getName()).c_str());
 		y += 10;
 	}
 

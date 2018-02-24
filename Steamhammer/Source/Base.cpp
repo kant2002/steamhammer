@@ -29,6 +29,8 @@ void Base::findGeysers()
 	}
 }
 
+// The depot may be null. (That's why player is a separate argument, not depot->getPlayer().)
+// A null depot for an owned base means that the base is inferred and hasn't been seen.
 void Base::setOwner(BWAPI::Unit depot, BWAPI::Player player)
 {
 	resourceDepot = depot;

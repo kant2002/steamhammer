@@ -1,4 +1,6 @@
 #include "Squad.h"
+
+#include "ScoutManager.h"
 #include "UnitUtil.h"
 
 using namespace UAlbertaBot;
@@ -6,6 +8,8 @@ using namespace UAlbertaBot;
 Squad::Squad()
 	: _name("Default")
 	, _combatSquad(false)
+	, _combatSimRadius(Config::Micro::CombatSimRadius)
+	, _fightVisibleOnly(false)
 	, _hasAir(false)
 	, _hasGround(false)
 	, _hasAntiAir(false)
@@ -25,6 +29,8 @@ Squad::Squad()
 Squad::Squad(const std::string & name, SquadOrder order, size_t priority)
 	: _name(name)
 	, _combatSquad(name != "Idle")
+	, _combatSimRadius(Config::Micro::CombatSimRadius)
+	, _fightVisibleOnly(false)
 	, _hasAir(false)
 	, _hasGround(false)
 	, _hasAntiAir(false)
@@ -54,17 +60,6 @@ void Squad::update()
 	}
 
 	_microHighTemplar.update();
-
-	// TODO This is a crude stand-in for a real survey squad controller.
-	if (_order.getType() == SquadOrderTypes::Survey && BWAPI::Broodwar->getFrameCount() < 24)
-	{
-		BWAPI::Unit surveyor = *(_units.begin());
-		if (surveyor && surveyor->exists())
-		{
-			Micro::SmartMove(surveyor, _order.getPosition());
-		}
-		return;
-	}
 
 	if (_order.getType() == SquadOrderTypes::Load)
 	{
@@ -100,6 +95,7 @@ void Squad::update()
 			BWAPI::Broodwar->drawCircleMap(regroupPosition.x, regroupPosition.y, 20, BWAPI::Colors::Purple, true);
 		}
         
+		_microAirToAir.regroup(regroupPosition);
 		_microMelee.regroup(regroupPosition);
 		_microRanged.regroup(regroupPosition);
 		//_microLurkers.regroup(regroupPosition);    // does more harm than good
@@ -108,6 +104,7 @@ void Squad::update()
 	else
 	{
 		// No need to regroup. Execute micro.
+		_microAirToAir.execute(_order);
 		_microMelee.execute(_order);
 		_microRanged.execute(_order);
 		_microTanks.execute(_order);
@@ -177,7 +174,10 @@ void Squad::setAllUnits()
 
 			if (unit->isFlying())
 			{
-				_hasAir = true;
+				if (!unit->getType().isDetector())    // mobile detectors don't count
+				{
+					_hasAir = true;
+				}
 			}
 			else
 			{
@@ -226,6 +226,7 @@ void Squad::setNearEnemyUnits()
 
 void Squad::addUnitsToMicroManagers()
 {
+	BWAPI::Unitset airToAirUnits;
 	BWAPI::Unitset meleeUnits;
 	BWAPI::Unitset rangedUnits;
 	BWAPI::Unitset detectorUnits;
@@ -237,9 +238,15 @@ void Squad::addUnitsToMicroManagers()
 
 	for (const auto unit : _units)
 	{
-		if (unit->isCompleted() && unit->getHitPoints() > 0 && unit->exists() && !unit->isLoaded())
+		if (unit->isCompleted() && unit->exists() && unit->getHitPoints() > 0 && !unit->isLoaded())
 		{
-			if (unit->getType() == BWAPI::UnitTypes::Protoss_High_Templar)
+			if (unit->getType() == BWAPI::UnitTypes::Terran_Valkyrie ||
+				unit->getType() == BWAPI::UnitTypes::Protoss_Corsair ||
+				unit->getType() == BWAPI::UnitTypes::Zerg_Devourer)
+			{
+				airToAirUnits.insert(unit);
+			}
+			else if (unit->getType() == BWAPI::UnitTypes::Protoss_High_Templar)
 			{
 				highTemplarUnits.insert(unit);
 			}
@@ -290,6 +297,7 @@ void Squad::addUnitsToMicroManagers()
 		}
 	}
 
+	_microAirToAir.setUnits(airToAirUnits);
 	_microMelee.setUnits(meleeUnits);
 	_microRanged.setUnits(rangedUnits);
 	_microDetectors.setUnits(detectorUnits);
@@ -407,7 +415,7 @@ bool Squad::needsToRegroup()
 		// All other checks are done. Finally do the expensive combat simulation.
 		CombatSimulation sim;
 
-		sim.setCombatUnits(unitClosest->getPosition(), Config::Micro::CombatRegroupRadius);
+		sim.setCombatUnits(unitClosest->getPosition(), _combatSimRadius, _fightVisibleOnly);
 		double score = sim.simulateCombat();
 
 		retreat = score < 0;
@@ -469,7 +477,7 @@ bool Squad::unitNearEnemy(BWAPI::Unit unit)
 
 	BWAPI::Unitset enemyNear;
 
-	MapGrid::Instance().GetUnits(enemyNear, unit->getPosition(), 400, false, true);
+	MapGrid::Instance().getUnits(enemyNear, unit->getPosition(), 400, false, true);
 
 	return enemyNear.size() > 0;
 }
@@ -641,7 +649,7 @@ void Squad::loadTransport()
 		// which is set to the transport's initial location.
 		if (trooper->exists() && !trooper->isLoaded() && trooper->getType().spaceProvided() == 0)
 		{
-			Micro::SmartMove(trooper, _order.getPosition());
+			Micro::Move(trooper, _order.getPosition());
 		}
 	}
 
@@ -710,12 +718,12 @@ void Squad::stimIfNeeded()
 		}
 
 		BWAPI::Unitset nearbyEnemies;
-		MapGrid::Instance().GetUnits(nearbyEnemies, firebat->getPosition(), 64, false, true);
+		MapGrid::Instance().getUnits(nearbyEnemies, firebat->getPosition(), 64, false, true);
 
 		// NOTE We don't check whether the enemy is attackable or worth attacking.
 		if (!nearbyEnemies.empty())
 		{
-			Micro::SmartStim(firebat);
+			Micro::Stim(firebat);
 			totalMedicEnergy -= stimEnergyCost;
 		}
 	}
@@ -735,12 +743,48 @@ void Squad::stimIfNeeded()
 		}
 
 		BWAPI::Unitset nearbyEnemies;
-		MapGrid::Instance().GetUnits(nearbyEnemies, marine->getPosition(), 5 * 32, false, true);
+		MapGrid::Instance().getUnits(nearbyEnemies, marine->getPosition(), 5 * 32, false, true);
 
 		if (!nearbyEnemies.empty())
 		{
-			Micro::SmartStim(marine);
+			Micro::Stim(marine);
 			totalMedicEnergy -= stimEnergyCost;
 		}
 	}
+}
+
+const bool Squad::hasCombatUnits() const
+{
+	// If the only units we have are detectors, then we have no combat units.
+	return !(_units.empty() || _units.size() == _microDetectors.getUnits().size());
+}
+
+// Is every unit in the squad an overlord hunter (or a detector)?
+// An overlord hunter is a fast air unit that is strong against overlords.
+const bool Squad::isOverlordHunterSquad() const
+{
+	if (!hasCombatUnits())
+	{
+		return false;
+	}
+
+	for (const auto unit : _units)
+	{
+		const BWAPI::UnitType type = unit->getType();
+		if (!type.isFlyer())
+		{
+			return false;
+		}
+		if (!type.isDetector() &&
+			type != BWAPI::UnitTypes::Terran_Wraith &&
+			type != BWAPI::UnitTypes::Terran_Valkyrie &&
+			type != BWAPI::UnitTypes::Zerg_Mutalisk &&
+			type != BWAPI::UnitTypes::Zerg_Scourge &&      // questionable, but the squad may have both
+			type != BWAPI::UnitTypes::Protoss_Corsair &&
+			type != BWAPI::UnitTypes::Protoss_Scout)
+		{
+			return false;
+		}
+	}
+	return true;
 }

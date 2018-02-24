@@ -4,9 +4,12 @@ using namespace UAlbertaBot;
 
 TimerManager::TimerManager() 
     : _timers(std::vector<BOSS::Timer>(NumTypes))
+	, _count(0)
+	, _maxMilliseconds(0.0)
+	, _totalMilliseconds(0.0)
     , _barWidth(40)
 {
-	_timerNames.push_back("Total");
+	_timerNames.push_back("Total");     // the Total timer must be first! it is referred to by index
 	_timerNames.push_back("Worker");
 	_timerNames.push_back("Production");
 	_timerNames.push_back("Building");
@@ -15,6 +18,7 @@ TimerManager::TimerManager()
 	_timerNames.push_back("UnitInfo");
 	_timerNames.push_back("MapGrid");
 	_timerNames.push_back("Search");
+	_timerNames.push_back("OpponentModel");
 }
 
 void TimerManager::startTimer(const TimerManager::Type t)
@@ -25,11 +29,32 @@ void TimerManager::startTimer(const TimerManager::Type t)
 void TimerManager::stopTimer(const TimerManager::Type t)
 {
 	_timers[t].stop();
+	if (t == Total)
+	{
+		++_count;
+		double ms = getMilliseconds();
+		_maxMilliseconds = std::max(_maxMilliseconds, ms);
+		_totalMilliseconds += ms;
+	}
 }
 
-double TimerManager::getTotalElapsed()
+double TimerManager::getMilliseconds()
 {
-	return _timers[0].getElapsedTimeInMilliSec();
+	return _timers[Total].getElapsedTimeInMilliSec();
+}
+
+double TimerManager::getMaxMilliseconds()
+{
+	return _maxMilliseconds;
+}
+
+double TimerManager::getMeanMilliseconds()
+{
+	if (_count == 0)
+	{
+		return 0.0;
+	}
+	return _totalMilliseconds / _count;
 }
 
 void TimerManager::displayTimers(int x, int y)
@@ -42,7 +67,7 @@ void TimerManager::displayTimers(int x, int y)
 	BWAPI::Broodwar->drawBoxScreen(x-5, y-5, x+110+_barWidth, y+5+(10*_timers.size()), BWAPI::Colors::Black, true);
 
 	int yskip = 0;
-	double total = _timers[0].getElapsedTimeInMilliSec();
+	double total = _timers[Total].getElapsedTimeInMilliSec();
 	for (size_t i(0); i<_timers.size(); ++i)
 	{
 		double elapsed = _timers[i].getElapsedTimeInMilliSec();

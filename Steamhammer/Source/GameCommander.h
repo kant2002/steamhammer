@@ -1,15 +1,17 @@
 #pragma once
 
 #include "Common.h"
+
+#include "BuildingManager.h"
 #include "CombatCommander.h"
 #include "InformationManager.h"
 #include "MapGrid.h"
-#include "WorkerManager.h"
+#include "OpponentModel.h"
 #include "ProductionManager.h"
-#include "BuildingManager.h"
 #include "ScoutManager.h"
 #include "StrategyManager.h"
 #include "TimerManager.h"
+#include "WorkerManager.h"
 
 namespace UAlbertaBot
 {
@@ -39,13 +41,14 @@ class GameCommander
 
 	int						_surrenderTime;    // for giving up early
 
-    bool                    _initialScoutSet;
-	bool					_goScout;
+	int						_initialScoutTime; // 0 until a scouting worker is assigned
 
     void                    assignUnit(BWAPI::Unit unit, BWAPI::Unitset & set);
 	bool                    isAssigned(BWAPI::Unit unit) const;
 
 	bool					surrenderMonkey();
+
+	BWAPI::Unit getAnyFreeWorker();
 
 public:
 
@@ -60,12 +63,11 @@ public:
 	void setCombatUnits();
 
 	void goScout();
+	int getScoutTime() const { return _initialScoutTime; };
 
 	void drawDebugInterface();
     void drawGameInformation(int x, int y);
 	void drawUnitOrders();
-
-	BWAPI::Unit getAnyFreeWorker();
 
 	void onUnitShow(BWAPI::Unit unit);
 	void onUnitHide(BWAPI::Unit unit);

@@ -112,23 +112,25 @@ void InformationManager::baseInferred(BWTA::BaseLocation * base)
 // This accounts for the theoretical case that it might be neutral.
 void InformationManager::baseFound(BWAPI::Unit depot)
 {
-	UAB_ASSERT(depot->getType().isResourceDepot(), "non-depot base");
-
-	BWAPI::Player owner = BWAPI::Broodwar->neutral();
-
-	if (depot->getPlayer() == _self || depot->getPlayer() == _enemy)
-	{
-		owner = depot->getPlayer();
-	}
+	UAB_ASSERT(depot && depot->getType().isResourceDepot(), "bad args");
 
 	for (BWTA::BaseLocation * base : BWTA::getBaseLocations())
 	{
 		if (closeEnough(base->getTilePosition(), depot->getTilePosition()))
 		{
-			_theBases[base]->setOwner(depot, owner);
+			baseFound(base, depot);
 			return;
 		}
 	}
+}
+
+// Set a base where the base and depot are both known.
+// The depot must be at or near the base location; this is not checked.
+void InformationManager::baseFound(BWTA::BaseLocation * base, BWAPI::Unit depot)
+{
+	UAB_ASSERT(base && depot && depot->getType().isResourceDepot(), "bad args");
+
+	_theBases[base]->setOwner(depot, depot->getPlayer());
 }
 
 // Something that may be a base was just destroyed.
@@ -140,13 +142,22 @@ void InformationManager::baseLost(BWAPI::TilePosition basePosition)
 	{
 		if (closeEnough(base->getTilePosition(), basePosition))
 		{
-			_theBases[base]->setOwner(nullptr, BWAPI::Broodwar->neutral());
-			if (base == getMyMainBaseLocation())
-			{
-				chooseNewMainBase();        // our main was lost, choose a new one
-			}
+			baseLost(base);
 			return;
 		}
+	}
+}
+
+// A base was lost and is now unowned.
+// If the lost base was our main, choose a new one if possible.
+void InformationManager::baseLost(BWTA::BaseLocation * base)
+{
+	UAB_ASSERT(base, "bad args");
+
+	_theBases[base]->setOwner(nullptr, BWAPI::Broodwar->neutral());
+	if (base == getMyMainBaseLocation())
+	{
+		chooseNewMainBase();        // our main was lost, choose a new one
 	}
 }
 
@@ -214,7 +225,6 @@ void InformationManager::maybeChooseNewMainBase()
 // A resource depot will not be recorded if it is offset by too much.
 // NOTE: This records the initial depot at the start of the game.
 // There's no need to take special action to record the starting base.
-// NOTE: Does not detect when a hatchery is cancelled during construction.
 void InformationManager::maybeAddBase(BWAPI::Unit unit)
 {
 	if (unit->getType().isResourceDepot())
@@ -235,6 +245,7 @@ void InformationManager::update()
 	updateUnitInfo();
 	updateBaseLocationInfo();
 	updateTheBases();
+	updateGoneFromLastPosition();
 }
 
 void InformationManager::updateUnitInfo() 
@@ -257,15 +268,18 @@ void InformationManager::updateBaseLocationInfo()
 {
 	_occupiedRegions[_self].clear();
 	_occupiedRegions[_enemy].clear();
-		
+	
+	// In the early game, look for enemy overlords as evidence of the enemy base.
+	enemyBaseLocationFromOverlordSighting();
+
 	// if we haven't found the enemy main base location yet
 	if (!_mainBaseLocations[_enemy]) 
-	{ 
+	{
 		// how many start locations have we explored
-		int exploredStartLocations = 0;
+		size_t exploredStartLocations = 0;
 		bool baseFound = false;
 
-		// an undexplored base location holder
+		// an unexplored base location holder
 		BWTA::BaseLocation * unexplored = nullptr;
 
 		for (BWTA::BaseLocation * startLocation : BWTA::getStartLocations()) 
@@ -293,17 +307,16 @@ void InformationManager::updateBaseLocationInfo()
 				}
 			}
 
-			// if it's explored, increment
 			// TODO If the enemy is zerg, we can be a little quicker by looking for creep.
 			// TODO If we see a mineral patch that has been mined, that should be a base.
 			if (BWAPI::Broodwar->isExplored(startLocation->getTilePosition())) 
 			{
-				exploredStartLocations++;
-
-			// otherwise set the unexplored base
+				// Count the explored bases.
+				++exploredStartLocations;
 			} 
 			else 
 			{
+				// Remember the unexplored base. It may be the only one.
 				unexplored = startLocation;
 			}
 		}
@@ -331,9 +344,8 @@ void InformationManager::updateBaseLocationInfo()
 	for (const auto & kv : _unitData[_enemy].getUnits())
 	{
 		const UnitInfo & ui(kv.second);
-		BWAPI::UnitType type = ui.type;
 
-		if (type.isBuilding()) 
+		if (ui.type.isBuilding() && !ui.goneFromLastPosition)
 		{
 			updateOccupiedRegions(BWTA::getRegion(BWAPI::TilePosition(ui.lastPosition)), _enemy);
 		}
@@ -343,38 +355,115 @@ void InformationManager::updateBaseLocationInfo()
 	for (const auto & kv : _unitData[_self].getUnits())
 	{
 		const UnitInfo & ui(kv.second);
-		BWAPI::UnitType type = ui.type;
 
-		if (type.isBuilding()) 
+		if (ui.type.isBuilding() && !ui.goneFromLastPosition)
 		{
 			updateOccupiedRegions(BWTA::getRegion(BWAPI::TilePosition(ui.lastPosition)), _self);
 		}
 	}
 }
 
+// If the opponent is zerg and it's early in the game, we may be able to infer the enemy
+// base's location by seeing the first overlord.
+// NOTE This doesn't quite extract all the information from an overlord sighting. In principle,
+//      we might be able to exclude a base location without being sure which remaining base is
+//      the enemy base. Steamhammer doesn't provide a way to exclude bases.
+void InformationManager::enemyBaseLocationFromOverlordSighting()
+{
+	// If we already know the base location, there's no need to try to infer it.
+	if (_mainBaseLocations[_enemy])
+	{
+		return;
+	}
+	
+	const int now = BWAPI::Broodwar->getFrameCount();
+
+	if (_enemy->getRace() != BWAPI::Races::Zerg || now > 5 * 60 * 24)
+	{
+		return;
+	}
+
+	for (const auto unit : _enemy->getUnits())
+	{
+		if (unit->getType() != BWAPI::UnitTypes::Zerg_Overlord)
+		{
+			continue;
+		}
+
+		// What bases could the overlord be from? Can we narrow it down to 1 possibility?
+		BWTA::BaseLocation * possibleEnemyBase = nullptr;
+		int countPossibleBases = 0;
+		for (BWTA::BaseLocation * base : BWTA::getStartLocations())
+		{
+			if (BWAPI::Broodwar->isExplored(base->getTilePosition()))
+			{
+				// We've already seen this base, and the enemy is not there.
+				continue;
+			}
+
+			// Assume the overlord came from this base.
+			// Where did the overlord start from? It starts offset from the hatchery in a specific way.
+			BWAPI::Position overlordStartPos;
+			overlordStartPos.x = base->getPosition().x + ((base->getPosition().x < 32 * BWAPI::Broodwar->mapWidth() / 2) ? +99 : -99);
+			overlordStartPos.y = base->getPosition().y + ((base->getPosition().y < 32 * BWAPI::Broodwar->mapHeight() / 2) ? +65 : -65);
+
+			// How far could it have traveled from there?
+			double maxDistance = double(now) * (BWAPI::UnitTypes::Zerg_Overlord).topSpeed();
+			if (maxDistance >= double(unit->getDistance(overlordStartPos)))
+			{
+				// It could have started from this base.
+				possibleEnemyBase = base;
+				++countPossibleBases;
+			}
+		}
+		if (countPossibleBases == 1)
+		{
+			// Success.
+			_mainBaseLocations[_enemy] = possibleEnemyBase;
+			baseInferred(possibleEnemyBase);
+			updateOccupiedRegions(BWTA::getRegion(possibleEnemyBase->getTilePosition()), _enemy);
+			return;
+		}
+	}
+}
+
 // _theBases is not always correctly updated by the event-driven methods.
-// Fix it.
-// TODO partially implemented; the finished part seems to work so far
+// Look for conflicting information and make corrections.
 void InformationManager::updateTheBases()
 {
 	for (BWTA::BaseLocation * base : BWTA::getBaseLocations())
 	{
-		if (_theBases[base]->owner == _self)
+		// If we can see the tile where the resource depot would be.
+		if (BWAPI::Broodwar->isVisible(base->getTilePosition()))
 		{
-			BWAPI::Unit depot = _theBases[base]->resourceDepot;
-			if (!depot || !depot->exists())
+			BWAPI::Unitset units = BWAPI::Broodwar->getUnitsOnTile(base->getTilePosition());
+			BWAPI::Unit depot = nullptr;
+			for (const auto unit : units)
 			{
-				baseLost(base->getTilePosition());
+				if (unit->getType().isResourceDepot())
+				{
+					depot = unit;
+					break;
+				}
 			}
-		}
-		else if (_theBases[base]->owner == _enemy)
-		{
-			// TODO
+			if (depot)
+			{
+				// The base is occupied.
+				baseFound(base, depot);
+			}
+			else
+			{
+				// The base is empty.
+				baseLost(base);
+			}
 		}
 		else
 		{
-			// Thought to be neutral. Is it really?
-			// TODO
+			// We don't see anything. It's definitely not our base.
+			if (_theBases[base]->owner == _self)
+			{
+				baseLost(base->getTilePosition());
+			}
 		}
 	}
 }
@@ -389,6 +478,21 @@ void InformationManager::updateOccupiedRegions(BWTA::Region * region, BWAPI::Pla
 	}
 }
 
+// If we can see the last known location of a remembered unit and the unit is not there,
+// set the unit's goneFromLastPosition flag.
+void InformationManager::updateGoneFromLastPosition()
+{
+	// We don't need to check often.
+	// 1. The game supposedly only resets visible tiles when frame % 100 == 99.
+	// 2. If the unit has only been gone from its location for a short time, it probably
+	//    didn't go far (it might have been recalled or gone through a nydus).
+	// So we check less than once per second.
+	if (BWAPI::Broodwar->getFrameCount() % 32 == 5)
+	{
+		_unitData[_enemy].updateGoneFromLastPosition();
+	}
+}
+
 bool InformationManager::isEnemyBuildingInRegion(BWTA::Region * region) 
 {
 	// invalid regions aren't considered the same, but they will both be null
@@ -400,7 +504,7 @@ bool InformationManager::isEnemyBuildingInRegion(BWTA::Region * region)
 	for (const auto & kv : _unitData[_enemy].getUnits())
 	{
 		const UnitInfo & ui(kv.second);
-		if (ui.type.isBuilding()) 
+		if (ui.type.isBuilding() && !ui.goneFromLastPosition)
 		{
 			if (BWTA::getRegion(BWAPI::TilePosition(ui.lastPosition)) == region) 
 			{
@@ -620,7 +724,9 @@ void InformationManager::drawExtendedInterface()
         if (!BWAPI::Broodwar->isVisible(BWAPI::TilePosition(ui.lastPosition)))
         {
             BWAPI::Broodwar->drawBoxMap(BWAPI::Position(left, top), BWAPI::Position(right, bottom), BWAPI::Colors::Grey, false);
-            BWAPI::Broodwar->drawTextMap(BWAPI::Position(left + 3, top + 4), "%s", ui.type.getName().c_str());
+            BWAPI::Broodwar->drawTextMap(BWAPI::Position(left + 3, top + 4), "%s %c",
+				ui.type.getName().c_str(),
+				ui.goneFromLastPosition ? 'X' : ' ');
         }
         
         if (!type.isResourceContainer() && type.maxHitPoints() > 0)
@@ -670,7 +776,7 @@ void InformationManager::drawExtendedInterface()
     }
 
     // draw neutral units and our units
-    for (auto & unit : BWAPI::Broodwar->getAllUnits())
+    for (const auto & unit : BWAPI::Broodwar->getAllUnits())
     {
         if (unit->getPlayer() == _enemy)
         {
@@ -904,6 +1010,14 @@ void InformationManager::drawBaseInformation(int x, int y)
 	}
 }
 
+void InformationManager::maybeAddStaticDefense(BWAPI::Unit unit)
+{
+	if (unit && unit->getPlayer() == _self && UnitUtil::IsStaticDefense(unit->getType()))
+	{
+		_staticDefense.insert(unit);
+	}
+}
+
 void InformationManager::updateUnit(BWAPI::Unit unit)
 {
     if (unit->getPlayer() == _self || unit->getPlayer() == _enemy)
@@ -923,6 +1037,12 @@ void InformationManager::onUnitDestroy(BWAPI::Unit unit)
 		{
 			baseLost(unit->getTilePosition());
 		}
+
+		// If it is our static defense, remove it.
+		if (unit->getPlayer() == _self && UnitUtil::IsStaticDefense(unit->getType()))
+		{
+			_staticDefense.erase(unit);
+		}
 	}
 }
 
@@ -936,33 +1056,39 @@ void InformationManager::getNearbyForce(std::vector<UnitInfo> & unitInfo, BWAPI:
 
 		// if it's a combat unit we care about
 		// and it's finished! 
-		if (UnitUtil::IsCombatSimUnit(ui.type) && ui.completed)
+		if (UnitUtil::IsCombatSimUnit(ui.type) && ui.completed && !ui.goneFromLastPosition)
 		{
-			// Determine its attack range, plus a small fudge factor.
-			// TODO find range using the same method as UnitUtil
-			int range = 0;
-			if (ui.type.groundWeapon() != BWAPI::WeaponTypes::None)
+			if (ui.type == BWAPI::UnitTypes::Terran_Medic)
 			{
-				range = ui.type.groundWeapon().maxRange() + 40;
+				// Spellcasters that the combat simulator is able to simulate.
+				if (ui.lastPosition.getDistance(p) <= (radius + 64))
+				{
+					unitInfo.push_back(ui);
+				}
 			}
-			// NOTE Ignores air weapon! Units with air attack only must be inside the radius to be
-			// included (except turrets and spores, because they are also detectors).
-
-			// if it can attack into the radius we care about
-			if (ui.lastPosition.getDistance(p) <= (radius + range))
+			else
 			{
-				// add it to the vector
-				unitInfo.push_back(ui);
+				// Non-spellcasters, aka units with weapons that have a range.
+
+				// Determine its attack range, in the worst case.
+				int range = UnitUtil::GetMaxAttackRange(ui.type);
+
+				// Include it if it can attack into the radius we care about (with fudge factor).
+				if (range && ui.lastPosition.getDistance(p) <= (radius + range + 32))
+				{
+					unitInfo.push_back(ui);
+				}
 			}
 		}
-		else if (ui.type.isDetector() && ui.lastPosition.getDistance(p) <= (radius + 250))
-        {
-			unitInfo.push_back(ui);
-        }
+		// NOTE FAP does not support detectors.
+		// else if (ui.type.isDetector() && ui.lastPosition.getDistance(p) <= (radius + 250))
+        // {
+		//	unitInfo.push_back(ui);
+        // }
 	}
 }
 
-int InformationManager::getNumUnits(BWAPI::UnitType t, BWAPI::Player player)
+int InformationManager::getNumUnits(BWAPI::UnitType t, BWAPI::Player player) const
 {
 	return getUnitData(player).getNumUnits(t);
 }
@@ -1331,11 +1457,36 @@ bool InformationManager::enemyHasMobileDetection()
 	return false;
 }
 
+// Our nearest shield battery, by air distance.
+// Null if none.
+BWAPI::Unit InformationManager::nearestShieldBattery(BWAPI::Position pos) const
+{
+	if (_self->getRace() == BWAPI::Races::Protoss)
+	{
+		int closestDist = 999999;
+		BWAPI::Unit closest = nullptr;
+		for (BWAPI::Unit building : _staticDefense)
+		{
+			if (building->getType() == BWAPI::UnitTypes::Protoss_Shield_Battery)
+			{
+				int dist = building->getDistance(pos);
+				if (dist < closestDist)
+				{
+					closestDist = dist;
+					closest = building;
+				}
+			}
+		}
+		return closest;
+	}
+	return nullptr;
+}
+
 // Zerg specific calculation: How many scourge hits are needed
 // to kill the enemy's known air fleet?
 // This counts individual units--you get 2 scourge per egg.
 // One scourge does 110 normal damage.
-// NOTE: This ignores air armor, which might make a difference in rare cases.
+// NOTE This ignores air armor, which might make a difference in rare cases.
 int InformationManager::nScourgeNeeded()
 {
 	int count = 0;

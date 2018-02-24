@@ -15,25 +15,19 @@ struct Strategy
 {
     std::string _name;
     BWAPI::Race _race;
-    int         _wins;
-    int         _losses;
 	std::string _openingGroup;
     BuildOrder  _buildOrder;
 
     Strategy()
         : _name("None")
         , _race(BWAPI::Races::None)
-        , _wins(0)
-        , _losses(0)
-		, _openingGroup("")
+ 		, _openingGroup("")
     {
     }
 
 	Strategy(const std::string & name, const BWAPI::Race & race, const std::string & openingGroup, const BuildOrder & buildOrder)
         : _name(name)
         , _race(race)
-        , _wins(0)
-        , _losses(0)
 		, _openingGroup(openingGroup)
 		, _buildOrder(buildOrder)
 	{
@@ -50,6 +44,8 @@ class StrategyManager
     int                             _totalGamesPlayed;
     const BuildOrder                _emptyBuildOrder;
 	std::string						_openingGroup;
+	bool							_hasDropTech;
+	int								_highWaterBases;   // most bases we've ever had, terran and protoss only
 
 	const	bool				    shouldExpandNow() const;
     const	MetaPairVector		    getProtossBuildOrderGoal();
@@ -72,6 +68,9 @@ public:
 
 			void					handleUrgentProductionIssues(BuildOrderQueue & queue);
 			void					freshProductionPlan();
+
+			bool					dropIsPlanned() const;
+			bool					hasDropTech();
 };
 
 }

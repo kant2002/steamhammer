@@ -17,20 +17,29 @@ MapTools::MapTools()
 	UAB_ASSERT(_rows > 0 && _cols > 0, "empty map");
 
     _map    = std::vector<bool>(_rows*_cols,false);
-	_units = std::vector<bool>(_rows*_cols, false);
     _fringe = std::vector<short int>(_rows*_cols,0);
 
     setBWAPIMapData();
+
+	_hasIslandBases = false;
+	for (BWTA::BaseLocation * base : BWTA::getBaseLocations())
+	{
+		if (base->isIsland())
+		{
+			_hasIslandBases = true;
+			break;
+		}
+	}
 }
 
 // return the index of the 1D array from (row,col)
-inline int MapTools::getIndex(int row,int col)
+inline short MapTools::getIndex(int row,int col) const
 {
     return row * _cols + col;
 }
 
 // Is the tile unexplored?
-bool MapTools::unexplored(DistanceMap & dmap,const int index) const
+bool MapTools::unexplored(DistanceMap & dmap, short index) const
 {
     return index != -1 &&            // index is valid
 		dmap[index] == -1 &&         // tile doesn't have a known distance
@@ -66,11 +75,10 @@ void MapTools::setBWAPIMapData()
     }
 
 	// 2. Check static units: Do they block tiles?
-	// TODO in progress
 	for (const auto unit : BWAPI::Broodwar->getStaticNeutralUnits())
 	{
 		// The neutral units may include moving critters which do not permanently block tiles.
-		// Someting immobile blocks tiles it occupies until it is destroyed (exceptions may be possible).
+		// Something immobile blocks tiles it occupies until it is destroyed (exceptions may be possible).
 		if (!unit->getType().canMove() && !unit->isFlying())
 		{
 			BWAPI::TilePosition pos = unit->getTilePosition();
@@ -131,7 +139,7 @@ int MapTools::getGroundDistance(BWAPI::Position origin, BWAPI::Position destinat
 	{
 		return 32 * tiles;
 	}
-	return tiles;
+	return tiles;    // 0 or -1
 }
 
 // computes walk distance from Position P to all other points on the map
@@ -231,7 +239,7 @@ const std::vector<BWAPI::TilePosition> & MapTools::getClosestTilesTo(BWAPI::Posi
     return _allMaps[pos].getSortedTiles();
 }
 
-BWAPI::TilePosition MapTools::getTilePosition(int index)
+BWAPI::TilePosition MapTools::getTilePosition(short index)
 {
     return BWAPI::TilePosition(index % _cols,index / _cols);
 }
@@ -258,15 +266,17 @@ void MapTools::drawHomeDistanceMap()
     }
 }
 
-BWTA::BaseLocation * MapTools::nextExpansion(bool hidden, bool minOnlyOK)
+BWTA::BaseLocation * MapTools::nextExpansion(bool hidden, bool wantMinerals, bool wantGas)
 {
+	UAB_ASSERT(wantMinerals || wantGas, "unwanted expansion");
+
 	// Abbreviations.
 	BWAPI::Player player = BWAPI::Broodwar->self();
 	BWAPI::Player enemy = BWAPI::Broodwar->enemy();
 
 	// We'll go through the bases and pick the one with the best score.
 	BWTA::BaseLocation * bestBase = nullptr;
-    double bestScore = 0.0;
+	double bestScore = -999999.0;
 	
 	BWAPI::TilePosition homeTile = InformationManager::Instance().getMyMainBaseLocation()->getTilePosition();
 	BWAPI::Position myBasePosition(homeTile);
@@ -276,8 +286,15 @@ BWTA::BaseLocation * MapTools::nextExpansion(bool hidden, bool minOnlyOK)
     {
 		double score = 0.0;
 
-        // Do we demand a gas base (!minOnlyOK)?
-		if (!minOnlyOK && base->isMineralOnly())
+        // Do we demand a gas base?
+		if (wantGas && (base->isMineralOnly() || base->gas() == 0))
+		{
+			continue;
+		}
+
+		// Do we demand a mineral base?
+		// The constant is an arbitrary limit "enough minerals to be worth it".
+		if (wantMinerals && base->minerals() < 500)
 		{
 			continue;
 		}
@@ -329,7 +346,7 @@ BWTA::BaseLocation * MapTools::nextExpansion(bool hidden, bool minOnlyOK)
 		double distanceFromUs = MapTools::Instance().getGroundTileDistance(BWAPI::Position(tile), myBasePosition);
 
         // if it is not connected, continue
-		if (!BWTA::isConnected(homeTile, tile) || distanceFromUs < 0)
+		if (distanceFromUs < 0)
         {
             continue;
         }
@@ -349,8 +366,11 @@ BWTA::BaseLocation * MapTools::nextExpansion(bool hidden, bool minOnlyOK)
 		score = hidden ? (distanceFromEnemy + distanceFromUs / 2.0) : (distanceFromEnemy / 2.0 - distanceFromUs);
 
 		// More resources -> better.
-		score += 0.01 * base->minerals();
-		if (!minOnlyOK)
+		if (wantMinerals)
+		{
+			score += 0.01 * base->minerals();
+		}
+		if (wantGas)
 		{
 			score += 0.02 * base->gas();
 		}
@@ -361,7 +381,7 @@ BWTA::BaseLocation * MapTools::nextExpansion(bool hidden, bool minOnlyOK)
 		}
 
 		// BWAPI::Broodwar->printf("base score %d, %d -> %f",  tile.x, tile.y, score);
-		if (!bestBase || score > bestScore)
+		if (score > bestScore)
         {
             bestBase = base;
 			bestScore = score;
@@ -372,17 +392,17 @@ BWTA::BaseLocation * MapTools::nextExpansion(bool hidden, bool minOnlyOK)
     {
         return bestBase;
 	}
-	if (!minOnlyOK)
+	if (wantMinerals && wantGas)
 	{
 		// We wanted a gas base and there isn't one. Try for a mineral-only base.
-		return nextExpansion(hidden, true);
+		return nextExpansion(hidden, true, false);
 	}
 	return nullptr;
 }
 
-BWAPI::TilePosition MapTools::getNextExpansion(bool hidden, bool minOnlyOK)
+BWAPI::TilePosition MapTools::getNextExpansion(bool hidden, bool wantMinerals, bool wantGas)
 {
-	BWTA::BaseLocation * base = nextExpansion(hidden, minOnlyOK);
+	BWTA::BaseLocation * base = nextExpansion(hidden, wantMinerals, wantGas);
 	if (base)
 	{
 		// BWAPI::Broodwar->printf("foresee base @ %d, %d", base->getTilePosition().x, base->getTilePosition().y);
@@ -391,9 +411,9 @@ BWAPI::TilePosition MapTools::getNextExpansion(bool hidden, bool minOnlyOK)
 	return BWAPI::TilePositions::None;
 }
 
-BWAPI::TilePosition MapTools::reserveNextExpansion(bool hidden, bool minOnlyOK)
+BWAPI::TilePosition MapTools::reserveNextExpansion(bool hidden, bool wantMinerals, bool wantGas)
 {
-	BWTA::BaseLocation * base = nextExpansion(hidden, minOnlyOK);
+	BWTA::BaseLocation * base = nextExpansion(hidden, wantMinerals, wantGas);
 	if (base)
 	{
 		// BWAPI::Broodwar->printf("reserve base @ %d, %d", base->getTilePosition().x, base->getTilePosition().y);

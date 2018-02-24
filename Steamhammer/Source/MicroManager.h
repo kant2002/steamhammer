@@ -27,6 +27,8 @@ protected:
 	bool				immobilizeUnit(BWAPI::Unit unit) const;    // siege or burrow
 	bool				unstickStuckUnit(BWAPI::Unit unit);
 
+	void				useShieldBattery(BWAPI::Unit unit, BWAPI::Unit shieldBattery);
+
 	void                drawOrderText();
 
 public:

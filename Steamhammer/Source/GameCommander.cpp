@@ -7,15 +7,14 @@ using namespace UAlbertaBot;
 
 GameCommander::GameCommander() 
 	: _combatCommander(CombatCommander::Instance())
-    , _initialScoutSet(false)
-	, _goScout(false)
+	, _initialScoutTime(0)
 	, _surrenderTime(0)
 {
 }
 
 void GameCommander::update()
 {
-	_timerManager.startTimer(TimerManager::All);
+	_timerManager.startTimer(TimerManager::Total);
 
 	// populate the unit vectors we will pass into various managers
 	handleUnitAssignments();
@@ -45,7 +44,7 @@ void GameCommander::update()
 	_timerManager.stopTimer(TimerManager::MapGrid);
 
 	_timerManager.startTimer(TimerManager::Search);
-	BOSSManager::Instance().update(35 - _timerManager.getTotalElapsed());
+	BOSSManager::Instance().update(35 - _timerManager.getMilliseconds());
 	_timerManager.stopTimer(TimerManager::Search);
 
 	_timerManager.startTimer(TimerManager::Worker);
@@ -68,10 +67,11 @@ void GameCommander::update()
     ScoutManager::Instance().update();
 	_timerManager.stopTimer(TimerManager::Scout);
 
-	// Should use a trivial amount of time.
+	_timerManager.startTimer(TimerManager::OpponentModel);
 	OpponentModel::Instance().update();
-	
-	_timerManager.stopTimer(TimerManager::All);
+	_timerManager.stopTimer(TimerManager::OpponentModel);
+
+	_timerManager.stopTimer(TimerManager::Total);
 
 	drawDebugInterface();
 }
@@ -84,7 +84,7 @@ void GameCommander::drawDebugInterface()
 	InformationManager::Instance().drawBaseInformation(575, 30);
 	BuildingManager::Instance().drawBuildingInformation(200, 50);
 	BuildingPlacer::Instance().drawReservedTiles();
-	ProductionManager::Instance().drawProductionInformation(30, 50);
+	ProductionManager::Instance().drawProductionInformation(30, 60);
 	BOSSManager::Instance().drawSearchInformation(490, 100);
     BOSSManager::Instance().drawStateInformation(250, 0);
 	MapTools::Instance().drawHomeDistanceMap();
@@ -112,26 +112,52 @@ void GameCommander::drawGameInformation(int x, int y)
 	}
 
 	BWAPI::Broodwar->drawTextScreen(x, y, "\x04Players:");
-	BWAPI::Broodwar->drawTextScreen(x+50, y, "%c%s \x04vs. %c%s",
-		BWAPI::Broodwar->self()->getTextColor(), BWAPI::Broodwar->self()->getName().c_str(), 
+	BWAPI::Broodwar->drawTextScreen(x+50, y, "%c%s %cv %c%s",
+		BWAPI::Broodwar->self()->getTextColor(), BWAPI::Broodwar->self()->getName().c_str(),
+		white,
         BWAPI::Broodwar->enemy()->getTextColor(), BWAPI::Broodwar->enemy()->getName().c_str());
 	y += 12;
 	
+	const std::string & openingGroup = StrategyManager::Instance().getOpeningGroup();
+	bool gasSteal = OpponentModel::Instance().getRecommendGasSteal() || ScoutManager::Instance().wantGasSteal();
     BWAPI::Broodwar->drawTextScreen(x, y, "\x04Strategy:");
-	BWAPI::Broodwar->drawTextScreen(x + 50, y, "\x03%s%s %s",
+	BWAPI::Broodwar->drawTextScreen(x + 50, y, "\x03%s%s%s%s",
 		Config::Strategy::StrategyName.c_str(),
-		StrategyManager::Instance().getOpeningGroup() != "" ? (" (" + StrategyManager::Instance().getOpeningGroup() + ")").c_str() : "",
-		Config::Strategy::FoundEnemySpecificStrategy ? "- enemy specific" : "");
+		openingGroup != "" ? (" (" + openingGroup + ")").c_str() : "",
+		gasSteal ? " + steal gas" : "",
+		Config::Strategy::FoundEnemySpecificStrategy ? " - enemy specific" : "");
 	BWAPI::Broodwar->setTextSize();
 	y += 12;
 
-    BWAPI::Broodwar->drawTextScreen(x, y, "\x04Map:");
+	std::string expect;
+	std::string enemyPlanString;
+	if (OpponentModel::Instance().getEnemyPlan() == OpeningPlan::Unknown &&
+		OpponentModel::Instance().getExpectedEnemyPlan() != OpeningPlan::Unknown)
+	{
+		expect = "expect ";
+		enemyPlanString = OpponentModel::Instance().getExpectedEnemyPlanString();
+	}
+	else
+	{
+		enemyPlanString = OpponentModel::Instance().getEnemyPlanString();
+	}
+	BWAPI::Broodwar->drawTextScreen(x, y, "\x04Opp Plan:");
+	BWAPI::Broodwar->drawTextScreen(x + 50, y, "%c%s%c%s", orange, expect.c_str(), yellow, enemyPlanString.c_str());
+	y += 12;
+
+	BWAPI::Broodwar->drawTextScreen(x, y, "\x04Map:");
 	BWAPI::Broodwar->drawTextScreen(x+50, y, "\x03%s", BWAPI::Broodwar->mapFileName().c_str());
 	BWAPI::Broodwar->setTextSize();
 	y += 12;
 
-    BWAPI::Broodwar->drawTextScreen(x, y, "\x04Time:");
-    BWAPI::Broodwar->drawTextScreen(x+50, y, "\x04%d %4dm %3ds", BWAPI::Broodwar->getFrameCount(), (int)(BWAPI::Broodwar->getFrameCount()/(23.8*60)), (int)((int)(BWAPI::Broodwar->getFrameCount()/23.8)%60));
+	int frame = BWAPI::Broodwar->getFrameCount();
+	BWAPI::Broodwar->drawTextScreen(x, y, "\x04Time:");
+	BWAPI::Broodwar->drawTextScreen(x + 50, y, "\x04%d %2u:%02u mean %.1fms max %.1fms",
+		frame,
+		int(frame / (23.8 * 60)),
+		int(frame / 23.8) % 60,
+		_timerManager.getMeanMilliseconds(),
+		_timerManager.getMaxMilliseconds());
 }
 
 void GameCommander::drawUnitOrders()
@@ -188,6 +214,7 @@ void GameCommander::handleUnitAssignments()
 {
 	_validUnits.clear();
     _combatUnits.clear();
+	// Don't clear the scout units.
 
 	// filter our units for those which are valid and usable
 	setValidUnits();
@@ -216,25 +243,42 @@ void GameCommander::setValidUnits()
 
 void GameCommander::setScoutUnits()
 {
-    // Send a scout if we haven't yet and should.
-	if (!_initialScoutSet && _scoutUnits.empty())
+	// If we're zerg, assign the first overlord to scout.
+	// But not if the enemy is terran: We have no evasion skills, we'll lose the overlord.
+	if (BWAPI::Broodwar->getFrameCount() == 0 &&
+		BWAPI::Broodwar->self()->getRace() == BWAPI::Races::Zerg &&
+		BWAPI::Broodwar->enemy()->getRace() != BWAPI::Races::Terran)
+	{
+		for (const auto unit : BWAPI::Broodwar->self()->getUnits())
+		{
+			if (unit->getType() == BWAPI::UnitTypes::Zerg_Overlord)
+			{
+				ScoutManager::Instance().setOverlordScout(unit);
+				assignUnit(unit, _scoutUnits);
+				break;
+			}
+		}
+	}
+
+    // Send a scout worker if we haven't yet and should.
+	if (!_initialScoutTime)
     {
-		if (_goScout && ScoutManager::Instance().shouldScout())
+		if (ScoutManager::Instance().shouldScout())
 		{
 			BWAPI::Unit workerScout = getAnyFreeWorker();
 
-			// If we find a worker (which we should), make it the scout unit.
+			// If we find a worker, make it the scout unit.
 			if (workerScout)
 			{
-                ScoutManager::Instance().setWorkerScout(workerScout);
+				ScoutManager::Instance().setWorkerScout(workerScout);
 				assignUnit(workerScout, _scoutUnits);
-                _initialScoutSet = true;
+                _initialScoutTime = BWAPI::Broodwar->getFrameCount();
 			}
 		}
     }
 }
 
-// sets combat units to be passed to CombatCommander
+// Set combat units to be passed to CombatCommander.
 void GameCommander::setCombatUnits()
 {
 	for (const auto unit : _validUnits)
@@ -244,12 +288,6 @@ void GameCommander::setCombatUnits()
 			assignUnit(unit, _combatUnits);
 		}
 	}
-}
-
-// Call when the strategy wants an unconditional worker scout.
-void GameCommander::goScout()
-{
-	_goScout = true;
 }
 
 void GameCommander::onUnitShow(BWAPI::Unit unit)			
@@ -296,11 +334,12 @@ BWAPI::Unit GameCommander::getAnyFreeWorker()
 {
 	for (const auto unit : _validUnits)
 	{
-		if (unit->getType().isWorker()
-			&& !isAssigned(unit)
-			&& WorkerManager::Instance().isFree(unit)
-			&& !unit->isCarryingMinerals()
-			&& !unit->isCarryingGas())
+		if (unit->getType().isWorker() &&
+			!isAssigned(unit) &&
+			WorkerManager::Instance().isFree(unit) &&
+			!unit->isCarryingMinerals() &&
+			!unit->isCarryingGas() &&
+			unit->getOrder() != BWAPI::Orders::MiningMinerals)
 		{
 			return unit;
 		}
