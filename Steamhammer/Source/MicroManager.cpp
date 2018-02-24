@@ -3,7 +3,6 @@
 #include "UnitUtil.h"
 
 using namespace UAlbertaBot;
-
 MicroManager::MicroManager() 
 {
 }
@@ -53,23 +52,14 @@ void MicroManager::execute(const SquadOrder & inputOrder)
 	BWAPI::Unitset nearbyEnemies;
 
 	// Always include enemies in the radius of the order.
-	MapGrid::Instance().GetUnits(nearbyEnemies, order.getPosition(), order.getRadius(), false, true);
+	MapGrid::Instance().getUnits(nearbyEnemies, order.getPosition(), order.getRadius(), false, true);
 
-	// For some orders, add enemies which are near our units, for different versions of "near".
-	if (order.getType() == SquadOrderTypes::Attack)
+	// For some orders, add enemies which are near our units.
+	if (order.getType() == SquadOrderTypes::Attack || order.getType() == SquadOrderTypes::Defend)
 	{
 		for (const auto unit : _units) 
 		{
-			MapGrid::Instance().GetUnits(nearbyEnemies, unit->getPosition(), unit->getType().sightRange(), false, true);
-		}
-	}
-	else if (order.getType() == SquadOrderTypes::Defend)
-	{
-		// Without this, defending units which are far from the base they are to defend will be
-		// assigned targets at the base, so they'll run blindly into enemies that are in the way.
-		for (const auto unit : _units)
-		{
-			MapGrid::Instance().GetUnits(nearbyEnemies, unit->getPosition(), 4 * 32, false, true);
+			MapGrid::Instance().getUnits(nearbyEnemies, unit->getPosition(), unit->getType().sightRange(), false, true);
 		}
 	}
 
@@ -116,13 +106,13 @@ void MicroManager::regroup(const BWAPI::Position & regroupPosition) const
 				BWAPI::Filter::IsEnemy && BWAPI::Filter::GetType == BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode,
 				64)))
 		{
-			Micro::SmartAttackMove(unit, unit->getPosition());
+			Micro::AttackMove(unit, unit->getPosition());
 		}
 		else if (unit->getDistance(regroupPosition) > 96)   // air distance, which can be unhelpful sometimes
 		{
 			if (!mobilizeUnit(unit))
 			{
-				Micro::SmartMove(unit, regroupPosition);
+				Micro::Move(unit, regroupPosition);
 			}
 		}
 		else
@@ -130,7 +120,7 @@ void MicroManager::regroup(const BWAPI::Position & regroupPosition) const
 			// We have retreated to a good position.
 			if (!immobilizeUnit(unit))
 			{
-				Micro::SmartAttackMove(unit, unit->getPosition());
+				Micro::AttackMove(unit, unit->getPosition());
 			}
 		}
 	}
@@ -163,7 +153,7 @@ bool MicroManager::unitNearEnemy(BWAPI::Unit unit)
 
 	BWAPI::Unitset enemyNear;
 
-	MapGrid::Instance().GetUnits(enemyNear, unit->getPosition(), 800, false, true);
+	MapGrid::Instance().getUnits(enemyNear, unit->getPosition(), 800, false, true);
 
 	return enemyNear.size() > 0;
 }
@@ -248,17 +238,34 @@ bool MicroManager::immobilizeUnit(BWAPI::Unit unit) const
 // Sometimes a unit on ground attack-move freezes in place.
 // Luckily it's easy to recognize, though units may be on PlayerGuard for other reasons.
 // Return whether any action was taken.
+// This solves stuck zerglings, but doesn't always prevent other units from getting stuck.
 bool MicroManager::unstickStuckUnit(BWAPI::Unit unit)
 {
 	if (!unit->isMoving() && !unit->getType().isFlyer() && !unit->isBurrowed() &&
 		unit->getOrder() == BWAPI::Orders::PlayerGuard &&
 		BWAPI::Broodwar->getFrameCount() % 4 == 0)
 	{
-		Micro::SmartStop(unit);
+		Micro::Stop(unit);
 		return true;
 	}
 
 	return false;
+}
+
+// Send the protoss unit to the shield battery and recharge its shields.
+// The caller should have already checked all conditions.
+void MicroManager::useShieldBattery(BWAPI::Unit unit, BWAPI::Unit shieldBattery)
+{
+	if (unit->getDistance(shieldBattery) >= 32)
+	{
+		// BWAPI::Broodwar->printf("move to battery %d at %d", unit->getID(), shieldBattery->getID());
+		Micro::Move(unit, shieldBattery->getPosition());
+	}
+	else
+	{
+		// BWAPI::Broodwar->printf("recharge shields %d at %d", unit->getID(), shieldBattery->getID());
+		Micro::RightClick(unit, shieldBattery);
+	}
 }
 
 void MicroManager::drawOrderText() 

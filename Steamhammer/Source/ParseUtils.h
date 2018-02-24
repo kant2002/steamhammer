@@ -10,7 +10,7 @@ namespace ParseUtils
     void ParseConfigFile(const std::string & filename);
     void ParseTextCommand(const std::string & commandLine);
     BWAPI::Race GetRace(const std::string & raceName);
-
+	
 	bool _ParseStrategy(
 		const rapidjson::Value & item,
 		std::string & stratName,

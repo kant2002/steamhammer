@@ -19,6 +19,8 @@ public:
 	void takeSelf();
 	void takeEnemy();
 
+	int getCount(BWAPI::UnitType type) const;
+
 	std::string debugString() const;
 };
 

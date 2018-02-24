@@ -3,6 +3,9 @@
 
 UAlbertaBot::FastAPproximation fap;
 
+// NOTE FAP does not use UnitInfo.goneFromLastPosition. The flag is always set false
+// on a UnitInfo value which is passed in (CombatSimulation makes sure of it).
+
 namespace UAlbertaBot {
 
 	FastAPproximation::FastAPproximation() {
@@ -126,7 +129,11 @@ namespace UAlbertaBot {
 	}
 
 	bool FastAPproximation::isSuicideUnit(BWAPI::UnitType ut) {
-		return (ut == BWAPI::UnitTypes::Zerg_Scourge || ut == BWAPI::UnitTypes::Terran_Vulture_Spider_Mine || ut == BWAPI::UnitTypes::Zerg_Infested_Terran);
+		return
+			ut == BWAPI::UnitTypes::Zerg_Scourge ||
+			ut == BWAPI::UnitTypes::Terran_Vulture_Spider_Mine ||
+			ut == BWAPI::UnitTypes::Zerg_Infested_Terran ||
+			ut == BWAPI::UnitTypes::Protoss_Scarab;
 	}
 
 	void FastAPproximation::unitsim(const FastAPproximation::FAPUnit &fu, std::vector <FastAPproximation::FAPUnit> &enemyUnits) {
@@ -136,7 +143,7 @@ namespace UAlbertaBot {
 		}
 
 		auto closestEnemy = enemyUnits.end();
-		int closestDist;
+		int closestDist = 99999;
 
 		for (auto enemyIt = enemyUnits.begin(); enemyIt != enemyUnits.end(); ++ enemyIt) {
 			if (enemyIt->flying) {
@@ -201,7 +208,7 @@ namespace UAlbertaBot {
 
 	void FastAPproximation::medicsim(const FAPUnit & fu, std::vector<FAPUnit> &friendlyUnits) {
 		auto closestHealable = friendlyUnits.end();
-		int closestDist;
+		int closestDist = 99999;
 
 		for (auto it = friendlyUnits.begin(); it != friendlyUnits.end(); ++it) {
 			if (it->isOrganic && it->health < it->maxHealth && !it->didHealThisFrame) {
@@ -217,7 +224,9 @@ namespace UAlbertaBot {
 			fu.x = closestHealable->x;
 			fu.y = closestHealable->y;
 
-			closestHealable->health += (closestHealable->healTimer += 400) / 256;
+			// According to N00byEdge, 400 (instead of 300) is correct, but in reality medics
+			// are not used optimally, so the smaller value is more accurate in practice.
+			closestHealable->health += (closestHealable->healTimer += 300) / 256;
 			closestHealable->healTimer %= 256;
 
 			if (closestHealable->health > closestHealable->maxHealth)
@@ -229,7 +238,7 @@ namespace UAlbertaBot {
 
 	bool FastAPproximation::suicideSim(const FAPUnit & fu, std::vector<FAPUnit>& enemyUnits) {
 		auto closestEnemy = enemyUnits.end();
-		int closestDist;
+		int closestDist = 99999;
 
 		for (auto enemyIt = enemyUnits.begin(); enemyIt != enemyUnits.end(); ++enemyIt) {
 			if (enemyIt->flying) {

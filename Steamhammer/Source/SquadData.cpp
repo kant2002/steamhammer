@@ -97,7 +97,7 @@ void SquadData::drawSquadInformation(int x, int y)
 
 		const BWAPI::Unitset & units = squad.getUnits();
 		const SquadOrder & order = squad.getSquadOrder();
-		char code = order.getCharCode();               // A == attack, etc.
+		char code = order.getCharCode();               // a == attack, etc.
 
 		BWAPI::Broodwar->drawTextScreen(x, y+40+((yspace)*10), "\x03 %c %s", code, squad.getName().c_str());
 		BWAPI::Broodwar->drawTextScreen(x+150, y+40+((yspace)*10), "\x03%d", units.size());

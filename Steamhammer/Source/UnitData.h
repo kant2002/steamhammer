@@ -17,6 +17,7 @@ struct UnitInfo
     BWAPI::Player   player;
     BWAPI::Unit     unit;
     BWAPI::Position lastPosition;
+	bool			goneFromLastPosition;    // last position was seen, and it wasn't there
     BWAPI::UnitType type;
     bool            completed;
 
@@ -28,6 +29,7 @@ struct UnitInfo
 		, player(nullptr)
         , unit(nullptr)
         , lastPosition(BWAPI::Positions::None)
+		, goneFromLastPosition(false)
         , type(BWAPI::UnitTypes::None)
         , completed(false)
 	{
@@ -41,6 +43,7 @@ struct UnitInfo
 		, player(unit->getPlayer())
 		, unit(unit)
 		, lastPosition(unit->getPosition())
+		, goneFromLastPosition(false)
 		, type(unit->getType())
 		, completed(unit->isCompleted())
 	{
@@ -80,6 +83,8 @@ class UnitData
 public:
 
     UnitData();
+
+	void	updateGoneFromLastPosition();
 
     void	updateUnit(BWAPI::Unit unit);
     void	removeUnit(BWAPI::Unit unit);

@@ -34,6 +34,7 @@ class InformationManager
 	BWTA::BaseLocation *								_myNaturalBaseLocation;  // whether taken yet or not
 	std::map<BWAPI::Player, std::set<BWTA::Region *> >  _occupiedRegions;        // contains any building
 	std::map<BWTA::BaseLocation *, Base *>				_theBases;
+	BWAPI::Unitset										_staticDefense;
 
 	InformationManager();
 
@@ -45,16 +46,22 @@ class InformationManager
 
 	void					baseInferred(BWTA::BaseLocation * base);
 	void					baseFound(BWAPI::Unit depot);
+	void					baseFound(BWTA::BaseLocation * base, BWAPI::Unit depot);
 	void					baseLost(BWAPI::TilePosition basePosition);
+	void					baseLost(BWTA::BaseLocation * base);
 	void					maybeAddBase(BWAPI::Unit unit);
 	bool					closeEnough(BWAPI::TilePosition a, BWAPI::TilePosition b);
 	void					chooseNewMainBase();
 
+	void					maybeAddStaticDefense(BWAPI::Unit unit);
+
 	void                    updateUnit(BWAPI::Unit unit);
     void                    updateUnitInfo();
     void                    updateBaseLocationInfo();
+	void					enemyBaseLocationFromOverlordSighting();
 	void					updateTheBases();
 	void                    updateOccupiedRegions(BWTA::Region * region, BWAPI::Player player);
+	void					updateGoneFromLastPosition();
 
 public:
 
@@ -64,13 +71,13 @@ public:
 	void					onUnitShow(BWAPI::Unit unit)        { updateUnit(unit); maybeAddBase(unit); }
     void					onUnitHide(BWAPI::Unit unit)        { updateUnit(unit); }
 	void					onUnitCreate(BWAPI::Unit unit)		{ updateUnit(unit); maybeAddBase(unit); }
-    void					onUnitComplete(BWAPI::Unit unit)    { updateUnit(unit); }
+	void					onUnitComplete(BWAPI::Unit unit)    { updateUnit(unit); maybeAddStaticDefense(unit); }
 	void					onUnitMorph(BWAPI::Unit unit)       { updateUnit(unit); maybeAddBase(unit); }
     void					onUnitRenegade(BWAPI::Unit unit)    { updateUnit(unit); }
     void					onUnitDestroy(BWAPI::Unit unit);
 
 	bool					isEnemyBuildingInRegion(BWTA::Region * region);
-    int						getNumUnits(BWAPI::UnitType type,BWAPI::Player player);
+    int						getNumUnits(BWAPI::UnitType type,BWAPI::Player player) const;
     bool					nearbyForceHasCloaked(BWAPI::Position p,BWAPI::Player player,int radius);
 
     void                    getNearbyForce(std::vector<UnitInfo> & unitInfo,BWAPI::Position p,BWAPI::Player player,int radius);
@@ -114,6 +121,10 @@ public:
 	bool					enemyHasOverlordHunters();
 	bool					enemyHasStaticDetection();
 	bool					enemyHasMobileDetection();
+
+	// BWAPI::Unit				nearestGroundStaticDefense(BWAPI::Position pos) const;
+	// BWAPI::Unit				nearestAirStaticDefense(BWAPI::Position pos) const;
+	BWAPI::Unit				nearestShieldBattery(BWAPI::Position pos) const;
 
 	int						nScourgeNeeded();           // zerg specific
 

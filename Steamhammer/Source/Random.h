@@ -14,6 +14,7 @@ public:
 	Random();
 
 	int index(int n);
+	bool flag(double probability);
 
 	static Random & Instance();
 };

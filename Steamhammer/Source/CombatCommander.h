@@ -16,15 +16,21 @@ class CombatCommander
 
 	bool			_goAggressive;
 
+	BWAPI::Position	_reconTarget;
+	int				_lastReconTargetChange;         // frame number
+
     void            updateScoutDefenseSquad();
 	void            updateBaseDefenseSquads();
+	void			updateReconSquad();
 	void            updateAttackSquads();
     void            updateDropSquads();
 	void            updateIdleSquad();
-	void			updateSurveySquad();
 
 	void			loadOrUnloadBunkers();
 	void			doComsatScan();
+
+	int				weighReconUnit(const BWAPI::Unit unit) const;
+	int				weighReconUnit(const BWAPI::UnitType type) const;
 
 	bool			unitIsGoodToDrop(const BWAPI::Unit unit) const;
 
@@ -36,8 +42,9 @@ class CombatCommander
     BWAPI::Unit     findClosestWorkerToTarget(BWAPI::Unitset & unitsToAssign, BWAPI::Unit target);
 
 	BWAPI::Position getDefendLocation();
+	void			chooseReconTarget();
+	BWAPI::Position getReconLocation() const;
 	BWAPI::Position getMainAttackLocation(const Squad * squad);
-	BWAPI::Position getSurveyLocation();
 
     void            initializeSquads();
     void            assignFlyingDefender(Squad & squad);

@@ -77,11 +77,11 @@ void MicroTanks::executeMicro(const BWAPI::Unitset & targets)
 
                 if (tank->isSieged())
                 {
-                    Micro::SmartAttackUnit(tank, target);
+                    Micro::AttackUnit(tank, target);
                 }
                 else
                 {
-                    Micro::SmartKiteTarget(tank, target);
+                    Micro::KiteTarget(tank, target);
                 }
 			}
 			// if there are no targets
@@ -97,7 +97,7 @@ void MicroTanks::executeMicro(const BWAPI::Unitset & targets)
                     else
                     {
     					// move to it
-    					Micro::SmartAttackMove(tank, order.getPosition());
+    					Micro::AttackMove(tank, order.getPosition());
                     }
 				}
 			}

@@ -39,14 +39,14 @@ void MicroHighTemplar::update()
 		else if (templar->getOrder() == BWAPI::Orders::ArchonWarp && framesSinceCommand > 5 * 24)
 		{
 			// The merge has been going on too long. It may be stuck. Stop and try again.
-			Micro::SmartMove(templar, gatherPoint);
+			Micro::Move(templar, gatherPoint);
 		}
 		else if (templar->getOrder() == BWAPI::Orders::PlayerGuard)
 		{
 			if (templar->getLastCommand().getType() == BWAPI::UnitCommandTypes::Use_Tech_Unit && framesSinceCommand > 10)
 			{
 				// Tried and failed to merge. Try moving first.
-				Micro::SmartMove(templar, gatherPoint);
+				Micro::Move(templar, gatherPoint);
 			}
 			else
 			{
@@ -80,6 +80,6 @@ void MicroHighTemplar::update()
 
 	if (closest1)
 	{
-		(void) Micro::SmartMergeArchon(closest1, closest2);
+		(void) Micro::MergeArchon(closest1, closest2);
 	}
 }

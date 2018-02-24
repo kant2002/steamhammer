@@ -25,7 +25,12 @@ class WorkerManager
 	void        handleRepairWorkers();
     void        handleMoveWorkers();
 
-	BWAPI::Unit findEnemyTargetForWorker(BWAPI::Unit worker);
+	BWAPI::Unit findEnemyTargetForWorker(BWAPI::Unit worker) const;
+	BWAPI::Unit findEscapeMinerals(BWAPI::Unit worker) const;
+	bool		defendSelf(BWAPI::Unit worker, BWAPI::Unit resource);
+
+	BWAPI::Unit getAnyClosestDepot(BWAPI::Unit worker);      // don't care whether it's full
+	BWAPI::Unit getClosestNonFullDepot(BWAPI::Unit worker);  // only if it can accept more mineral workers
 
 	WorkerManager();
 
@@ -63,7 +68,6 @@ public:
 
     BWAPI::Unit getBuilder(const Building & b,bool setJobAsBuilder = true);
     BWAPI::Unit getMoveWorker(BWAPI::Position p);
-    BWAPI::Unit getClosestDepot(BWAPI::Unit worker);
     BWAPI::Unit getGasWorker(BWAPI::Unit refinery);
     BWAPI::Unit getClosestMineralWorkerTo(BWAPI::Unit enemyUnit);
     BWAPI::Unit getWorkerScout();

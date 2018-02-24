@@ -20,10 +20,10 @@ struct BuildOrderItem
 
 class BuildOrderQueue
 {
-    std::deque< BuildOrderItem > queue;
-	bool modified;                                              // so ProductionManager can detect changes made behind its back
+    std::deque< BuildOrderItem > queue;		// highest priority item is in the back
+	bool modified;							// so ProductionManager can detect changes made behind its back
 
-	void queueItem(BuildOrderItem b);							// queues something with a given priority
+	void queueItem(BuildOrderItem b);		// queues something with a given priority
 
 public:
 
@@ -37,6 +37,7 @@ public:
     void queueAsLowestPriority(MacroAct m);						// queues something at the lowest priority
     void removeHighestPriorityItem();							// removes the highest priority item
 	void doneWithHighestPriorityItem();							// removes highest priority item without setting `modified`
+	void pullToTop(size_t i);									// move item at index i to the highest priority position
 
     size_t size() const;										// number of items in the queue
 	bool isEmpty() const;
@@ -47,8 +48,10 @@ public:
 	
 	bool anyInQueue(BWAPI::UpgradeType type) const;
 	bool anyInQueue(BWAPI::UnitType type) const;
+	bool anyInNextN(BWAPI::UnitType type, int n) const;
 	size_t numInQueue(BWAPI::UnitType type) const;
 	void totalCosts(int & minerals, int & gas) const;
+	bool isGasStealInQueue() const;
 
 	void drawQueueInformation(int x, int y, bool outOfBook);
 

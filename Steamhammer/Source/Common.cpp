@@ -1,5 +1,13 @@
 #include "Common.h"
 
+// Return an upper bound for the UCB1 algorithm.
+// Changing the constant 2.0 can alter the balance between exploration and exploitation.
+double UCB1_bound(int tries, int total)
+{
+	UAB_ASSERT(tries > 0 && total >= tries, "bad args");
+	return sqrt(2.0 * log(double(total)/tries));
+}
+
 int GetIntFromString(const std::string & s)
 {
 	std::stringstream ss(s);
@@ -28,8 +36,34 @@ std::string TrimRaceName(const std::string & s)
 	return s;
 }
 
+char RaceChar(BWAPI::Race race)
+{
+	if (race == BWAPI::Races::Zerg)
+	{
+		return 'Z';
+	}
+	if (race == BWAPI::Races::Protoss)
+	{
+		return 'P';
+	}
+	if (race == BWAPI::Races::Terran)
+	{
+		return 'T';
+	}
+	return 'U';
+}
+
+// Make a MacroAct string look pretty for the UI.
+std::string NiceMacroActName(const std::string & s)
+{
+	std::string nicer = TrimRaceName(s);
+	std::replace(nicer.begin(), nicer.end(), '_', ' ');
+
+	return nicer;
+}
+
 // Safely return the name of a unit type.
-// Note: Can fail for some non-unit unit types which Steamhammer does not use.
+// NOTE Can fail for some non-unit unit types which Steamhammer does not use.
 std::string UnitTypeName(BWAPI::UnitType type)
 {
 	if (type == BWAPI::UnitTypes::None   ) return "None";

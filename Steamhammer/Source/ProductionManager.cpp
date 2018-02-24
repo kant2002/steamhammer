@@ -1,5 +1,6 @@
 #include "ProductionManager.h"
 #include "GameCommander.h"
+#include "StrategyBossZerg.h"
 #include "UnitUtil.h"
 
 using namespace UAlbertaBot;
@@ -75,7 +76,7 @@ void ProductionManager::onUnitDestroy(BWAPI::Unit unit)
 	if (unit->getType().isWorker() && !_outOfBook)
 	{
 		// We lost a worker in the opening. Replace it.
-		// It helps if a small number of workers are killed. If many are killed, you're toast anyway.
+		// This helps if a small number of workers are killed. If many are killed, you're toast anyway.
 		// Still, it's better than breaking out of the opening altogether.
 		_queue.queueAsHighestPriority(unit->getType());
 
@@ -84,8 +85,9 @@ void ProductionManager::onUnitDestroy(BWAPI::Unit unit)
 		if (BWAPI::Broodwar->self()->getRace() == BWAPI::Races::Protoss)
 		{
 			if (UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Protoss_Gateway) > 0 &&
-				UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Protoss_Zealot) == 0 &&
-				(BWAPI::Broodwar->self()->minerals() >= 150 || UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Protoss_Probe) > 0))
+				UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Protoss_Zealot) == 0 &&
+				!_queue.anyInNextN(BWAPI::UnitTypes::Protoss_Zealot, 2) &&
+				(BWAPI::Broodwar->self()->minerals() >= 150 || UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Protoss_Probe) > 3))
 			{
 				_queue.queueAsHighestPriority(BWAPI::UnitTypes::Protoss_Zealot);
 			}
@@ -93,25 +95,29 @@ void ProductionManager::onUnitDestroy(BWAPI::Unit unit)
 		else if (BWAPI::Broodwar->self()->getRace() == BWAPI::Races::Terran)
 		{
 			if (UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Terran_Barracks) > 0 &&
-				UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Terran_Marine) == 0 &&
-				(BWAPI::Broodwar->self()->minerals() >= 100 || UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Terran_SCV) > 0))
+				UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Terran_Marine) == 0 &&
+				!_queue.anyInNextN(BWAPI::UnitTypes::Terran_Marine, 2) &&
+				(BWAPI::Broodwar->self()->minerals() >= 100 || UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Terran_SCV) > 3))
 			{
 				_queue.queueAsHighestPriority(BWAPI::UnitTypes::Terran_Marine);
 			}
 		}
-		else // Zerg
+		else // Zerg (unused code due to the condition at the top of the method)
 		{
 			if (UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Zerg_Spawning_Pool) > 0 &&
-				UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Zerg_Zergling) == 0 &&
-				(BWAPI::Broodwar->self()->minerals() >= 100 || UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Zerg_Drone) > 0))
+				UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Zergling) == 0 &&
+				!_queue.anyInNextN(BWAPI::UnitTypes::Zerg_Zergling, 2) &&
+				(BWAPI::Broodwar->self()->minerals() >= 100 || UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Zerg_Drone) > 3))
 			{
 				_queue.queueAsHighestPriority(BWAPI::UnitTypes::Zerg_Zergling);
 			}
 		}
 	}
-	else if (unit->getType().isBuilding() && !(UnitUtil::CanAttackAir(unit) || UnitUtil::CanAttackGround(unit)))
+	else if (unit->getType().isBuilding() &&
+		!(UnitUtil::CanAttackAir(unit) || UnitUtil::CanAttackGround(unit)) &&
+		unit->getType().supplyProvided() == 0)
 	{
-		// We lost a building other than static defense. It may be serious. Replan from scratch.
+		// We lost a building other than static defense or supply. It may be serious. Replan from scratch.
 		goOutOfBook();
 	}
 }
@@ -124,6 +130,9 @@ void ProductionManager::manageBuildOrderQueue()
 		doExtractorTrick();
 		return;
 	}
+
+	// We may be able to produce faster if we pull a later item to the front.
+	maybePermuteQueue();
 
 	// If we were planning to build and assigned a worker, but the queue was then
 	// changed behind our back, release the worker and continue.
@@ -216,6 +225,49 @@ void ProductionManager::manageBuildOrderQueue()
 		//      only commands and bug workarounds continue to the next item
 		break;
 	}
+}
+
+// If we can't immediately produce the top item in the queue but we can produce a
+// later item, we may want to move the later item to the front.
+// For now, this happens under very limited conditions.
+void ProductionManager::maybePermuteQueue()
+{
+	if (_queue.size() < 2)
+	{
+		return;
+	}
+
+	// We can reorder the queue if:
+	// We are waiting for gas and have excess minerals,
+	// and we can move a later no-dependency no-gas item to the front,
+	// and we have the minerals to cover both.
+	MacroAct top = _queue.getHighestPriorityItem().macroAct;
+	int minerals = getFreeMinerals();
+	if (top.gasPrice() > 0 && top.gasPrice() > getFreeGas() && top.mineralPrice() < minerals)
+	{
+		for (int i = _queue.size() - 2; i >= std::max(0, int(_queue.size()) - 4); --i)
+		{
+			const MacroAct & act = _queue[i].macroAct;
+			if (act.isUnit() &&
+				act.gasPrice() == 0 &&
+				act.mineralPrice() + top.mineralPrice() <= minerals &&
+				independentUnitType(act.getUnitType()))
+			{
+				// BWAPI::Broodwar->printf("permute %d and %d", _queue.size() - 1, i);
+				_queue.pullToTop(i);
+				return;
+			}
+		}
+	}
+}
+
+// The unit type has no dependencies: We can always make it if we have the minerals and a worker.
+bool ProductionManager::independentUnitType(BWAPI::UnitType type) const
+{
+	return
+		type.supplyProvided() > 0 ||    // includes resource depot and supply unit
+		type.isRefinery() ||
+		type == BWAPI::UnitTypes::Zerg_Creep_Colony;
 }
 
 // May return null if no producer is found.
@@ -589,8 +641,11 @@ void ProductionManager::executeCommand(MacroCommand command)
 		cmd == MacroCommandType::ScoutOnceOnly ||
 		cmd == MacroCommandType::ScoutWhileSafe)
 	{
-		GameCommander::Instance().goScout();
 		ScoutManager::Instance().setScoutCommand(cmd);
+	}
+	else if (cmd == MacroCommandType::StealGas)
+	{
+		ScoutManager::Instance().setGasSteal();
 	}
 	else if (cmd == MacroCommandType::StopGas)
 	{
@@ -606,10 +661,6 @@ void ProductionManager::executeCommand(MacroCommand command)
 		_targetGasAmount = BWAPI::Broodwar->self()->gatheredGas()
 			- BWAPI::Broodwar->self()->gas()
 			+ command.getAmount();
-	}
-	else if (cmd == MacroCommandType::StealGas)
-	{
-		ScoutManager::Instance().setGasSteal();
 	}
 	else if (cmd == MacroCommandType::ExtractorTrickDrone)
 	{
@@ -639,6 +690,10 @@ void ProductionManager::executeCommand(MacroCommand command)
 	else if (cmd == MacroCommandType::ReleaseWorkers)
 	{
 		CombatCommander::Instance().releaseWorkers();
+	}
+	else if (cmd == MacroCommandType::Nonadaptive)
+	{
+		StrategyBossZerg::Instance().setNonadaptive(true);
 	}
 	else
 	{
@@ -717,7 +772,7 @@ void ProductionManager::drawProductionInformation(int x, int y)
             t = unit->getBuildType();
         }
 
-		BWAPI::Broodwar->drawTextScreen(x, y, " %c%s", green, TrimRaceName(t.getName()).c_str());
+		BWAPI::Broodwar->drawTextScreen(x, y, " %c%s", green, NiceMacroActName(t.getName()).c_str());
 		BWAPI::Broodwar->drawTextScreen(x - 35, y, "%c%6d", green, unit->getRemainingBuildTime());
 	}
 
@@ -728,12 +783,6 @@ ProductionManager & ProductionManager::Instance()
 {
 	static ProductionManager instance;
 	return instance;
-}
-
-void ProductionManager::queueGasSteal()
-{
-    _queue.queueAsHighestPriority(MacroAct(BWAPI::Broodwar->self()->getRace().getRefinery()), true);
-	_queue.resetModified();
 }
 
 // We're zerg and doing the extractor trick to get an extra drone or pair of zerglings,
@@ -878,6 +927,17 @@ void ProductionManager::doExtractorTrick()
 	}
 }
 
+void ProductionManager::queueGasSteal()
+{
+	_queue.queueAsHighestPriority(MacroAct(BWAPI::Broodwar->self()->getRace().getRefinery()), true);
+}
+
+// Has a gas steal has been queued?
+bool ProductionManager::isGasStealInQueue() const
+{
+	return _queue.isGasStealInQueue() || BuildingManager::Instance().isGasStealInQueue();
+}
+
 // The next item in the queue is a building that requires a worker to construct.
 // Addons and morphed buildings (e.g. lair) do not need a worker.
 bool ProductionManager::nextIsBuilding() const
@@ -889,8 +949,7 @@ bool ProductionManager::nextIsBuilding() const
 
 	const MacroAct & next = _queue.getHighestPriorityItem().macroAct;
 
-	return next.isUnit() &&
-		next.getUnitType().isBuilding() &&
+	return next.isBuilding() &&
 		!next.getUnitType().isAddon() &&
 		!UnitUtil::IsMorphedBuildingType(next.getUnitType());
 }

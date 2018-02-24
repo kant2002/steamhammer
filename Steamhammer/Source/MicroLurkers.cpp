@@ -17,8 +17,6 @@ void MicroLurkers::executeMicro(const BWAPI::Unitset & targets)
 	std::copy_if(targets.begin(), targets.end(), std::inserter(LurkerTargets, LurkerTargets.end()),
 		[](BWAPI::Unit u){ return u->isVisible() && !u->isFlying() && u->getPosition().isValid(); });
 
-	const int lurkerRange = BWAPI::UnitTypes::Zerg_Lurker.groundWeapon().maxRange();
-
 	for (const auto lurker : lurkers)
 	{
 		const bool inOrderRange = lurker->getDistance(order.getPosition()) <= 3 * 32;
@@ -35,13 +33,20 @@ void MicroLurkers::executeMicro(const BWAPI::Unitset & targets)
 
 			const int dist = lurker->getDistance(target);
 
+			const int lurkerRange = BWAPI::UnitTypes::Zerg_Lurker.groundWeapon().maxRange();
+
 			if (Config::Debug::DrawUnitTargetInfo) {
-				BWAPI::Broodwar->drawLineMap(lurker->getPosition(), target->getPosition(), BWAPI::Colors::Purple);
+				BWAPI::Broodwar->drawLineMap(lurker->getPosition(), target->getPosition(), BWAPI::Colors::Blue);
+				if (lurker->getTarget() && lurker->getTarget()->getPosition().isValid())
+				{
+					BWAPI::Broodwar->drawLineMap(lurker->getPosition(), lurker->getTarget()->getPosition(), BWAPI::Colors::Orange);
+				}
 				BWAPI::Broodwar->drawCircleMap(lurker->getPosition(), 12, BWAPI::Colors::Red);
 				BWAPI::Broodwar->drawTextMap(lurker->getPosition() + BWAPI::Position(20, -10), "%c%d/192", white, dist);
 			}
 
 			// Special case for photon cannons. Don't engage them with only a few lurkers.
+			// TODO the special case doesn't help
 			const bool cannonDanger =
 				target->getType() == BWAPI::UnitTypes::Protoss_Photon_Cannon &&
 				lurkers.size() < 5;
@@ -60,7 +65,7 @@ void MicroLurkers::executeMicro(const BWAPI::Unitset & targets)
 				{
 					if (dist <= lurkerRange)
 					{
-						Micro::SmartAttackUnit(lurker, target);
+						Micro::AttackUnit(lurker, target);
 					}
 				}
 			}
@@ -68,7 +73,7 @@ void MicroLurkers::executeMicro(const BWAPI::Unitset & targets)
 				isThreat && dist > std::max(lurkerRange, 32 + UnitUtil::GetAttackRange(target, lurker)))
 			{
 				// Possibly unburrow and move.
-				if (lurker->canUnburrow() && !inOrderRange && lurker->getHitPoints() > 20 && !lurker->isIrradiated())
+				if (lurker->canUnburrow() && !inOrderRange && lurker->getHitPoints() > 30 && !lurker->isIrradiated())
 				{
 					// Unburrow only at set intervals. Reduces the burrow-unburrow frenzy.
 					if (BWAPI::Broodwar->getFrameCount() % 24 == 0)
@@ -80,12 +85,12 @@ void MicroLurkers::executeMicro(const BWAPI::Unitset & targets)
 				{
 					if (dist <= lurkerRange)
 					{
-						Micro::SmartAttackUnit(lurker, target);
+						Micro::AttackUnit(lurker, target);
 					}
 				}
 				else
 				{
-					Micro::SmartMove(lurker, target->getPosition());
+					Micro::Move(lurker, target->getPosition());
 				}
 			}
 			else
@@ -96,12 +101,12 @@ void MicroLurkers::executeMicro(const BWAPI::Unitset & targets)
 				{
 					if (dist <= lurkerRange)
 					{
-						Micro::SmartAttackUnit(lurker, target);
+						Micro::AttackUnit(lurker, target);
 					}
 				}
 				else
 				{
-					Micro::SmartMove(lurker, target->getPosition());
+					Micro::Move(lurker, target->getPosition());
 				}
 			}
 		}
@@ -127,7 +132,7 @@ void MicroLurkers::executeMicro(const BWAPI::Unitset & targets)
 				}
 				else
 				{
-					Micro::SmartMove(lurker, order.getPosition());
+					Micro::Move(lurker, order.getPosition());
 				}
 			}
 		}
@@ -165,6 +170,8 @@ BWAPI::Unit MicroLurkers::getTarget(BWAPI::Unit lurker, const BWAPI::Unitset & t
 	{
 		int distance = lurker->getDistance(target);
 		int priority = getAttackPriority(target);
+
+		// BWAPI::Broodwar->drawTextMap(target->getPosition() + BWAPI::Position(20, -10), "%c%d", yellow, priority);
 
 		if ((priority > highPriority) || (priority == highPriority && distance < closestDist))
 		{
@@ -228,7 +235,11 @@ int MicroLurkers::getAttackPriority(BWAPI::Unit target) const
 	{
 		return 5;
 	}
-	if (targetType == BWAPI::UnitTypes::Protoss_Pylon || targetType == BWAPI::UnitTypes::Protoss_Observatory)
+	if (targetType == BWAPI::UnitTypes::Protoss_Observatory || targetType == BWAPI::UnitTypes::Protoss_Robotics_Facility)
+	{
+		return 5;
+	}
+	if (targetType == BWAPI::UnitTypes::Protoss_Pylon)
 	{
 		return 5;
 	}

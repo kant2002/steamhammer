@@ -35,9 +35,8 @@ public:
 
 	short int & operator [] (const short int index)			{ return dist[index]; }
 	short int & operator [] (const BWAPI::Position & pos)	{ return dist[getIndex(pos.y / 32, pos.x / 32)]; }
-	void setDistance(const short int index, const int val)	{ dist[index] = val; }
+	void setDistance(short int index, short int val)		{ dist[index] = val; }
 
-	// reset the distance map
 	void reset(const int & rows, const int & cols)
 	{
 		this->rows = rows;
@@ -46,7 +45,6 @@ public:
         sorted.clear();
 	}
 
-	// reset the distance map
 	void reset()
 	{
 		std::fill(dist.begin(), dist.end(), -1);

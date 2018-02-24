@@ -27,8 +27,13 @@ class BuildingManager
     void            checkForStartedConstruction();			// STEP 4
     void            checkForDeadTerranBuilders();			// STEP 5
     void            checkForCompletedBuildings();			// STEP 6
+	void			checkReservedResources();				// error check
 
+	bool			buildingTimedOut(const Building & b) const;
     char            getBuildingWorkerCode(const Building & b) const;
+
+	void			setBuilderUnit(Building & b);
+	void			releaseBuilderUnit(const Building & b);
     
 public:
     
@@ -48,6 +53,7 @@ public:
 	bool				anythingBeingBuilt() const { return !_buildings.empty();  };
     bool                isBeingBuilt(BWAPI::UnitType type) const;
 	size_t              getNumUnstarted(BWAPI::UnitType type) const;
+	bool				isGasStealInQueue() const;
 
     std::vector<BWAPI::UnitType> buildingsQueued();
 

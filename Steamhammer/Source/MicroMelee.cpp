@@ -36,7 +36,24 @@ void MicroMelee::assignTargets(const BWAPI::Unitset & targets)
 
 	for (const auto meleeUnit : meleeUnits)
 	{
-		if (order.isCombatOrder()) 
+		if (meleeUnit->isBurrowed())
+		{
+			// For now, it would burrow only if irradiated. Leave it.
+			continue;
+		}
+
+		// Special case for irradiated zerg units.
+		if (meleeUnit->isIrradiated() && meleeUnit->getType().getRace() == BWAPI::Races::Zerg)
+		{
+			if (meleeUnit->canBurrow())
+			{
+				meleeUnit->burrow();
+				continue;
+			}
+			// Otherwise ignore it. Ultralisks should probably just keep going.
+		}
+		
+		if (order.isCombatOrder())
         {
 			if (unstickStuckUnit(meleeUnit))
 			{
@@ -46,26 +63,34 @@ void MicroMelee::assignTargets(const BWAPI::Unitset & targets)
 			// run away if we meet the retreat criterion
             if (meleeUnitShouldRetreat(meleeUnit, targets))
             {
-				// UAB_ASSERT(meleeUnit->exists(), "bad worker");  // TODO temporary debugging - see Micro::SmartMove
-				BWAPI::Position fleeTo(InformationManager::Instance().getMyMainBaseLocation()->getPosition());
-                Micro::SmartMove(meleeUnit, fleeTo);
+				BWAPI::Unit shieldBattery = InformationManager::Instance().nearestShieldBattery(meleeUnit->getPosition());
+				if (shieldBattery &&
+					meleeUnit->getDistance(shieldBattery) < 400 &&
+					shieldBattery->getEnergy() >= 10)
+				{
+					useShieldBattery(meleeUnit, shieldBattery);
+				}
+				else
+				{
+					BWAPI::Position fleeTo(InformationManager::Instance().getMyMainBaseLocation()->getPosition());
+					Micro::Move(meleeUnit, fleeTo);
+				}
             }
 			else if (meleeUnitTargets.empty())
 			{
 				// There are no targets. Move to the order position if not already close.
 				if (meleeUnit->getDistance(order.getPosition()) > 96)
 				{
-					// UAB_ASSERT(meleeUnit->exists(), "bad worker");  // TODO temporary debugging - see Micro::SmartMove
-					Micro::SmartMove(meleeUnit, order.getPosition());
+					Micro::Move(meleeUnit, order.getPosition());
 				}
 			}
 			else
 			{
 				// There are targets. Pick the best one and attack it.
 				// NOTE We *always* choose a target. We can't decide none are worth it and bypass them.
-				//      This causes a lot of needless distraction.
+				//      This causes a lot of needless distraction. :-(
 				BWAPI::Unit target = getTarget(meleeUnit, meleeUnitTargets);
-				Micro::SmartAttackUnit(meleeUnit, target);
+				Micro::AttackUnit(meleeUnit, target);
 			}
 		}
 

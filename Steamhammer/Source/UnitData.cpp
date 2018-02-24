@@ -17,16 +17,34 @@ UnitData::UnitData()
 	numDeadUnits	= std::vector<int>(maxTypeID + 1, 0);
 }
 
+// An enemy unit which is not visible, but whose lastPosition can be seen, is known
+// not to be at its lastPosition. Flag it.
+// Called from InformationManager with the enemy UnitData.
+void UnitData::updateGoneFromLastPosition()
+{
+	for (auto & kv : unitMap)
+	{
+		UnitInfo & ui(kv.second);
+
+		if (!ui.goneFromLastPosition &&
+			ui.lastPosition.isValid() &&   // should be always true
+			ui.unit &&                     // should be always true
+			!ui.unit->isVisible() &&
+			BWAPI::Broodwar->isVisible(BWAPI::TilePosition(ui.lastPosition)))
+		{
+			ui.goneFromLastPosition = true;
+		}
+	}
+}
+
 void UnitData::updateUnit(BWAPI::Unit unit)
 {
 	if (!unit) { return; }
 
-    bool firstSeen = false;
-    auto & it = unitMap.find(unit);
-    if (it == unitMap.end())
+	if (unitMap.find(unit) == unitMap.end())
     {
-        firstSeen = true;
-        unitMap[unit] = UnitInfo();
+		++numUnits[unit->getType().getID()];
+		unitMap[unit] = UnitInfo();
     }
     
 	UnitInfo & ui   = unitMap[unit];
@@ -34,16 +52,12 @@ void UnitData::updateUnit(BWAPI::Unit unit)
 	ui.updateFrame	= BWAPI::Broodwar->getFrameCount();
     ui.player       = unit->getPlayer();
 	ui.lastPosition = unit->getPosition();
+	ui.goneFromLastPosition = false;
 	ui.lastHealth   = unit->getHitPoints();
     ui.lastShields  = unit->getShields();
 	ui.unitID       = unit->getID();
 	ui.type         = unit->getType();
     ui.completed    = unit->isCompleted();
-
-    if (firstSeen)
-    {
-        numUnits[unit->getType().getID()]++;
-    }
 }
 
 void UnitData::removeUnit(BWAPI::Unit unit)
@@ -84,7 +98,7 @@ const bool UnitData::badUnitInfo(const UnitInfo & ui) const
         return false;
     }
 
-	// Cull away any refineries/assimilators/extractors that were destroyed and reverted to vespene geysers
+	// Cull any refineries/assimilators/extractors that were destroyed and reverted to vespene geysers.
 	if (ui.unit->getType() == BWAPI::UnitTypes::Resource_Vespene_Geyser)
 	{ 
 		return true;

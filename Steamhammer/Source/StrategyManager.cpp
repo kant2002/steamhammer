@@ -1,5 +1,6 @@
 #include "StrategyManager.h"
 #include "CombatCommander.h"
+#include "OpponentModel.h"
 #include "ProductionManager.h"
 #include "StrategyBossZerg.h"
 #include "UnitUtil.h"
@@ -11,6 +12,8 @@ StrategyManager::StrategyManager()
 	, _enemyRace(BWAPI::Broodwar->enemy()->getRace())
     , _emptyBuildOrder(BWAPI::Broodwar->self()->getRace())
 	, _openingGroup("")
+	, _hasDropTech(false)
+	, _highWaterBases(1)
 {
 }
 
@@ -36,10 +39,12 @@ const BuildOrder & StrategyManager::getOpeningBookBuildOrder() const
     }
 }
 
+// This is used for terran and protoss.
 const bool StrategyManager::shouldExpandNow() const
 {
 	// if there is no place to expand to, we can't expand
-	if (MapTools::Instance().getNextExpansion() == BWAPI::TilePositions::None)
+	// We check mineral expansions only.
+	if (MapTools::Instance().getNextExpansion(false, true, false) == BWAPI::TilePositions::None)
 	{
 		return false;
 	}
@@ -65,7 +70,7 @@ const bool StrategyManager::shouldExpandNow() const
 	int minute = frame / (24 * 60);
 
 	// we will make expansion N after array[N] minutes have passed
-    std::vector<int> expansionTimes = {5, 9, 13, 17, 21, 25};
+	std::vector<int> expansionTimes = {5, 9, 13, 17, 21, 25};
 
     for (size_t i(0); i < expansionTimes.size(); ++i)
     {
@@ -130,6 +135,7 @@ const MetaPairVector StrategyManager::getProtossBuildOrderGoal()
 	int numNexusAll = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Protoss_Nexus);
 	int numProbes = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Protoss_Probe);
 	int numCannon = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Protoss_Photon_Cannon);
+	int numObservers = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Protoss_Observer);
 	int numZealots = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Protoss_Zealot);
 	int numDragoons = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Protoss_Dragoon);
 	int numDarkTemplar = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Protoss_Dark_Templar);
@@ -144,8 +150,8 @@ const MetaPairVector StrategyManager::getProtossBuildOrderGoal()
 	BWAPI::Player self = BWAPI::Broodwar->self();
 
 	if (_openingGroup == "zealots")
-    {
-        goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Zealot, numZealots + 6));
+	{
+		goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Zealot, numZealots + 6));
 
 		if (numNexusAll >= 3)
 		{
@@ -182,7 +188,7 @@ const MetaPairVector StrategyManager::getProtossBuildOrderGoal()
 		}
 	}
 	else if (_openingGroup == "dragoons")
-    {
+	{
 		goal.push_back(MetaPair(BWAPI::UpgradeTypes::Singularity_Charge, 1));
 		goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Dragoon, numDragoons + 6));
 
@@ -200,16 +206,16 @@ const MetaPairVector StrategyManager::getProtossBuildOrderGoal()
 
 	}
 	else if (_openingGroup == "dark templar")
-    {
-        goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Dark_Templar, numDarkTemplar + 2));
+	{
+		goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Dark_Templar, numDarkTemplar + 2));
 
 		// Once we have a 2nd nexus, add dragoons.
 		if (numNexusAll >= 2)
-        {
+		{
 			goal.push_back(MetaPair(BWAPI::UpgradeTypes::Singularity_Charge, 1));
 			goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Dragoon, numDragoons + 4));
-        }
-    }
+		}
+	}
 	else if (_openingGroup == "drop")
 	{
 		goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Dark_Templar, numDarkTemplar + 2));
@@ -219,10 +225,11 @@ const MetaPairVector StrategyManager::getProtossBuildOrderGoal()
 		_openingGroup = "dragoons";
 	}
 	else
-    {
+	{
 		UAB_ASSERT_WARNING(false, "Unknown Opening Group: %s", _openingGroup.c_str());
-    }
-    
+		_openingGroup = "dragoons";    // we're misconfigured, but try to do something
+	}
+
 	// If we're doing a corsair thing and it's still working, slowly add more.
 	if (_enemyRace == BWAPI::Races::Zerg &&
 		hasStargate &&
@@ -232,21 +239,38 @@ const MetaPairVector StrategyManager::getProtossBuildOrderGoal()
 		goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Corsair, numCorsairs + 1));
 	}
 
+	// Maybe get some static defense against air attack.
+	const int enemyAirToGround =
+		InformationManager::Instance().getNumUnits(BWAPI::UnitTypes::Terran_Wraith, BWAPI::Broodwar->enemy()) / 8 +
+		InformationManager::Instance().getNumUnits(BWAPI::UnitTypes::Terran_Battlecruiser, BWAPI::Broodwar->enemy()) / 3 +
+		InformationManager::Instance().getNumUnits(BWAPI::UnitTypes::Protoss_Scout, BWAPI::Broodwar->enemy()) / 5 +
+		InformationManager::Instance().getNumUnits(BWAPI::UnitTypes::Zerg_Mutalisk, BWAPI::Broodwar->enemy()) / 6;
+	if (enemyAirToGround > 0)
+	{
+		goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Protoss_Photon_Cannon, enemyAirToGround));
+	}
+
 	// Get observers if we have a second base, or if the enemy has cloaked units.
 	if (numNexusCompleted >= 2 || InformationManager::Instance().enemyHasCloakTech())
 	{
 		goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Robotics_Facility, 1));
-		
-		if (self->completedUnitCount(BWAPI::UnitTypes::Protoss_Robotics_Facility) > 0)
+
+		if (numObservers < 3 && self->completedUnitCount(BWAPI::UnitTypes::Protoss_Robotics_Facility) > 0)
 		{
-			goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Observer, 2));
+			goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Observer, numObservers + 1));
 		}
 	}
 
 	// Make more probes, up to a limit.
 	goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Probe, std::min(maxProbes, numProbes + 8)));
 
-    // if we want to expand, insert a nexus into the build order
+	// If the map has islands, get drop after we have 3 bases.
+	if (Config::Macro::ExpandToIslands && numNexusCompleted >= 3 && MapTools::Instance().hasIslandBases())
+	{
+		goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Shuttle, 1));
+	}
+
+	// if we want to expand, insert a nexus into the build order
 	if (shouldExpandNow())
 	{
 		goal.push_back(MetaPair(BWAPI::UnitTypes::Protoss_Nexus, numNexusAll + 1));
@@ -268,7 +292,8 @@ const MetaPairVector StrategyManager::getTerranBuildOrderGoal()
 	int numMedics       = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Terran_Medic);
 	int numWraith       = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Terran_Wraith);
     int numVultures     = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Terran_Vulture);
-    int numGoliaths     = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Terran_Goliath);
+	int numVessels		= UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Terran_Science_Vessel);
+	int numGoliaths		= UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Terran_Goliath);
     int numTanks        = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode)
                         + UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode);
 
@@ -318,8 +343,8 @@ const MetaPairVector StrategyManager::getTerranBuildOrderGoal()
 		}
 		if (hasAcademy)
 		{
-			// 1 medic for each 6 marines.
-			int medicGoal = std::max(numMedics, numMarines / 6);
+			// 1 medic for each 5 marines.
+			int medicGoal = std::max(numMedics, numMarines / 5);
 			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Medic, medicGoal));
 			if (!self->hasResearched(BWAPI::TechTypes::Stim_Packs))
 			{
@@ -336,26 +361,36 @@ const MetaPairVector StrategyManager::getTerranBuildOrderGoal()
         }
 		if (hasEBay)
 		{
-			if (self->getUpgradeLevel(BWAPI::UpgradeTypes::Terran_Infantry_Weapons) == 0 &&
+			int weaponsUps = self->getUpgradeLevel(BWAPI::UpgradeTypes::Terran_Infantry_Weapons);
+			if (weaponsUps == 0 &&
 				!self->isUpgrading(BWAPI::UpgradeTypes::Terran_Infantry_Weapons))
 			{
 				goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Terran_Infantry_Weapons, 1));
 			}
-			else if (self->getUpgradeLevel(BWAPI::UpgradeTypes::Terran_Infantry_Weapons) > 0 &&
+			else if (weaponsUps > 0 &&
 				self->getUpgradeLevel(BWAPI::UpgradeTypes::Terran_Infantry_Armor) == 0 &&
 				!self->isUpgrading(BWAPI::UpgradeTypes::Terran_Infantry_Armor))
 			{
 				goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Terran_Infantry_Armor, 1));
 			}
+			else if (weaponsUps > 0 &&
+				weaponsUps < 3 &&
+				!self->isUpgrading(BWAPI::UpgradeTypes::Terran_Infantry_Weapons) &&
+				numVessels > 0)
+			{
+goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Terran_Infantry_Weapons, weaponsUps + 1));
+			}
 		}
 
 		// Add in tanks if they're useful.
-		int enemiesCounteredByTanks =
+		const int enemiesCounteredByTanks =
 			InformationManager::Instance().getNumUnits(BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode, BWAPI::Broodwar->enemy()) +
 			InformationManager::Instance().getNumUnits(BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode, BWAPI::Broodwar->enemy()) +
 			InformationManager::Instance().getNumUnits(BWAPI::UnitTypes::Protoss_Dragoon, BWAPI::Broodwar->enemy()) +
-			InformationManager::Instance().getNumUnits(BWAPI::UnitTypes::Zerg_Lurker, BWAPI::Broodwar->enemy());
-		bool enemyHasStaticDefense =
+			InformationManager::Instance().getNumUnits(BWAPI::UnitTypes::Protoss_Reaver, BWAPI::Broodwar->enemy()) +
+			InformationManager::Instance().getNumUnits(BWAPI::UnitTypes::Zerg_Lurker, BWAPI::Broodwar->enemy()) +
+			InformationManager::Instance().getNumUnits(BWAPI::UnitTypes::Zerg_Ultralisk, BWAPI::Broodwar->enemy());
+		const bool enemyHasStaticDefense =
 			InformationManager::Instance().getNumUnits(BWAPI::UnitTypes::Terran_Bunker, BWAPI::Broodwar->enemy()) > 0 ||
 			InformationManager::Instance().getNumUnits(BWAPI::UnitTypes::Protoss_Photon_Cannon, BWAPI::Broodwar->enemy()) > 0 ||
 			InformationManager::Instance().getNumUnits(BWAPI::UnitTypes::Zerg_Sunken_Colony, BWAPI::Broodwar->enemy()) > 0;
@@ -378,25 +413,25 @@ const MetaPairVector StrategyManager::getTerranBuildOrderGoal()
 			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode, nTanksWanted));
 			goal.push_back(std::pair<MacroAct, int>(BWAPI::TechTypes::Tank_Siege_Mode, 1));
 		}
-    }
+	}
 	else if (_openingGroup == "vultures")
-    {
-        goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Vulture, numVultures + 3));
+	{
+		goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Vulture, numVultures + 3));
 		goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Ion_Thrusters, 1));
 
-        if (numVultures >= 6)
-        {
+		if (numVultures >= 6)
+		{
 			// The rush is over, transition out on the next call.
 			_openingGroup = "tanks";
-        }
-    }
+		}
+	}
 	else if (_openingGroup == "tanks")
-    {
-		goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode, numVultures + 1));
-		goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode, numTanks + 3));
+	{
+		goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Vulture, numVultures + 4));
+		goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode, numTanks + 2));
 		goal.push_back(std::pair<MacroAct, int>(BWAPI::TechTypes::Tank_Siege_Mode, 1));
 
-		if (numTanks >= 8)
+		if (numTanks >= 6)
 		{
 			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Goliath, numGoliaths + 4));
 			goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Ion_Thrusters, 1));
@@ -410,7 +445,7 @@ const MetaPairVector StrategyManager::getTerranBuildOrderGoal()
 			// Maintain 1 vessel to spot for the tanks.
 			makeVessel = true;
 		}
-    }
+	}
 	else if (_openingGroup == "drop")
 	{
 		goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Ion_Thrusters, 1));
@@ -428,9 +463,10 @@ const MetaPairVector StrategyManager::getTerranBuildOrderGoal()
 		}
 	}
 	else
-    {
+	{
 		BWAPI::Broodwar->printf("Unknown Opening Group: %s", _openingGroup.c_str());
-    }
+		_openingGroup = "bio";       // we're misconfigured, but try to do something
+	}
 
 	if (numCC > 1 || InformationManager::Instance().enemyHasCloakTech())
 	{
@@ -441,6 +477,16 @@ const MetaPairVector StrategyManager::getTerranBuildOrderGoal()
 		}
 	}
 
+	const int enemyAirToGround =
+		InformationManager::Instance().getNumUnits(BWAPI::UnitTypes::Terran_Wraith, BWAPI::Broodwar->enemy()) / 6 +
+		InformationManager::Instance().getNumUnits(BWAPI::UnitTypes::Terran_Battlecruiser, BWAPI::Broodwar->enemy()) / 2 +
+		InformationManager::Instance().getNumUnits(BWAPI::UnitTypes::Protoss_Scout, BWAPI::Broodwar->enemy()) / 3 +
+		InformationManager::Instance().getNumUnits(BWAPI::UnitTypes::Zerg_Mutalisk, BWAPI::Broodwar->enemy()) / 4;
+	if (enemyAirToGround > 0)
+	{
+		goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Missile_Turret, enemyAirToGround));
+	}
+
 	if (numCC > 0 && hasAcademy)
 	{
 		goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Comsat_Station, UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Terran_Command_Center)));
@@ -448,7 +494,10 @@ const MetaPairVector StrategyManager::getTerranBuildOrderGoal()
 
 	if (makeVessel || InformationManager::Instance().enemyHasCloakTech())
 	{
-		goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Science_Vessel, 1));
+		if (numVessels < 2)
+		{
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Science_Vessel, numVessels + 1));
+		}
 	}
 
 	if (hasArmory &&
@@ -462,6 +511,12 @@ const MetaPairVector StrategyManager::getTerranBuildOrderGoal()
 	if (_openingGroup != "anti-rush")
 	{
 		goal.push_back(MetaPair(BWAPI::UnitTypes::Terran_SCV, std::min(maxSCVs, numSCVs + 2 * numCC)));
+	}
+
+	// If the map has islands, get drop after we have 3 bases.
+	if (Config::Macro::ExpandToIslands && numCC >= 3 && MapTools::Instance().hasIslandBases())
+	{
+		goal.push_back(MetaPair(BWAPI::UnitTypes::Terran_Dropship, 1));
 	}
 
 	if (shouldExpandNow())
@@ -523,21 +578,35 @@ void StrategyManager::handleUrgentProductionIssues(BuildOrderQueue & queue)
 			queue.queueAsHighestPriority(MacroAct(BWAPI::Broodwar->self()->getRace().getSupplyProvider()));
 		}
 
+		const MacroAct * nextInQueuePtr = queue.isEmpty() ? nullptr : &(queue.getHighestPriorityItem().macroAct);
+
 		// If we need gas, make sure it is turned on.
-		// NOTE Nothing for protoss or terran turns off gas if we get too much.
-		if (!queue.isEmpty())
+		int gas = BWAPI::Broodwar->self()->gas();
+		if (nextInQueuePtr)
 		{
-			const MacroAct nextInQueue = queue.getHighestPriorityItem().macroAct;
-			if (nextInQueue.gasPrice() > BWAPI::Broodwar->self()->gas())
+			if (nextInQueuePtr->gasPrice() > gas)
 			{
 				WorkerManager::Instance().setCollectGas(true);
+			}
+		}
+
+		// If we have collected too much gas, turn it off.
+		if (ProductionManager::Instance().isOutOfBook() &&
+			gas > 400 &&
+			gas > 4 * BWAPI::Broodwar->self()->minerals())
+		{
+			int queueMinerals, queueGas;
+			queue.totalCosts(queueMinerals, queueGas);
+			if (gas >= queueGas)
+			{
+				WorkerManager::Instance().setCollectGas(false);
 			}
 		}
 
 		// If they have mobile cloaked units, get some static detection.
 		if (InformationManager::Instance().enemyHasMobileCloakTech())
 		{
-			if (BWAPI::Broodwar->self()->getRace() == BWAPI::Races::Protoss)
+			if (_selfRace == BWAPI::Races::Protoss)
 			{
 				if (BWAPI::Broodwar->self()->allUnitCount(BWAPI::UnitTypes::Protoss_Photon_Cannon) < 2 &&
 					!queue.anyInQueue(BWAPI::UnitTypes::Protoss_Photon_Cannon) &&
@@ -553,7 +622,7 @@ void StrategyManager::handleUrgentProductionIssues(BuildOrderQueue & queue)
 					}
 				}
 			}
-			else if (BWAPI::Broodwar->self()->getRace() == BWAPI::Races::Terran)
+			else if (_selfRace == BWAPI::Races::Terran)
 			{
 				if (BWAPI::Broodwar->self()->allUnitCount(BWAPI::UnitTypes::Terran_Missile_Turret) < 3 &&
 					!queue.anyInQueue(BWAPI::UnitTypes::Terran_Missile_Turret) &&
@@ -570,6 +639,83 @@ void StrategyManager::handleUrgentProductionIssues(BuildOrderQueue & queue)
 					}
 				}
 			}
+		}
+
+		OpeningPlan enemyPlan = OpponentModel::Instance().getEnemyPlan();
+		OpeningPlan likelyEnemyPlan = OpponentModel::Instance().getBestGuessEnemyPlan();
+
+		// If the opponent is rushing, make some defense.
+		if (likelyEnemyPlan == OpeningPlan::Proxy ||
+			likelyEnemyPlan == OpeningPlan::WorkerRush ||
+			likelyEnemyPlan == OpeningPlan::FastRush ||
+			enemyPlan == OpeningPlan::HeavyRush)           // we can react later to this
+		{
+			// If we are terran and have marines, make a bunker.
+			if (_selfRace == BWAPI::Races::Terran)
+			{
+				if (!queue.anyInQueue(BWAPI::UnitTypes::Terran_Bunker) &&
+					UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Terran_Marine) > 0 &&          // usefulness requirement
+					UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Terran_Barracks) > 0 &&  // tech requirement for a bunker
+					UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Terran_Bunker) == 0 &&
+					!BuildingManager::Instance().isBeingBuilt(BWAPI::UnitTypes::Terran_Bunker))
+				{
+					queue.queueAsHighestPriority(BWAPI::UnitTypes::Terran_Bunker);
+				}
+			}
+
+			// If we are protoss, make a shield battery.
+			// NOTE This works, but is turned off because protoss can't use the battery yet.
+			/*
+			else if (_selfRace == BWAPI::Races::Protoss)
+			{
+				if (UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Protoss_Pylon) > 0 &&    // tech requirement
+					UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Protoss_Gateway) > 0 &&  // tech requirement
+					UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Protoss_Shield_Battery) == 0 &&
+					!queue.anyInQueue(BWAPI::UnitTypes::Protoss_Shield_Battery) &&
+					!BuildingManager::Instance().isBeingBuilt(BWAPI::UnitTypes::Protoss_Shield_Battery))
+				{
+					queue.queueAsHighestPriority(BWAPI::UnitTypes::Protoss_Shield_Battery);
+				}
+			}
+			*/
+		}
+
+		const BWAPI::UnitType resourceDepotType = _selfRace == BWAPI::Races::Terran
+			? BWAPI::UnitTypes::Terran_Command_Center
+			: BWAPI::UnitTypes::Protoss_Nexus;
+		const int numDepots = UnitUtil::GetAllUnitCount(resourceDepotType);
+		if (numDepots > _highWaterBases)
+		{
+			_highWaterBases = numDepots;
+		}
+		bool makeResourceDepot = false;
+
+		// If there is no resource depot, order one if we can afford it.
+		// NOTE Does not check whether we have a worker to build it.
+		if (numDepots == 0 && BWAPI::Broodwar->self()->minerals() >= 400)
+		{
+			makeResourceDepot = true;
+		}
+
+		// If the opponent fast expanded and we haven't taken the natural yet, do that immediately.
+		// Not if the enemy is zerg, though. Zerg can be ahead in expansions.
+		if (enemyPlan == OpeningPlan::SafeExpand || enemyPlan == OpeningPlan::NakedExpand)
+		{
+			// Use _highWaterBases instead of numDepots so we don't try to remake a destroyed natural.
+			if (_highWaterBases == 1 && BWAPI::Broodwar->enemy()->getRace() != BWAPI::Races::Zerg)
+			{
+				makeResourceDepot = true;
+			}
+		}
+
+		// We only care about the next item in the queue, not possible later resource depots in the queue.
+		// This should be done last, so that no other emegency reaction puts something else in front of
+		// a resource depot in the queue. Otherwise the rule will fire repeatedly.
+		if (makeResourceDepot &&
+			(!nextInQueuePtr || !nextInQueuePtr->isUnit() || nextInQueuePtr->getUnitType() != resourceDepotType) &&
+			!BuildingManager::Instance().isBeingBuilt(resourceDepotType))
+		{
+			queue.queueAsHighestPriority(MacroAct(resourceDepotType));
 		}
 	}
 }
@@ -697,4 +843,39 @@ bool StrategyManager::canPlanBuildOrderNow() const
 	}
 
 	return true;
+}
+
+// Do we expect or plan to drop at some point during the game?
+bool StrategyManager::dropIsPlanned() const
+{
+	// Don't drop in ZvZ.
+	if (_selfRace == BWAPI::Races::Zerg && BWAPI::Broodwar->enemy()->getRace() == BWAPI::Races::Zerg)
+	{
+		return false;
+	}
+
+	// Otherwise plan drop if the opening says so, or if the map has islands to take.
+	return getOpeningGroup() == "drop" ||
+		Config::Macro::ExpandToIslands && MapTools::Instance().hasIslandBases();
+}
+
+// Whether we have the tech and transport to drop.
+bool StrategyManager::hasDropTech()
+{
+	if (_selfRace == BWAPI::Races::Zerg)
+	{
+		// NOTE May be slow drop.
+		return BWAPI::Broodwar->self()->getUpgradeLevel(BWAPI::UpgradeTypes::Ventral_Sacs) > 0 &&
+			UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Zerg_Overlord) > 0;
+	}
+	if (_selfRace == BWAPI::Races::Protoss)
+	{
+		return UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Protoss_Shuttle) > 0;
+	}
+	if (_selfRace == BWAPI::Races::Terran)
+	{
+		return UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Terran_Dropship) > 0;
+	}
+
+	return false;
 }

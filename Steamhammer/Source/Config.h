@@ -23,13 +23,16 @@ namespace Config
 	{
 		extern std::string ReadDir;
 		extern std::string WriteDir;
-		extern bool UseOpponentModel;
+		extern bool ReadOpponentModel;
+		extern bool WriteOpponentModel;
 	}
 
 	namespace Strategy
     {
         extern std::string StrategyName;
         extern bool ScoutHarassEnemy;
+		extern bool AutoGasSteal;
+		extern double RandomGasStealRate;
 		extern bool SurrenderWhenHopeIsLost;
         extern bool UseEnemySpecificStrategy;
         extern bool FoundEnemySpecificStrategy;
@@ -89,7 +92,7 @@ namespace Config
         extern bool WorkersDefendRush;
         extern int RetreatMeleeUnitShields;
         extern int RetreatMeleeUnitHP;
-        extern int CombatRegroupRadius;         
+        extern int CombatSimRadius;         
         extern int UnitNearEnemyRadius;         
 		extern int ScoutDefenseRadius;
 	}
@@ -103,6 +106,7 @@ namespace Config
         extern int BuildingSpacing;
         extern int PylonSpacing;
 		extern int ProductionJamFrameLimit;
+		extern bool ExpandToIslands;
     }
 
     namespace Tools

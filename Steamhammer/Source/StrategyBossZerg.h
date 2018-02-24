@@ -31,6 +31,8 @@ class StrategyBossZerg
 	BWAPI::Player _enemy;
 	BWAPI::Race _enemyRace;
 
+	bool _nonadaptive;                     // set by some openings
+
 	// The target unit mix. If nothing can or should be made, None.
 	BWAPI::UnitType _mineralUnit;
 	BWAPI::UnitType _gasUnit;
@@ -82,6 +84,7 @@ class StrategyBossZerg
 
 	int nLings;
 	int nHydras;
+	int nLurkers;
 	int nMutas;
 	int nGuardians;
 	int nDevourers;
@@ -118,7 +121,9 @@ class StrategyBossZerg
 	int numInEgg(BWAPI::UnitType) const;
 	bool isBeingBuilt(const BWAPI::UnitType unitType) const;
 
+	int mineralsBackOnCancel(BWAPI::UnitType type) const;
 	void cancelStuff(int mineralsNeeded);
+	void cancelForSpawningPool();
 	bool nextInQueueIsUseless(BuildOrderQueue & queue) const;
 
 	void produce(const MacroAct & act);
@@ -130,6 +135,7 @@ class StrategyBossZerg
 	bool takeUrgentAction(BuildOrderQueue & queue);
 	void makeUrgentReaction(BuildOrderQueue & queue);
 
+	bool adaptToEnemyOpeningPlan();
 	bool rebuildCriticalLosses();
 
 	void checkGroundDefenses(BuildOrderQueue & queue);
@@ -138,9 +144,10 @@ class StrategyBossZerg
 	bool lairTechUnit(TechUnit techUnit) const;
 	bool airTechUnit(TechUnit techUnit) const;
 	bool hiveTechUnit(TechUnit techUnit) const;
+	int techTier(TechUnit techUnit) const;
+
 	bool lurkerDenTiming() const;
 	
-	int techTier(TechUnit techUnit) const;
 	void resetTechScores();
 	void setAvailableTechUnits(std::array<bool, int(TechUnit::Size)> & available);
 
@@ -155,11 +162,16 @@ class StrategyBossZerg
 	void chooseEconomyRatio();
 	void chooseStrategy();
 	
+	void produceUnits(int & mineralsLeft, int & gasLeft);
+	void produceOtherStuff(int & mineralsLeft, int & gasLeft, bool hasEnoughUnits);
+
 	std::string techTargetToString(TechUnit target);
 	void drawStrategyBossInformation();
 
 public:
 	static StrategyBossZerg & Instance();
+
+	void setNonadaptive(bool flag) { _nonadaptive = flag; };
 
 	void setUnitMix(BWAPI::UnitType minUnit, BWAPI::UnitType gasUnit);
 	void setEconomyRatio(double ratio);

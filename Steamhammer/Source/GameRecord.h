@@ -1,10 +1,15 @@
 #pragma once
 
 #include "Common.h"
+#include "OpponentPlan.h"
 #include "PlayerSnapshot.h"
 
+#include <exception>
+
 // NOTE
-// This class does little checking of its input file format. Feed it no bad files.
+// This class does only a little checking of its input file format. Feed it no bad files.
+
+class game_record_read_error : public std::exception {};
 
 namespace UAlbertaBot
 {
@@ -34,8 +39,14 @@ struct GameSnapshot
 
 class GameRecord
 {
+private:
 	const int firstSnapshotTime = 2 * 60 * 24;
 	const int snapshotInterval = 30 * 24;
+
+	// Each game record is labeled with a version number, to allow some backward compatibility
+	// file format changes.
+	// Plan: Set the version number to the last Steamhammer release which changed the file format.
+	const std::string fileFormatVersion = "1.4";
 
 	const std::string gameEndMark = "END GAME";
 
@@ -46,9 +57,16 @@ class GameRecord
 	BWAPI::Race ourRace;
 	BWAPI::Race enemyRace;
 	bool enemyIsRandom;
-	//
+
+	std::string mapName;
+	std::string openingName;
+	OpeningPlan expectedEnemyPlan;
+	OpeningPlan enemyPlan;
 	bool win;
-	int frameEnemyScoutsOurBase;           // TODO written but not updated
+
+	int frameScoutSentForGasSteal;         // 0 if we didn't try to steal gas
+	bool gasStealHappened;                 // true if a refinery building was started
+	int frameEnemyScoutsOurBase;
 	int frameEnemyGetsCombatUnits;
 	int frameEnemyGetsAirUnits;
 	int frameEnemyGetsStaticAntiAir;
@@ -63,7 +81,6 @@ class GameRecord
 
 	void takeSnapshot();
 
-	char raceChar(BWAPI::Race race);
 	BWAPI::Race charRace(char ch);
 
 	int readNumber(std::istream & input);
@@ -71,24 +88,26 @@ class GameRecord
 
 	void parseMatchup(const std::string & s);
 
-	void writePlayerSnapshot(std::ostream & output, const PlayerSnapshot & snap);
-	void writeGameSnapshot(std::ostream & output, const GameSnapshot * snap);
+	OpeningPlan readOpeningPlan(std::istream & input);
 
 	bool readPlayerSnapshot(std::istream & input, PlayerSnapshot & snap);
 	GameSnapshot * readGameSnapshot(std::istream & input);
 	void skipToEnd(std::istream & input);
 	void read(std::istream & input);
 
+	void writePlayerSnapshot(std::ostream & output, const PlayerSnapshot & snap);
+	void writeGameSnapshot(std::ostream & output, const GameSnapshot * snap);
+
 	int snapDistance(const PlayerSnapshot & a, const PlayerSnapshot & b) const;
 
-public:
-	std::string mapName;
-	std::string openingName;
+	bool enemyScoutedUs() const;
 
+public:
 	GameRecord();
 	GameRecord(std::istream & input);
 
 	bool isValid() { return valid; };
+	void setOpening(const std::string & opening) { openingName = opening; };
 	void setWin(bool isWinner);
 
 	void write(std::ostream & output);
@@ -98,6 +117,15 @@ public:
 	int distance(const GameRecord & record) const;    // similarity distance
 
 	bool findClosestSnapshot(int t, PlayerSnapshot & snap) const;
+
+	bool getEnemyIsRandom() const { return enemyIsRandom; };
+	bool sameMatchup(const GameRecord & record) const;
+	const std::string & getMapName() const { return mapName; };
+	const std::string & getOpeningName() const { return openingName; };
+	OpeningPlan getEnemyPlan() const { return enemyPlan; };
+	bool getWin() const { return win; };
+	int getFrameScoutSentForGasSteal() const { return frameScoutSentForGasSteal; };
+	bool getGasStealHappened() const { return gasStealHappened; };
 
 	void debugLog();
 	static GameRecord & Instance();

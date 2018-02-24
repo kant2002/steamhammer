@@ -40,6 +40,7 @@ PlayerSnapshot::PlayerSnapshot(BWAPI::Player side)
 	}
 }
 
+// Include only valid, completed units.
 void PlayerSnapshot::takeSelf()
 {
 	BWAPI::Player self = BWAPI::Broodwar->self();
@@ -55,6 +56,8 @@ void PlayerSnapshot::takeSelf()
 	}
 }
 
+// Include incomplete buildings, but not other incomplete units.
+// The plan recognizer pays attention to incomplete buildings.
 void PlayerSnapshot::takeEnemy()
 {
 	BWAPI::Player enemy = BWAPI::Broodwar->enemy();
@@ -65,11 +68,21 @@ void PlayerSnapshot::takeEnemy()
 	{
 		const UnitInfo & ui(kv.second);
 
-		if (ui.completed && !excludeType(ui.type))
+		if ((ui.completed || ui.type.isBuilding()) && !excludeType(ui.type))
 		{
 			++unitCounts[ui.type];
 		}
 	}
+}
+
+int PlayerSnapshot::getCount(BWAPI::UnitType type) const
+{
+		auto it = unitCounts.find(type);
+	if (it == unitCounts.end())
+	{
+		return 0;
+	}
+	return it->second;
 }
 
 std::string PlayerSnapshot::debugString() const

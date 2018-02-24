@@ -36,6 +36,8 @@ class ProductionManager
     bool                meetsReservedResources(MacroAct type);
     void                create(BWAPI::Unit producer,const BuildOrderItem & item);
     void                manageBuildOrderQueue();
+	void				maybePermuteQueue();
+	bool				independentUnitType(BWAPI::UnitType type) const;
     bool                canMakeNow(BWAPI::Unit producer,MacroAct t);
     void                predictWorkerMovement(const Building & b);
 
@@ -56,8 +58,10 @@ public:
 	void	onUnitMorph(BWAPI::Unit unit);
 	void	onUnitDestroy(BWAPI::Unit unit);
 	void	drawProductionInformation(int x, int y);
-	void	queueGasSteal();
 	void	startExtractorTrick(BWAPI::UnitType type);
+
+	void	queueGasSteal();
+	bool	isGasStealInQueue() const;
 
 	bool	nextIsBuilding() const;
 

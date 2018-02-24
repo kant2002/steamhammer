@@ -105,13 +105,10 @@ public:
 		return this->getElapsedTimeInMicroSec() * 0.001;
 	}
 
-
 	double getElapsedTimeInSec()
 	{
 		return this->getElapsedTimeInMicroSec() * 0.000001;
 	}
-
-
 
 	double getElapsedTime()
 	{

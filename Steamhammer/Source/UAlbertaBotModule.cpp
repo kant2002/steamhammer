@@ -15,7 +15,7 @@
 
 using namespace UAlbertaBot;
 
-// This gets called when the bot starts!
+// This gets called when the bot starts.
 void UAlbertaBotModule::onStart()
 {
     // Initialize BOSS, the Build Order Search System
@@ -46,7 +46,6 @@ void UAlbertaBotModule::onStart()
         BWAPI::Broodwar->enableFlag(BWAPI::Flag::UserInput);
     }
 
-	OpponentModel::Instance().read();
 	StrategyManager::Instance().setOpeningGroup();    // may depend on config and/or opponent model
 
     if (Config::BotInfo::PrintInfoOnStart)

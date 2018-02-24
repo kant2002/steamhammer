@@ -15,37 +15,38 @@ class MapTools
 	const size_t allMapsSize = 40;           // store this many distance maps in _allMaps
 
     std::map<BWAPI::Position,
-             DistanceMap>       _allMaps;    // a cache of already computed distance maps
-    std::vector<bool>           _map;        // the map stored at TilePosition resolution, values are 0/1 for walkable or not walkable
-	std::vector<bool>           _units;      // UNUSED map that stores whether a unit is on this position
-    std::vector<short int>      _fringe;     // the fringe vector which is used as a sort of 'open list'
-    int                         _rows;
-    int                         _cols;
+             DistanceMap>	_allMaps;    // a cache of already computed distance maps
+    std::vector<bool>		_map;        // the map stored at TilePosition resolution, values are 0/1 for walkable or not walkable
+    std::vector<short int>	_fringe;     // the fringe vector which is used as a sort of 'open list'
+    int						_rows;
+    int						_cols;
+	bool					_hasIslandBases;
 
     MapTools();
 
-    int                     getIndex(int row,int col);		// return the index of the 1D array from (row,col)
-    bool                    unexplored(DistanceMap & dmap,const int index) const;
-    void                    setBWAPIMapData();				// reads in the map data from bwapi and stores it in our map format
+    short                   getIndex(int row, int col) const;	// return the index of the 1D array from (row,col)
+    bool                    unexplored(DistanceMap & dmap, short index) const;
+    void                    setBWAPIMapData();					// reads in the map data from bwapi and stores it in our map format
 	void                    resetFringe();
     void                    computeDistance(DistanceMap & dmap,const BWAPI::Position p); // computes walk distance from Position P to all other points on the map
-    BWAPI::TilePosition     getTilePosition(int index);
+    BWAPI::TilePosition     getTilePosition(short index);
 
-	BWTA::BaseLocation *    nextExpansion(bool hidden, bool minOnlyOK);
+	BWTA::BaseLocation *    nextExpansion(bool hidden, bool wantMinerals, bool wantGas);
 
 public:
 
     static MapTools &       Instance();
 
-    void                    search(DistanceMap & dmap,const int sR,const int sC);
-    int                     getGroundTileDistance(BWAPI::Position from,BWAPI::Position to);
-	int                     getGroundDistance(BWAPI::Position from, BWAPI::Position to);
-	BWAPI::TilePosition     getNextExpansion(bool hidden = false, bool minOnlyOK = false);
-	BWAPI::TilePosition     reserveNextExpansion(bool hidden = false, bool minOnlyOK = false);
-	void                    drawHomeDistanceMap();
+    void				search(DistanceMap & dmap,const int sR,const int sC);
+    int					getGroundTileDistance(BWAPI::Position from,BWAPI::Position to);
+	int					getGroundDistance(BWAPI::Position from, BWAPI::Position to);
+	BWAPI::TilePosition	getNextExpansion(bool hidden, bool wantMinerals, bool wantGas);
+	BWAPI::TilePosition	reserveNextExpansion(bool hidden, bool wantMinerals, bool wantGas);
+	void				drawHomeDistanceMap();
 
     const std::vector<BWAPI::TilePosition> & getClosestTilesTo(BWAPI::Position pos);
 
+	bool				hasIslandBases() const { return _hasIslandBases; };
 };
 
 }

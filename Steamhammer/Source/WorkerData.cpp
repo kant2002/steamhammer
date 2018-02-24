@@ -108,7 +108,7 @@ void WorkerData::setWorkerJob(BWAPI::Unit unit, WorkerJob job, BWAPI::Unit jobUn
         addToMineralPatch(mineralToMine, 1);
 
 		// right click the mineral to start mining
-		Micro::SmartRightClick(unit, mineralToMine);
+		Micro::RightClick(unit, mineralToMine);
 	}
 	else if (job == Gas)
 	{
@@ -119,7 +119,7 @@ void WorkerData::setWorkerJob(BWAPI::Unit unit, WorkerJob job, BWAPI::Unit jobUn
 		workerRefineryMap[unit] = jobUnit;
 
 		// right click the refinery to start harvesting
-		Micro::SmartRightClick(unit, jobUnit);
+		Micro::RightClick(unit, jobUnit);
 	}
     else if (job == Repair)
     {
@@ -132,7 +132,7 @@ void WorkerData::setWorkerJob(BWAPI::Unit unit, WorkerJob job, BWAPI::Unit jobUn
         // start repairing 
         if (!unit->isRepairing())
         {
-            Micro::SmartRepair(unit, jobUnit);
+            Micro::Repair(unit, jobUnit);
         }
     }
 //	else if (job == Scout)

@@ -6,6 +6,7 @@
 #include "CombatSimulation.h"
 #include "SquadOrder.h"
 
+#include "MicroAirToAir.h"
 #include "MicroMelee.h"
 #include "MicroRanged.h"
 
@@ -18,23 +19,26 @@
 
 namespace UAlbertaBot
 {
-    
+
 class Squad
 {
     std::string         _name;
 	BWAPI::Unitset      _units;
 	bool				_combatSquad;
+	int					_combatSimRadius;
+	bool				_fightVisibleOnly;  // combat sim uses visible enemies only (vs. all known enemies)
 	bool				_hasAir;
 	bool				_hasGround;
 	bool				_hasAntiAir;
 	bool				_hasAntiGround;
 	std::string         _regroupStatus;
-	bool				_attackAtMax;
+	bool				_attackAtMax;       // turns true when we are at max supply
     int                 _lastRetreatSwitch;
     bool                _lastRetreatSwitchVal;
     size_t              _priority;
 	
 	SquadOrder          _order;
+	MicroAirToAir		_microAirToAir;
 	MicroMelee			_microMelee;
 	MicroRanged			_microRanged;
 	MicroDetectors		_microDetectors;
@@ -85,10 +89,19 @@ public:
 	const BWAPI::Unitset &  getUnits() const;
 	const SquadOrder &  getSquadOrder()	const;
 
+	int					getCombatSimRadius() const { return _combatSimRadius; };
+	void				setCombatSimRadius(int radius) { _combatSimRadius = radius; };
+
+	bool				getFightVisible() const { return _fightVisibleOnly; };
+	void				setFightVisible(bool visibleOnly) { _fightVisibleOnly = visibleOnly; };
+
 	const bool			hasAir()        const { return _hasAir; };
 	const bool			hasGround()     const { return _hasGround; };
 	const bool			hasAntiAir()    const { return _hasAntiAir; };
 	const bool			hasAntiGround() const { return _hasAntiGround; };
+	const bool			hasDetector()   const { return !_microDetectors.getUnits().empty(); };
+	const bool			hasCombatUnits() const;
+	const bool			isOverlordHunterSquad() const;
 
 };
 }

@@ -36,18 +36,24 @@ void MicroRanged::assignTargets(const BWAPI::Unitset & targets)
 			continue;
 		}
 
-		// Special case for irradiated zerg air units.
+		if (rangedUnit->isBurrowed())
+		{
+			// For now, it would burrow only if irradiated. Leave it.
+			continue;
+		}
+
+		// Special case for irradiated zerg units.
 		if (rangedUnit->isIrradiated() && rangedUnit->getType().getRace() == BWAPI::Races::Zerg)
 		{
 			if (rangedUnit->isFlying())
 			{
 				if (rangedUnit->getDistance(order.getPosition()) < 300)
 				{
-					Micro::SmartAttackMove(rangedUnit, order.getPosition());
+					Micro::AttackMove(rangedUnit, order.getPosition());
 				}
 				else
 				{
-					Micro::SmartMove(rangedUnit, order.getPosition());
+					Micro::Move(rangedUnit, order.getPosition());
 				}
 				continue;
 			}
@@ -66,7 +72,7 @@ void MicroRanged::assignTargets(const BWAPI::Unitset & targets)
 		if (stayHomeUntilReady(rangedUnit))
 		{
 			BWAPI::Position fleeTo(InformationManager::Instance().getMyMainBaseLocation()->getPosition());
-			Micro::SmartAttackMove(rangedUnit, fleeTo);
+			Micro::AttackMove(rangedUnit, fleeTo);
 			continue;
 		}
 
@@ -83,6 +89,7 @@ void MicroRanged::assignTargets(const BWAPI::Unitset & targets)
 			{
 				if (Config::Debug::DrawUnitTargetInfo)
 				{
+
 					BWAPI::Broodwar->drawLineMap(rangedUnit->getPosition(), rangedUnit->getTargetPosition(), BWAPI::Colors::Purple);
 				}
 
@@ -95,12 +102,12 @@ void MicroRanged::assignTargets(const BWAPI::Unitset & targets)
 					}
 					else
 					{
-						Micro::SmartKiteTarget(rangedUnit, target);
+						Micro::KiteTarget(rangedUnit, target);
 					}
 				}
 				else
 				{
-					Micro::SmartAttackUnit(rangedUnit, target);
+					Micro::AttackUnit(rangedUnit, target);
 				}
 			}
 			else
@@ -108,7 +115,7 @@ void MicroRanged::assignTargets(const BWAPI::Unitset & targets)
 				// No target found. If we're not near the order position, go there.
 				if (rangedUnit->getDistance(order.getPosition()) > 100)
 				{
-					Micro::SmartAttackMove(rangedUnit, order.getPosition());
+					Micro::AttackMove(rangedUnit, order.getPosition());
 				}
 			}
 		}
@@ -120,13 +127,14 @@ BWAPI::Unit MicroRanged::getTarget(BWAPI::Unit rangedUnit, const BWAPI::Unitset 
 {
 	int bestScore = -999999;
 	BWAPI::Unit bestTarget = nullptr;
+	int bestPriority = -1;   // TODO debug only
 
 	for (const auto target : targets)
 	{
 		int priority = getAttackPriority(rangedUnit, target);     // 0..12
 		int range    = rangedUnit->getDistance(target);           // 0..map size in pixels
 		int toGoal   = target->getDistance(order.getPosition());  // 0..map size in pixels
-
+		
 		// Let's say that 1 priority step is worth 160 pixels (5 tiles).
 		// We care about unit-target range and target-order position distance.
 		int score = 5 * 32 * priority - range - toGoal/2;
@@ -160,13 +168,27 @@ BWAPI::Unit MicroRanged::getTarget(BWAPI::Unit rangedUnit, const BWAPI::Unitset 
 		}
 		
 		// Prefer targets that are already hurt.
-		if (target->getType().getRace() == BWAPI::Races::Protoss && target->getShields() == 0)
+		if (target->getType().getRace() == BWAPI::Races::Protoss && target->getShields() <= 5)
 		{
 			score += 32;
 		}
 		if (target->getHitPoints() < target->getType().maxHitPoints())
 		{
 			score += 24;
+		}
+
+		// Prefer to hit air units that have acid spores on them from devourers.
+		if (target->getAcidSporeCount() > 0)
+		{
+			// Especially if we're a mutalisk with a bounce attack.
+			if (rangedUnit->getType() == BWAPI::UnitTypes::Zerg_Mutalisk)
+			{
+				score += 16 * target->getAcidSporeCount();
+			}
+			else
+			{
+				score += 8 * target->getAcidSporeCount();
+			}
 		}
 
 		BWAPI::DamageType damage = UnitUtil::GetWeapon(rangedUnit, target).damageType();
@@ -189,9 +211,11 @@ BWAPI::Unit MicroRanged::getTarget(BWAPI::Unit rangedUnit, const BWAPI::Unitset 
 		{
 			bestScore = score;
 			bestTarget = target;
+
+			bestPriority = priority;
 		}
 	}
-	
+
 	return bestTarget;
 }
 
@@ -216,27 +240,16 @@ int MicroRanged::getAttackPriority(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 			return 0;
 		}
 		
+		// Arbiters first.
+		if (targetType == BWAPI::UnitTypes::Protoss_Arbiter)
+		{
+			return 10;
+		}
+
 		// Everything else is the same. Hit whatever's closest.
-		return 10;
+		return 9;
 	}
 
-	if (rangedType == BWAPI::UnitTypes::Zerg_Devourer)
-	{
-		if (!target->isFlying())
-		{
-			// Can't target it.
-			return 0;
-		}
-		if (targetType.isBuilding())
-		{
-			// A lifted building is less important.
-			return 1;
-		}
-
-		// Everything else is the same.
-		return 10;
-	}
-	
 	if (rangedType == BWAPI::UnitTypes::Zerg_Guardian && target->isFlying())
 	{
 		// Can't target it.
@@ -252,7 +265,7 @@ int MicroRanged::getAttackPriority(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 
     // if the target is building something near our base something is fishy
     BWAPI::Position ourBasePosition = BWAPI::Position(InformationManager::Instance().getMyMainBaseLocation()->getPosition());
-	if (target->getDistance(ourBasePosition) < 1200) {
+	if (target->getDistance(ourBasePosition) < 1000) {
 		if (target->getType().isWorker() && (target->isConstructing() || target->isRepairing()))
 		{
 			return 12;
@@ -293,7 +306,8 @@ int MicroRanged::getAttackPriority(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 		return 12;
 	}
 
-	if (targetType == BWAPI::UnitTypes::Protoss_Reaver)
+	if (targetType == BWAPI::UnitTypes::Protoss_Reaver ||
+		targetType == BWAPI::UnitTypes::Protoss_Arbiter)
 	{
 		return 11;
 	}
@@ -304,7 +318,7 @@ int MicroRanged::getAttackPriority(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 		return 9;
 	}
 
-	// Threats can attack us. Exception: Workers are not threats.
+	// Threats can attack us. Exceptions: Workers are not threats.
 	if (UnitUtil::CanAttack(targetType, rangedType) && !targetType.isWorker())
 	{
 		// Enemy unit which is far enough outside its range is lower priority than a worker.
@@ -322,7 +336,8 @@ int MicroRanged::getAttackPriority(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 	}
 	// Also as bad are other dangerous things.
 	if (targetType == BWAPI::UnitTypes::Terran_Science_Vessel ||
-		targetType == BWAPI::UnitTypes::Zerg_Scourge)
+		targetType == BWAPI::UnitTypes::Zerg_Scourge ||
+		targetType == BWAPI::UnitTypes::Protoss_Observer)
 	{
 		return 10;
 	}

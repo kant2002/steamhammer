@@ -286,6 +286,7 @@ int MacroAct::supplyRequired() const
 	return 0;
 }
 
+// NOTE Because upgrades vary in price with level, this is context dependent.
 int MacroAct::mineralPrice() const
 {
 	if (isCommand()) {
@@ -296,15 +297,52 @@ int MacroAct::mineralPrice() const
 		}
 		return 0;
 	}
-	return isUnit() ? _unitType.mineralPrice() : (isTech() ? _techType.mineralPrice() : _upgradeType.mineralPrice());
+	if (isUnit())
+	{
+		return _unitType.mineralPrice();
+	}
+	if (isTech())
+	{
+		return _techType.mineralPrice();
+	}
+	if (isUpgrade())
+	{
+		if (_upgradeType.maxRepeats() > 1 && BWAPI::Broodwar->self()->getUpgradeLevel(_upgradeType) > 0)
+		{
+			return _upgradeType.mineralPrice(1 + BWAPI::Broodwar->self()->getUpgradeLevel(_upgradeType));
+		}
+		return _upgradeType.mineralPrice();
+	}
+
+	UAB_ASSERT(false, "bad MacroAct");
+	return 0;
 }
 
+// NOTE Because upgrades vary in price with level, this is context dependent.
 int MacroAct::gasPrice() const
 {
 	if (isCommand()) {
 		return 0;
 	}
-	return isUnit() ? _unitType.gasPrice() : (isTech() ? _techType.gasPrice() : _upgradeType.gasPrice());
+	if (isUnit())
+	{
+		return _unitType.gasPrice();
+	}
+	if (isTech())
+	{
+		return _techType.gasPrice();
+	}
+	if (isUpgrade())
+	{
+		if (_upgradeType.maxRepeats() > 1 && BWAPI::Broodwar->self()->getUpgradeLevel(_upgradeType) > 0)
+		{
+			return _upgradeType.gasPrice(1 + BWAPI::Broodwar->self()->getUpgradeLevel(_upgradeType));
+		}
+		return _upgradeType.gasPrice();
+	}
+
+	UAB_ASSERT(false, "bad MacroAct");
+	return 0;
 }
 
 BWAPI::UnitType MacroAct::whatBuilds() const

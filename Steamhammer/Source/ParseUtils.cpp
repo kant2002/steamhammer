@@ -1,10 +1,16 @@
 #include "ParseUtils.h"
 #include "JSONTools.h"
+
 #include "BuildOrder.h"
+#include "OpponentModel.h"
 #include "Random.h"
 #include "StrategyManager.h"
 
 #include <regex>
+
+// Parse the configuration file.
+// Parse manual commands.
+// Provide a few simple parsing routines for wider use.
 
 using namespace UAlbertaBot;
 
@@ -26,7 +32,6 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
 	const char * matchup = matchupStr.c_str();
 
 	// Number of starting locations on the map.
-	// const int mapSize = BWTA::getStartLocations().size();
 	const int mapSize = BWAPI::Broodwar->getStartLocations().size();
 	UAB_ASSERT(mapSize >= 2 && mapSize <= 8, "bad map size");
 	const std::string mapWeightString = std::string("Weight") + std::string("012345678").at(mapSize);
@@ -75,7 +80,7 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
 		
 		Config::Micro::RetreatMeleeUnitShields = GetIntByRace("RetreatMeleeUnitShields", micro);
 		Config::Micro::RetreatMeleeUnitHP = GetIntByRace("RetreatMeleeUnitHP", micro);
-		Config::Micro::CombatRegroupRadius = GetIntByRace("RegroupRadius", micro);
+		Config::Micro::CombatSimRadius = GetIntByRace("CombatSimRadius", micro);
 		Config::Micro::UnitNearEnemyRadius = GetIntByRace("UnitNearEnemyRadius", micro);
 		Config::Micro::ScoutDefenseRadius = GetIntByRace("ScoutDefenseRadius", micro);
 
@@ -113,6 +118,7 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
 		Config::Macro::BuildingSpacing = GetIntByRace("BuildingSpacing", macro);
 		Config::Macro::WorkersPerRefinery = GetIntByRace("WorkersPerRefinery", macro);
 		Config::Macro::WorkersPerPatch = GetDoubleByRace("WorkersPerPatch", macro);
+		// Config::Macro::ExpandToIslands = GetBoolByRace("ExpandToIslands", macro);
 	}
 
     // Parse the Debug Options
@@ -161,8 +167,13 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
 		JSONTools::ReadString("ReadDirectory", io, Config::IO::ReadDir);
 		JSONTools::ReadString("WriteDirectory", io, Config::IO::WriteDir);
 
-		Config::IO::UseOpponentModel = GetBoolByRace("UseOpponentModel", io);
+		Config::IO::ReadOpponentModel = GetBoolByRace("ReadOpponentModel", io);
+		Config::IO::WriteOpponentModel = GetBoolByRace("WriteOpponentModel", io);
 	}
+
+	// We do this here because opening selection may depend on the results.
+	// File reading only happens if Config::IO::ReadOpponentModel is true.
+	OpponentModel::Instance().read();
 
     // Parse the Strategy options.
     if (doc.HasMember("Strategy") && doc["Strategy"].IsObject())
@@ -177,10 +188,16 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
 
 		Config::Strategy::ScoutHarassEnemy = GetBoolByRace("ScoutHarassEnemy", strategy);
 		Config::Strategy::SurrenderWhenHopeIsLost = GetBoolByRace("SurrenderWhenHopeIsLost", strategy);
+		Config::Strategy::AutoGasSteal = GetBoolByRace("AutoGasSteal", strategy);
+		Config::Strategy::RandomGasStealRate = GetDoubleByRace("RandomGasStealRate", strategy);
 
-		// check if we are using an enemy specific strategy
+		bool openingStrategyDecided = false;
+
+		// 1. Should we use a special strategy against this specific enemy?
 		JSONTools::ReadBool("UseEnemySpecificStrategy", strategy, Config::Strategy::UseEnemySpecificStrategy);
-		if (Config::Strategy::UseEnemySpecificStrategy && strategy.HasMember("EnemySpecificStrategy") && strategy["EnemySpecificStrategy"].IsObject())
+		if (Config::Strategy::UseEnemySpecificStrategy &&
+			strategy.HasMember("EnemySpecificStrategy") &&
+			strategy["EnemySpecificStrategy"].IsObject())
 		{
 			const rapidjson::Value & specific = strategy["EnemySpecificStrategy"];
 			const std::string enemyName = BWAPI::Broodwar->enemy()->getName();
@@ -195,12 +212,46 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
 				{
 					Config::Strategy::StrategyName = strategyName;
 					Config::Strategy::FoundEnemySpecificStrategy = true;   // defaults to false; see Config.cpp
+					openingStrategyDecided = true;
 				}
 			}
 		}
 
-		// If we don't have a strategy for this enemy, fall back on a more general strategy.
-		if (!Config::Strategy::FoundEnemySpecificStrategy)
+		// 2. Does the opponent model tell us what opening to play?
+		if (!openingStrategyDecided &&
+			OpponentModel::Instance().getRecommendedOpening() != "" &&
+			strategy.HasMember("CounterStrategies") &&
+			strategy["CounterStrategies"].IsObject())
+		{
+			const rapidjson::Value & counters = strategy["CounterStrategies"];
+			const std::string & recommendation = OpponentModel::Instance().getRecommendedOpening();
+
+			// 1. Is there a counter specific to the opponent's race, P T Z U?
+			std::string recommendationVersus = recommendation + " v" + RaceChar(BWAPI::Broodwar->enemy()->getRace());
+			if (counters.HasMember(recommendationVersus.c_str()))
+			{
+				std::string strategyName;
+				if (_ParseStrategy(counters[recommendationVersus.c_str()], strategyName, mapWeightString, ourRaceStr, strategyCombos))
+				{
+					Config::Strategy::StrategyName = strategyName;
+					openingStrategyDecided = true;
+				}
+			}
+
+			// 2. Is there a general counter?
+			else if (counters.HasMember(recommendation.c_str()))
+			{
+				std::string strategyName;
+				if (_ParseStrategy(counters[recommendation.c_str()], strategyName, mapWeightString, ourRaceStr, strategyCombos))
+				{
+					Config::Strategy::StrategyName = strategyName;
+					openingStrategyDecided = true;
+				}
+			}
+		}
+
+		// 3. If we don't have a strategy for this enemy, fall back on a more general strategy.
+		if (!openingStrategyDecided)
 		{
 			std::string strategyName;
 
@@ -215,6 +266,8 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
 				Config::Strategy::StrategyName = strategyName;
 			}
 		}
+
+		OpponentModel::Instance().setOpening();
 
         // Parse all the Strategies
         if (strategy.HasMember("Strategies") && strategy["Strategies"].IsObject())
@@ -232,7 +285,7 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
                 }
                 else
                 {
-                    UAB_ASSERT_WARNING(false, "Strategy must have a Race string. Skipping strategy %s", name.c_str());
+                    UAB_ASSERT_WARNING(false, "Strategy must have a Race string. Skipping %s", name.c_str());
                     continue;
                 }
 
@@ -316,31 +369,37 @@ void ParseUtils::ParseTextCommand(const std::string & commandString)
         
         // Micro Options
         else if (variableName == "workersdefendrush") { Config::Micro::WorkersDefendRush = GetBoolFromString(val); }
-        else if (variableName == "regroupradius") { Config::Micro::CombatRegroupRadius = GetIntFromString(val); }
+		else if (variableName == "combatsimradius") { Config::Micro::CombatSimRadius = GetIntFromString(val); }
         else if (variableName == "unitnearenemyradius") { Config::Micro::UnitNearEnemyRadius = GetIntFromString(val); }
 
         // Macro Options
-        else if (variableName == "buildingspacing") { Config::Macro::BuildingSpacing = GetIntFromString(val); }
+		else if (variableName == "absolutemaxworkers") { Config::Macro::AbsoluteMaxWorkers = GetIntFromString(val); }
+		else if (variableName == "buildingspacing") { Config::Macro::BuildingSpacing = GetIntFromString(val); }
         else if (variableName == "pylonspacing") { Config::Macro::PylonSpacing = GetIntFromString(val); }
 
         // Debug Options
         else if (variableName == "errorlogfilename") { Config::Debug::ErrorLogFilename = val; }
-        else if (variableName == "drawbuildordersearchinfo") { Config::Debug::DrawBuildOrderSearchInfo = GetBoolFromString(val); }
-        else if (variableName == "drawunithealthbars") { Config::Debug::DrawUnitHealthBars = GetBoolFromString(val); }
-        else if (variableName == "drawproductioninfo") { Config::Debug::DrawProductionInfo = GetBoolFromString(val); }
+		else if (variableName == "drawgameinfo") { Config::Debug::DrawGameInfo = GetBoolFromString(val); }
+		else if (variableName == "drawunithealthbars") { Config::Debug::DrawUnitHealthBars = GetBoolFromString(val); }
+		else if (variableName == "drawproductioninfo") { Config::Debug::DrawProductionInfo = GetBoolFromString(val); }
+		else if (variableName == "drawbuildordersearchinfo") { Config::Debug::DrawBuildOrderSearchInfo = GetBoolFromString(val); }
         else if (variableName == "drawenemyunitinfo") { Config::Debug::DrawEnemyUnitInfo = GetBoolFromString(val); }
         else if (variableName == "drawmoduletimers") { Config::Debug::DrawModuleTimers = GetBoolFromString(val); }
         else if (variableName == "drawresourceinfo") { Config::Debug::DrawResourceInfo = GetBoolFromString(val); }
         else if (variableName == "drawcombatsiminfo") { Config::Debug::DrawCombatSimulationInfo = GetBoolFromString(val); }
         else if (variableName == "drawunittargetinfo") { Config::Debug::DrawUnitTargetInfo = GetBoolFromString(val); }
-        else if (variableName == "drawbwtainfo") { Config::Debug::DrawBWTAInfo = GetBoolFromString(val); }
+		else if (variableName == "drawunitorders") { Config::Debug::DrawUnitOrders = GetBoolFromString(val); }
+		else if (variableName == "drawbwtainfo") { Config::Debug::DrawBWTAInfo = GetBoolFromString(val); }
         else if (variableName == "drawmapgrid") { Config::Debug::DrawMapGrid = GetBoolFromString(val); }
 		else if (variableName == "drawmapdistances") { Config::Debug::DrawMapDistances = GetBoolFromString(val); }
+		else if (variableName == "drawbaseinfo") { Config::Debug::DrawBaseInfo = GetBoolFromString(val); }
+		else if (variableName == "drawstrategybossinfo") { Config::Debug::DrawStrategyBossInfo = GetBoolFromString(val); }
 		else if (variableName == "drawsquadinfo") { Config::Debug::DrawSquadInfo = GetBoolFromString(val); }
         else if (variableName == "drawworkerinfo") { Config::Debug::DrawWorkerInfo = GetBoolFromString(val); }
         else if (variableName == "drawmousecursorinfo") { Config::Debug::DrawMouseCursorInfo = GetBoolFromString(val); }
         else if (variableName == "drawbuildinginfo") { Config::Debug::DrawBuildingInfo = GetBoolFromString(val); }
         else if (variableName == "drawreservedbuildingtiles") { Config::Debug::DrawReservedBuildingTiles = GetBoolFromString(val); }
+		else if (variableName == "drawbossstateinfo") { Config::Debug::DrawBOSSStateInfo = GetBoolFromString(val); }
 
         else { UAB_ASSERT_WARNING(false, "Unknown variable name for /set: %s", variableName.c_str()); }
     }

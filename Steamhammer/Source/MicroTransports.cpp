@@ -37,7 +37,7 @@ void MicroTransports::calculateMapEdgeVertices()
 	int maxX = std::numeric_limits<int>::min(); int maxY = maxX;
 
 	//compute mins and maxs
-	for(auto &tile : closestTobase)
+	for(auto & tile : closestTobase)
 	{
 		if (tile.x > maxX) maxX = tile.x;
 		else if (tile.x < minX) minX = tile.x;
@@ -223,7 +223,7 @@ void MicroTransports::followPerimeter(int clockwise)
 		BWAPI::Broodwar->drawCircleMap(goTo, 5, BWAPI::Colors::Red, true);
 	}
 
-	Micro::SmartMove(_transportShip, goTo);
+	Micro::Move(_transportShip, goTo);
 }
 
 void MicroTransports::followPerimeter(BWAPI::Position to, BWAPI::Position from)
@@ -247,7 +247,7 @@ void MicroTransports::followPerimeter(BWAPI::Position to, BWAPI::Position from)
 
 		// BWAPI::Broodwar->printf("WAYPOINTS: [%d] - [%d]", wpIDX.first, wpIDX.second);
 
-		Micro::SmartMove(_transportShip, _waypoints[0]);
+		Micro::Move(_transportShip, _waypoints[0]);
 	}
 	else if (_waypoints.size() > 1 && _transportShip->getDistance(_waypoints[0]) < 100)
 	{
@@ -276,7 +276,7 @@ void MicroTransports::followPerimeter(BWAPI::Position to, BWAPI::Position from)
 	{	
 		//if close to second waypoint, go to destination!
 		following = 0;
-		Micro::SmartMove(_transportShip, to);
+		Micro::Move(_transportShip, to);
 	}
 }
 
