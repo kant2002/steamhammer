@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Common.h"
-#include "DistanceMap.hpp"
 #include "StrategyManager.h"
 #include "CombatSimulation.h"
 #include "SquadOrder.h"
@@ -29,8 +28,8 @@ class Squad
 	bool				_fightVisibleOnly;  // combat sim uses visible enemies only (vs. all known enemies)
 	bool				_hasAir;
 	bool				_hasGround;
-	bool				_hasAntiAir;
-	bool				_hasAntiGround;
+	bool				_canAttackAir;
+	bool				_canAttackGround;
 	std::string         _regroupStatus;
 	bool				_attackAtMax;       // turns true when we are at max supply
     int                 _lastRetreatSwitch;
@@ -95,12 +94,12 @@ public:
 	bool				getFightVisible() const { return _fightVisibleOnly; };
 	void				setFightVisible(bool visibleOnly) { _fightVisibleOnly = visibleOnly; };
 
-	const bool			hasAir()        const { return _hasAir; };
-	const bool			hasGround()     const { return _hasGround; };
-	const bool			hasAntiAir()    const { return _hasAntiAir; };
-	const bool			hasAntiGround() const { return _hasAntiGround; };
-	const bool			hasDetector()   const { return !_microDetectors.getUnits().empty(); };
-	const bool			hasCombatUnits() const;
+	const bool			hasAir()			const { return _hasAir; };
+	const bool			hasGround()			const { return _hasGround; };
+	const bool			canAttackAir()		const { return _canAttackAir; };
+	const bool			canAttackGround()	const { return _canAttackGround; };
+	const bool			hasDetector()		const { return !_microDetectors.getUnits().empty(); };
+	const bool			hasCombatUnits()	const;
 	const bool			isOverlordHunterSquad() const;
 
 };

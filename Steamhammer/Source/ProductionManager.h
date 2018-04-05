@@ -65,6 +65,7 @@ public:
 
 	bool	nextIsBuilding() const;
 
+	void	goOutOfBookAndClearQueue();
 	void	goOutOfBook();
 	bool	isOutOfBook() const { return _outOfBook; };
 };

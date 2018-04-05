@@ -30,8 +30,12 @@ MacroLocation MacroAct::getMacroLocationFromString(std::string & s)
 	{
 		return MacroLocation::Natural;
 	}
+	if (s == "center")
+	{
+		return MacroLocation::Center;
+	}
 
-	UAB_ASSERT(false, "config file - bad location '%s' after @", s.c_str());
+	UAB_ASSERT(false, "config file - bad location '@ %s'", s.c_str());
 
 	return MacroLocation::Anywhere;
 }
@@ -91,7 +95,7 @@ MacroAct::MacroAct(const std::string & name)
 	// It's meaningless and ignored for anything except a building.
 	// Here we parse out the building and its location.
 	// Since buildings are units, only UnitType below sets _macroLocation.
-	std::regex macroLocationRegex("([a-z_ ]+[a-z])\\s*\\@\\s*([a-z][a-z ]+)");
+	std::regex macroLocationRegex("([a-zA-Z_ ]+[a-zA-Z])\\s+\\@\\s+([a-zA-Z][a-zA-Z ]+)");
 	std::smatch m;
 	if (std::regex_match(inputName, m, macroLocationRegex)) {
 		specifiedMacroLocation = getMacroLocationFromString(m[2].str());
@@ -277,10 +281,26 @@ const MacroLocation MacroAct::getMacroLocation() const
 	return _macroLocation;
 }
 
+// Supply required if this is produced.
 int MacroAct::supplyRequired() const
 {
 	if (isUnit())
 	{
+		if (_unitType.isTwoUnitsInOneEgg())
+		{
+			// Zerglings or scourge.
+			return 2;
+		}
+		if (_unitType == BWAPI::UnitTypes::Zerg_Lurker)
+		{
+			// Difference between hydralisk supply and lurker supply.
+			return 2;
+		}
+		if (_unitType == BWAPI::UnitTypes::Zerg_Guardian || _unitType == BWAPI::UnitTypes::Zerg_Devourer)
+		{
+			// No difference between mutalisk supply and guardian/devourer supply.
+			return 0;
+		}
 		return _unitType.supplyRequired();
 	}
 	return 0;

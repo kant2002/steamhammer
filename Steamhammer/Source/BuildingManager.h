@@ -52,6 +52,7 @@ public:
 
 	bool				anythingBeingBuilt() const { return !_buildings.empty();  };
     bool                isBeingBuilt(BWAPI::UnitType type) const;
+	size_t              getNumUnstarted() const;
 	size_t              getNumUnstarted(BWAPI::UnitType type) const;
 	bool				isGasStealInQueue() const;
 

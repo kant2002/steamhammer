@@ -140,7 +140,7 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
         JSONTools::ReadBool("DrawModuleTimers", debug, Config::Debug::DrawModuleTimers);
         JSONTools::ReadBool("DrawMouseCursorInfo", debug, Config::Debug::DrawMouseCursorInfo);
         JSONTools::ReadBool("DrawEnemyUnitInfo", debug, Config::Debug::DrawEnemyUnitInfo);
-        JSONTools::ReadBool("DrawBWTAInfo", debug, Config::Debug::DrawBWTAInfo);
+        JSONTools::ReadBool("DrawMapInfo", debug, Config::Debug::DrawMapInfo);
         JSONTools::ReadBool("DrawMapGrid", debug, Config::Debug::DrawMapGrid);
 		JSONTools::ReadBool("DrawMapDistances", debug, Config::Debug::DrawMapDistances);
 		JSONTools::ReadBool("DrawBaseInfo", debug, Config::Debug::DrawBaseInfo);
@@ -309,8 +309,8 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
 							int unitCount = 1;    // the default count
 
 							// You can specify a count, like "6 x mutalisk". The spaces are required.
-							// Mostly useful for units!
-							std::regex countRegex("([0-9]+)\\s+x\\s+([a-zA-Z_ ]+)");
+							// Mostly useful for units, but "2 x creep colony @ natural" also works.
+							std::regex countRegex("([0-9]+)\\s+x\\s+([a-zA-Z_ ]+(\\s+@\\s+[a-zA-Z_ ]+)?)");
 							std::smatch m;
 							if (std::regex_match(itemName, m, countRegex)) {
 								unitCount = GetIntFromString(m[1].str());
@@ -389,7 +389,7 @@ void ParseUtils::ParseTextCommand(const std::string & commandString)
         else if (variableName == "drawcombatsiminfo") { Config::Debug::DrawCombatSimulationInfo = GetBoolFromString(val); }
         else if (variableName == "drawunittargetinfo") { Config::Debug::DrawUnitTargetInfo = GetBoolFromString(val); }
 		else if (variableName == "drawunitorders") { Config::Debug::DrawUnitOrders = GetBoolFromString(val); }
-		else if (variableName == "drawbwtainfo") { Config::Debug::DrawBWTAInfo = GetBoolFromString(val); }
+		else if (variableName == "drawmapinfo") { Config::Debug::DrawMapInfo = GetBoolFromString(val); }
         else if (variableName == "drawmapgrid") { Config::Debug::DrawMapGrid = GetBoolFromString(val); }
 		else if (variableName == "drawmapdistances") { Config::Debug::DrawMapDistances = GetBoolFromString(val); }
 		else if (variableName == "drawbaseinfo") { Config::Debug::DrawBaseInfo = GetBoolFromString(val); }

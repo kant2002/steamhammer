@@ -435,6 +435,22 @@ bool BuildingManager::isBeingBuilt(BWAPI::UnitType type) const
 }
 
 // Number in the building queue with status other than "under constrution".
+size_t BuildingManager::getNumUnstarted() const
+{
+	size_t count = 0;
+
+	for (const auto & b : _buildings)
+	{
+		if (b.status != BuildingStatus::UnderConstruction)
+		{
+			++count;
+		}
+	}
+
+	return count;
+}
+
+// Number of a given type in the building queue with status other than "under constrution".
 size_t BuildingManager::getNumUnstarted(BWAPI::UnitType type) const
 {
 	size_t count = 0;
@@ -470,13 +486,12 @@ void BuildingManager::drawBuildingInformation(int x, int y)
         return;
     }
 
-    for (const auto &unit : BWAPI::Broodwar->self()->getUnits())
+    for (const auto unit : BWAPI::Broodwar->self()->getUnits())
     {
         BWAPI::Broodwar->drawTextMap(unit->getPosition().x,unit->getPosition().y+5,"\x07%d",unit->getID());
     }
 
-	BWAPI::Broodwar->drawTextScreen(x, y, "\x04 Building Information:");
-    BWAPI::Broodwar->drawTextScreen(x,y+20,"\x04 Name");
+    BWAPI::Broodwar->drawTextScreen(x,y+20,"\x04 Building");
     BWAPI::Broodwar->drawTextScreen(x+150,y+20,"\x04 State");
 
     int yspace = 0;

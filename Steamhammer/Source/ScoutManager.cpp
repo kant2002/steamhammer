@@ -57,9 +57,8 @@ void ScoutManager::setScoutTargets()
 	}
 
 	// Unset any targets that we have searched.
-	for (BWTA::BaseLocation * startLocation : BWTA::getStartLocations())
+	for (BWAPI::TilePosition pos : BWAPI::Broodwar->getStartLocations())
 	{
-		BWAPI::TilePosition pos = startLocation->getTilePosition();
 		if (BWAPI::Broodwar->isExplored(pos))
 		{
 			// We've seen it. No need to look there any more.
@@ -75,9 +74,8 @@ void ScoutManager::setScoutTargets()
 	}
 
 	// Set any target that we need to search.
-	for (BWTA::BaseLocation * startLocation : BWTA::getStartLocations())
+	for (BWAPI::TilePosition pos : BWAPI::Broodwar->getStartLocations())
 	{
-		BWAPI::TilePosition pos = startLocation->getTilePosition();
 		if (!BWAPI::Broodwar->isExplored(pos))
 		{
 			if (_overlordScout && !_overlordScoutTarget.isValid() && _workerScoutTarget != pos)

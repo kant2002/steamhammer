@@ -8,6 +8,7 @@
 
 #include "UAlbertaBotModule.h"
 
+#include "Bases.h"
 #include "Common.h"
 #include "OpponentModel.h"
 #include "ParseUtils.h"
@@ -26,13 +27,16 @@ void UAlbertaBotModule::onStart()
 	BWTA::readMap();
 	BWTA::analyze();
 
+	// Our own map analysis.
+	Bases::Instance().onStart();
+
 	// Parse the bot's configuration file.
 	// Change this file path to point to your config file.
     // Any relative path name will be relative to Starcraft installation folder
 	// The config depends on the map and must be read after the map is analyzed.
     ParseUtils::ParseConfigFile(Config::ConfigFile::ConfigFileLocation);
 
-    // Set our BWAPI options here    
+    // Set our BWAPI options according to the configuration. 
 	BWAPI::Broodwar->setLocalSpeed(Config::BWAPIOptions::SetLocalSpeed);
 	BWAPI::Broodwar->setFrameSkip(Config::BWAPIOptions::SetFrameSkip);
     

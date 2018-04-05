@@ -360,69 +360,123 @@ BWAPI::Position CombatCommander::getReconLocation() const
 //      Other air units always go into the flying squad.
 void CombatCommander::updateAttackSquads()
 {
-    Squad & mainAttackSquad = _squadData.getSquad("Ground");
+    Squad & groundSquad = _squadData.getSquad("Ground");
 	Squad & flyingSquad = _squadData.getSquad("Flying");
 
 	// Include exactly 1 detector in each squad, for detection.
-	bool mainDetector = mainAttackSquad.hasDetector();
-	bool mainSquadExists = mainAttackSquad.hasCombatUnits();
+	bool groundDetector = groundSquad.hasDetector();
+	bool groundSquadExists = groundSquad.hasCombatUnits();
 
 	bool flyingDetector = flyingSquad.hasDetector();
 	bool flyingSquadExists = false;
 	for (const auto unit : flyingSquad.getUnits())
 	{
-		if (unit->getType() == BWAPI::UnitTypes::Zerg_Mutalisk ||
-			unit->getType() == BWAPI::UnitTypes::Terran_Wraith ||
-			unit->getType() == BWAPI::UnitTypes::Terran_Valkyrie ||
-			unit->getType() == BWAPI::UnitTypes::Terran_Battlecruiser ||
-			unit->getType() == BWAPI::UnitTypes::Protoss_Corsair ||
-			unit->getType() == BWAPI::UnitTypes::Protoss_Scout)
+		if (isFlyingSquadUnit(unit->getType()))
 		{
 			flyingSquadExists = true;
+			break;
 		}
 	}
 
 	for (const auto unit : _combatUnits)
     {
-        // Scourge, devourers, carriers go into the flying squad only if it already exists.
-		// Otherwise they go into the ground squad.
-		bool isDetector = unit->getType().isDetector();
-		if (_squadData.canAssignUnitToSquad(unit, flyingSquad)
-			  &&
-			(unit->getType() == BWAPI::UnitTypes::Zerg_Mutalisk ||
-			unit->getType() == BWAPI::UnitTypes::Zerg_Scourge && flyingSquadExists ||
-			unit->getType() == BWAPI::UnitTypes::Zerg_Devourer && flyingSquadExists ||
-			unit->getType() == BWAPI::UnitTypes::Terran_Wraith ||
-			unit->getType() == BWAPI::UnitTypes::Terran_Valkyrie ||
-			unit->getType() == BWAPI::UnitTypes::Terran_Battlecruiser ||
-			unit->getType() == BWAPI::UnitTypes::Protoss_Corsair ||
-			unit->getType() == BWAPI::UnitTypes::Protoss_Scout ||
-			unit->getType() == BWAPI::UnitTypes::Protoss_Carrier && flyingSquadExists ||
-			isDetector && !flyingDetector && flyingSquadExists))
+		// Each squad gets 1 detector. Priority to the ground squad which can't see uphill otherwise.
+		if (unit->getType().isDetector())
 		{
-			_squadData.assignUnitToSquad(unit, flyingSquad);
-			if (isDetector)
+			if (groundSquadExists && !groundDetector && _squadData.canAssignUnitToSquad(unit, groundSquad))
+			{
+				groundDetector = true;
+				_squadData.assignUnitToSquad(unit, groundSquad);
+			}
+			else if (flyingSquadExists && !flyingDetector && _squadData.canAssignUnitToSquad(unit, groundSquad))
 			{
 				flyingDetector = true;
+				_squadData.assignUnitToSquad(unit, flyingSquad);
 			}
 		}
-        else if (!unit->getType().isWorker() &&
-			(!isDetector || isDetector && !mainDetector && mainSquadExists) &&
-			_squadData.canAssignUnitToSquad(unit, mainAttackSquad))
-        {
-			_squadData.assignUnitToSquad(unit, mainAttackSquad);
-			if (isDetector)
+
+		else if (isFlyingSquadUnit(unit->getType()))
+		{
+			if (_squadData.canAssignUnitToSquad(unit, flyingSquad))
 			{
-				mainDetector = true;
+				_squadData.assignUnitToSquad(unit, flyingSquad);
 			}
-        }
-    }
+		}
 
-	SquadOrder mainAttackOrder(SquadOrderTypes::Attack, getMainAttackLocation(&mainAttackSquad), AttackRadius, "Attack enemy base");
-    mainAttackSquad.setSquadOrder(mainAttackOrder);
+		// Certain flyers go into the flying squad only if it already exists.
+		// Otherwise they go into the ground squad.
+		else if (isOptionalFlyingSquadUnit(unit->getType()))
+		{
+			if (flyingSquadExists)
+			{
+				if (groundSquad.containsUnit(unit))
+				{
+					groundSquad.removeUnit(unit);
+				}
+				if (_squadData.canAssignUnitToSquad(unit, flyingSquad))
+				{
+					_squadData.assignUnitToSquad(unit, flyingSquad);
+				}
+			}
+			else
+			{
+				if (flyingSquad.containsUnit(unit))
+				{
+					flyingSquad.removeUnit(unit);
+					UAB_ASSERT(_squadData.canAssignUnitToSquad(unit, groundSquad), "can't go to ground");
+				}
+				if (_squadData.canAssignUnitToSquad(unit, groundSquad))
+				{
+					_squadData.assignUnitToSquad(unit, groundSquad);
+				}
+			}
+		}
 
-	SquadOrder flyingAttackOrder(SquadOrderTypes::Attack, getMainAttackLocation(&flyingSquad), AttackRadius, "Attack enemy base");
+		// isGroundSquadUnit() is defined as a catchall, so it has to go last.
+		else if (isGroundSquadUnit(unit->getType()))
+		{
+			if (_squadData.canAssignUnitToSquad(unit, groundSquad))
+			{
+				_squadData.assignUnitToSquad(unit, groundSquad);
+			}
+		}
+	}
+
+	SquadOrder groundAttackOrder(SquadOrderTypes::Attack, getMainAttackLocation(&groundSquad), AttackRadius, "Attack enemy");
+	groundSquad.setSquadOrder(groundAttackOrder);
+
+	SquadOrder flyingAttackOrder(SquadOrderTypes::Attack, getMainAttackLocation(&flyingSquad), AttackRadius, "Attack enemy");
 	flyingSquad.setSquadOrder(flyingAttackOrder);
+}
+
+// Unit definitely belongs in the Flying squad.
+bool CombatCommander::isFlyingSquadUnit(const BWAPI::UnitType type) const
+{
+	return
+		type == BWAPI::UnitTypes::Zerg_Mutalisk ||
+		type == BWAPI::UnitTypes::Terran_Wraith ||
+		type == BWAPI::UnitTypes::Terran_Valkyrie ||
+		type == BWAPI::UnitTypes::Terran_Battlecruiser ||
+		type == BWAPI::UnitTypes::Protoss_Corsair ||
+		type == BWAPI::UnitTypes::Protoss_Scout;
+}
+
+// Unit belongs in the Flying squad if the Flying squad exists, otherwise the Ground squad.
+bool CombatCommander::isOptionalFlyingSquadUnit(const BWAPI::UnitType type) const
+{
+	return
+		type == BWAPI::UnitTypes::Zerg_Scourge ||
+		type == BWAPI::UnitTypes::Zerg_Devourer ||
+		type == BWAPI::UnitTypes::Protoss_Carrier;
+}
+
+// Unit belongs in the ground squad.
+// With the current definition, it includes everything except workers, so it captures
+// everything that is not already taken: It should be the last condition checked.
+bool CombatCommander::isGroundSquadUnit(const BWAPI::UnitType type) const
+{
+	return
+		!type.isWorker();
 }
 
 // Despite the name, this supports only 1 drop squad which has 1 transport.
@@ -904,6 +958,8 @@ void CombatCommander::doComsatScan()
 		{
 			// At most one scan per call. We don't check whether it succeeds.
 			(void) Micro::Scan(unit->getPosition());
+			// Also make sure the Info Manager knows that the enemy can burrow.
+			InformationManager::Instance().enemySeenBurrowing();
 			break;
 		}
 	}
@@ -938,11 +994,11 @@ void CombatCommander::cancelDyingItems()
 				type == BWAPI::UnitTypes::Zerg_Sunken_Colony && unit->getHitPoints() < 130 && unit->getRemainingBuildTime() < 24
 			))
 		{
-			if (unit->isMorphing() && unit->canCancelMorph())
+			if (unit->canCancelMorph())
 			{
 				unit->cancelMorph();
 			}
-			else if (unit->isBeingConstructed() && unit->canCancelConstruction())
+			else if (unit->canCancelConstruction())
 			{
 				unit->cancelConstruction();
 			}
@@ -1034,16 +1090,16 @@ BWAPI::Position CombatCommander::getMainAttackLocation(const Squad * squad)
 	// Otherwise we are aggressive. Look for a spot to attack.
 
 	// Ground and air considerations.
-	bool isGround = true;
-	bool isAir = false;
+	bool hasGround = true;
+	bool hasAir = false;
 	bool canAttackAir = false;
 	bool canAttackGround = true;
 	if (squad)
 	{
-		isGround = squad->hasGround();
-		isAir = squad->hasAir();
-		canAttackAir = squad->hasAntiAir();
-		canAttackGround = squad->hasAntiGround();
+		hasGround = squad->hasGround();
+		hasAir = squad->hasAir();
+		canAttackAir = squad->canAttackAir();
+		canAttackGround = squad->canAttackGround();
 	}
 
 	// 1. Attack the enemy base with the weakest static defense.
@@ -1054,17 +1110,18 @@ BWAPI::Position CombatCommander::getMainAttackLocation(const Squad * squad)
 		int bestScore = -99999;
 		for (BWTA::BaseLocation * base : BWTA::getBaseLocations())
 		{
-			int score = 0;
 			if (InformationManager::Instance().getBaseOwner(base) == BWAPI::Broodwar->enemy())
 			{
+				int score = 0;     // the final score will be 0 or negative
 				std::vector<UnitInfo> enemies;
-				InformationManager::Instance().getNearbyForce(enemies, base->getPosition(), BWAPI::Broodwar->enemy(), AttackRadius);
+				InformationManager::Instance().getNearbyForce(enemies, base->getPosition(), BWAPI::Broodwar->enemy(), 600);
 				for (const auto & enemy : enemies)
 				{
 					if (enemy.type.isBuilding())
 					{
-						if (isGround && UnitUtil::TypeCanAttackGround(enemy.type) ||
-							isAir && UnitUtil::TypeCanAttackAir(enemy.type))
+						// If the building can attack (some units of) the squad, count it.
+						if (hasGround && UnitUtil::TypeCanAttackGround(enemy.type) ||
+							hasAir && UnitUtil::TypeCanAttackAir(enemy.type))
 						{
 							--score;
 						}
@@ -1079,6 +1136,16 @@ BWAPI::Position CombatCommander::getMainAttackLocation(const Squad * squad)
 		}
 		if (bestBase)
 		{
+			// TODO debugging occasional wrong targets
+			if (false && squad && squad->getSquadOrder().getPosition() != bestBase->getPosition())
+			{
+				BWAPI::Broodwar->printf("redirecting %s to %d,%d priority %d [ %s%shits %s%s]",
+					squad->getName().c_str(), bestBase->getTilePosition().x, bestBase->getTilePosition().y, bestScore,
+					(hasGround ? "ground " : ""),
+					(hasAir ? "air " : ""),
+					(canAttackGround ? "ground " : ""),
+					(canAttackAir ? "air " : ""));
+			}
 			return bestBase->getPosition();
 		}
 	}
@@ -1117,7 +1184,7 @@ BWAPI::Position CombatCommander::getMainAttackLocation(const Squad * squad)
 	}
 
 	// 4. We can't see anything, so explore the map until we find something.
-	return MapGrid::Instance().getLeastExplored();
+	return MapGrid::Instance().getLeastExplored(hasGround && !hasAir);
 }
 
 // Choose one worker to pull for scout defense.

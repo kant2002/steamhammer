@@ -125,11 +125,13 @@ class StrategyBossZerg
 	void cancelStuff(int mineralsNeeded);
 	void cancelForSpawningPool();
 	bool nextInQueueIsUseless(BuildOrderQueue & queue) const;
+	void leaveBook();
 
 	void produce(const MacroAct & act);
 	bool needDroneNext() const;
 	BWAPI::UnitType findUnitType(BWAPI::UnitType type) const;
 
+	bool queueSupplyIsOK(BuildOrderQueue & queue);
 	void makeOverlords(BuildOrderQueue & queue);
 
 	bool takeUrgentAction(BuildOrderQueue & queue);

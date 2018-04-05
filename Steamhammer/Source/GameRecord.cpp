@@ -231,7 +231,7 @@ void GameRecord::read(std::istream & input)
 			snapshots.push_back(snap);
 		}
 	}
-	catch (game_record_read_error &)
+	catch (const game_record_read_error &)
 	{
 		skipToEnd(input);      // end of the game record
 		valid = false;

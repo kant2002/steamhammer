@@ -32,6 +32,10 @@ class CombatCommander
 	int				weighReconUnit(const BWAPI::Unit unit) const;
 	int				weighReconUnit(const BWAPI::UnitType type) const;
 
+	bool			isFlyingSquadUnit(const BWAPI::UnitType type) const;
+	bool			isOptionalFlyingSquadUnit(const BWAPI::UnitType type) const;
+	bool			isGroundSquadUnit(const BWAPI::UnitType type) const;
+
 	bool			unitIsGoodToDrop(const BWAPI::Unit unit) const;
 
 	void			cancelDyingItems();

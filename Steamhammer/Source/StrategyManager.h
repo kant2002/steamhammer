@@ -45,14 +45,17 @@ class StrategyManager
     const BuildOrder                _emptyBuildOrder;
 	std::string						_openingGroup;
 	bool							_hasDropTech;
-	int								_highWaterBases;   // most bases we've ever had, terran and protoss only
+	int								_highWaterBases;				// most bases we've ever had, terran and protoss only
+	bool							_openingStaticDefenseDropped;	// make sure we do this at most once ever
 
 	const	bool				    shouldExpandNow() const;
     const	MetaPairVector		    getProtossBuildOrderGoal();
 	const	MetaPairVector		    getTerranBuildOrderGoal();
 	const	MetaPairVector		    getZergBuildOrderGoal() const;
 
-	bool							detectSupplyBlock(BuildOrderQueue & queue);
+	bool							detectSupplyBlock(BuildOrderQueue & queue) const;
+	bool							handleExtremeEmergency(BuildOrderQueue & queue);
+
 	bool							canPlanBuildOrderNow() const;
 	void							performBuildOrderSearch();
 

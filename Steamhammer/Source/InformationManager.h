@@ -6,8 +6,6 @@
 #include "Base.h"
 #include "UnitData.h"
 
-//#include "..\..\SparCraft\source\SparCraft.h"
-
 namespace UAlbertaBot
 {
 
@@ -121,6 +119,8 @@ public:
 	bool					enemyHasOverlordHunters();
 	bool					enemyHasStaticDetection();
 	bool					enemyHasMobileDetection();
+
+	void					enemySeenBurrowing() { _enemyHasCloakTech = true; };
 
 	// BWAPI::Unit				nearestGroundStaticDefense(BWAPI::Position pos) const;
 	// BWAPI::Unit				nearestAirStaticDefense(BWAPI::Position pos) const;

@@ -11,6 +11,7 @@ namespace UnitUtil
 	bool IsMorphedUnitType(BWAPI::UnitType type);
 
 	bool IsStaticDefense(BWAPI::UnitType type);
+	bool IsComingStaticDefense(BWAPI::UnitType type);
 
 	bool IsCombatSimUnit(BWAPI::Unit unit);
 	bool IsCombatSimUnit(BWAPI::UnitType type);

@@ -27,7 +27,8 @@ MapGrid::MapGrid(int mapWidth, int mapHeight, int cellSize)
 // 1. Any starting base location that has not been explored.
 // 2. The least-recently explored cell accessible by land.
 // Item 1 ensures that, if early game scouting failed, we scout with force.
-BWAPI::Position MapGrid::getLeastExplored() 
+// If byGround, only locations that are accessible by ground from our start location.
+BWAPI::Position MapGrid::getLeastExplored(bool byGround) 
 {
 	// 1. Any starting location that has not been explored.
 	for (BWAPI::TilePosition tile : BWAPI::Broodwar->getStartLocations())
@@ -51,7 +52,8 @@ BWAPI::Position MapGrid::getLeastExplored()
 			BWAPI::Position cellCenter = getCellCenter(r,c);
 
 			// don't worry about places that aren't connected to our start location
-			if (!BWTA::isConnected(BWAPI::TilePosition(cellCenter), BWAPI::Broodwar->self()->getStartLocation()))
+			if (byGround &&
+				!BWTA::isConnected(BWAPI::TilePosition(cellCenter), BWAPI::Broodwar->self()->getStartLocation()))
 			{
 				continue;
 			}

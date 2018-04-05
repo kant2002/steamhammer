@@ -1,4 +1,5 @@
 #include "BuildOrderQueue.h"
+#include "UnitUtil.h"
 
 using namespace UAlbertaBot;
 
@@ -11,6 +12,24 @@ void BuildOrderQueue::clearAll()
 {
 	queue.clear();
 	modified = true;
+}
+
+// A special purpose queue modification.
+void BuildOrderQueue::dropStaticDefenses()
+{
+	for (auto it = queue.begin(); it != queue.end(); )
+	{
+		MacroAct act = (*it).macroAct;
+		
+		if (act.isBuilding() &&	UnitUtil::IsComingStaticDefense(act.getUnitType()))
+		{
+			it = queue.erase(it);
+		}
+		else
+		{
+			++it;
+		}
+	}
 }
 
 void BuildOrderQueue::queueAsHighestPriority(MacroAct m, bool gasSteal)
@@ -147,6 +166,22 @@ size_t BuildOrderQueue::numInQueue(BWAPI::UnitType type) const
 			++count;
 		}
 	}
+	return count;
+}
+
+size_t BuildOrderQueue::numInNextN(BWAPI::UnitType type, int n) const
+{
+	size_t count = 0;
+
+	for (int i = queue.size() - 1; i >= std::max(0, int(queue.size()) - 1 - n); --i)
+	{
+		const MacroAct & act = queue[i].macroAct;
+		if (act.isUnit() && act.getUnitType() == type)
+		{
+			++count;
+		}
+	}
+
 	return count;
 }
 

@@ -2,7 +2,7 @@
 #include "UABAssert.h"
 
 // Most values here are default values that apply if the configuration entry
-// is missing from the config file, or is invalid.
+// is missing from the config file, or is invalid. 
 
 // The ConfigFile record tells where to find the config file, so it's different.
 
@@ -12,7 +12,7 @@ namespace Config
     {
         bool ConfigFileFound                = false;
         bool ConfigFileParsed               = false;
-        std::string ConfigFileLocation      = "bwapi-data/AI/Steamhammer_1.4.json";
+        std::string ConfigFileLocation      = "bwapi-data/AI/Steamhammer_1.4.1.json";
     }
 
 	namespace IO
@@ -51,13 +51,13 @@ namespace Config
         bool EnableUserInput                = true;
         bool EnableCompleteMapInformation   = false;
     }
-
-    namespace Tournament
+    
+    namespace Tournament						
     {
-        int GameEndFrame                    = 86400;
+        int GameEndFrame                    = 86400;	
     }
-
-    namespace Debug
+    
+    namespace Debug								
     {
         bool DrawGameInfo                   = true;
         bool DrawUnitHealthBars             = false;
@@ -72,7 +72,7 @@ namespace Config
         bool DrawBuildingInfo               = false;
         bool DrawMouseCursorInfo            = false;
         bool DrawEnemyUnitInfo              = false;
-        bool DrawBWTAInfo                   = false;
+		bool DrawMapInfo					= false;
         bool DrawMapGrid                    = false;
 		bool DrawMapDistances				= false;
 		bool DrawBaseInfo					= false;
@@ -91,11 +91,11 @@ namespace Config
         BWAPI::Color ColorUnitNotNearEnemy  = BWAPI::Colors::Green;
     }
 
-    namespace Micro
+    namespace Micro								
     {
         bool KiteWithRangedUnits            = true;
         std::set<BWAPI::UnitType> KiteLongerRangedUnits;
-        bool WorkersDefendRush              = false;
+        bool WorkersDefendRush              = false; 
 		int RetreatMeleeUnitShields         = 0;
         int RetreatMeleeUnitHP              = 0;
 		int CombatSimRadius					= 300;      // radius of units around frontmost unit for combat sim
@@ -115,7 +115,7 @@ namespace Config
 		bool ExpandToIslands				= false;
     }
 
-    namespace Tools
+    namespace Tools								
     {
         extern int MAP_GRID_SIZE            = 320;      // size of grid spacing in MapGrid
     }

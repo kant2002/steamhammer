@@ -14,6 +14,7 @@ StrategyManager::StrategyManager()
 	, _openingGroup("")
 	, _hasDropTech(false)
 	, _highWaterBases(1)
+	, _openingStaticDefenseDropped(false)
 {
 }
 
@@ -431,10 +432,13 @@ goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Terran_Infantry_Wea
 		goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode, numTanks + 2));
 		goal.push_back(std::pair<MacroAct, int>(BWAPI::TechTypes::Tank_Siege_Mode, 1));
 
+		if (numVultures > 0)
+		{
+			goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Ion_Thrusters, 1));
+		}
 		if (numTanks >= 6)
 		{
 			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Goliath, numGoliaths + 4));
-			goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Ion_Thrusters, 1));
 		}
 		if (numGoliaths >= 4)
 		{
@@ -442,7 +446,6 @@ goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Terran_Infantry_Wea
 		}
 		if (self->hasResearched(BWAPI::TechTypes::Tank_Siege_Mode))
 		{
-			// Maintain 1 vessel to spot for the tanks.
 			makeVessel = true;
 		}
 	}
@@ -494,6 +497,7 @@ goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Terran_Infantry_Wea
 
 	if (makeVessel || InformationManager::Instance().enemyHasCloakTech())
 	{
+		// Maintain 1 vessel to spot for the ground squad and 1 to go with the recon squad.
 		if (numVessels < 2)
 		{
 			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Science_Vessel, numVessels + 1));
@@ -520,9 +524,9 @@ goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Terran_Infantry_Wea
 	}
 
 	if (shouldExpandNow())
-    {
-        goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Command_Center, numCC + 1));
-    }
+	{
+		goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Command_Center, numCC + 1));
+	}
 
 	return goal;
 }
@@ -533,14 +537,14 @@ const MetaPairVector StrategyManager::getZergBuildOrderGoal() const
 {
 	// the goal to return
 	std::vector<MetaPair> goal;
-	
+
 	// These counts include uncompleted units.
-	int nLairs			= UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Lair);
-	int nHives			= UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Hive);
-    int nHatches        = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Hatchery)
-                        + nLairs + nHives;
-    int nDrones			= UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Drone);
-	int nHydras			= UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Hydralisk);
+	int nLairs = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Lair);
+	int nHives = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Hive);
+	int nHatches = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Hatchery)
+		+ nLairs + nHives;
+	int nDrones = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Drone);
+	int nHydras = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Hydralisk);
 
 	const int droneMax = 48;             // number of drones not to exceed
 
@@ -561,12 +565,52 @@ const MetaPairVector StrategyManager::getZergBuildOrderGoal() const
 
 void StrategyManager::handleUrgentProductionIssues(BuildOrderQueue & queue)
 {
+	// This is the enemy plan that we have seen in action.
+	OpeningPlan enemyPlan = OpponentModel::Instance().getEnemyPlan();
+
+	// For all races, if we've just discovered that the enemy is going with a heavy macro opening,
+	// drop any static defense that our opening build order told us to make.
+	if (!ProductionManager::Instance().isOutOfBook() && !_openingStaticDefenseDropped)
+	{
+		// We're in the opening book and haven't dropped static defenses yet. Should we?
+		if (enemyPlan == OpeningPlan::Turtle ||
+			enemyPlan == OpeningPlan::SafeExpand)
+			// enemyPlan == OpeningPlan::NakedExpand && _enemyRace != BWAPI::Races::Zerg) // could do this too
+		{
+			// 1. Remove upcoming defense buildings from the queue.
+			queue.dropStaticDefenses();
+			// 2. Cancel unfinished defense buildings.
+			for (BWAPI::Unit unit : BWAPI::Broodwar->self()->getUnits())
+			{
+				if (UnitUtil::IsComingStaticDefense(unit->getType()) && unit->canCancelConstruction())
+				{
+					unit->cancelConstruction();
+				}
+			}
+			// 3. Never do it again.
+			_openingStaticDefenseDropped = true;
+		}
+	}
+
 	if (_selfRace == BWAPI::Races::Zerg)
 	{
 		StrategyBossZerg::Instance().handleUrgentProductionIssues(queue);
 	}
 	else
 	{
+		// Count resource depots.
+		const BWAPI::UnitType resourceDepotType = _selfRace == BWAPI::Races::Terran
+			? BWAPI::UnitTypes::Terran_Command_Center
+			: BWAPI::UnitTypes::Protoss_Nexus;
+		const int numDepots = UnitUtil::GetAllUnitCount(resourceDepotType);
+
+		// If we need to cope with an extreme emergency, don't do anything else.
+		// If we have no resource depot, we can do nothing; that case is dealt with below.
+		if (numDepots > 0 && handleExtremeEmergency(queue))
+		{
+			return;
+		}
+
 		// detect if there's a supply block once per second
 		if ((BWAPI::Broodwar->getFrameCount() % 24 == 1) && detectSupplyBlock(queue))
 		{
@@ -641,7 +685,8 @@ void StrategyManager::handleUrgentProductionIssues(BuildOrderQueue & queue)
 			}
 		}
 
-		OpeningPlan enemyPlan = OpponentModel::Instance().getEnemyPlan();
+		// This is the enemy plan that we have seen, or if none yet, the expected enemy plan.
+		// Some checks can use the expected plan, some are better with the observed plan.
 		OpeningPlan likelyEnemyPlan = OpponentModel::Instance().getBestGuessEnemyPlan();
 
 		// If the opponent is rushing, make some defense.
@@ -668,22 +713,18 @@ void StrategyManager::handleUrgentProductionIssues(BuildOrderQueue & queue)
 			/*
 			else if (_selfRace == BWAPI::Races::Protoss)
 			{
-				if (UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Protoss_Pylon) > 0 &&    // tech requirement
-					UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Protoss_Gateway) > 0 &&  // tech requirement
-					UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Protoss_Shield_Battery) == 0 &&
-					!queue.anyInQueue(BWAPI::UnitTypes::Protoss_Shield_Battery) &&
-					!BuildingManager::Instance().isBeingBuilt(BWAPI::UnitTypes::Protoss_Shield_Battery))
-				{
-					queue.queueAsHighestPriority(BWAPI::UnitTypes::Protoss_Shield_Battery);
-				}
+			if (UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Protoss_Pylon) > 0 &&    // tech requirement
+			UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Protoss_Gateway) > 0 &&  // tech requirement
+			UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Protoss_Shield_Battery) == 0 &&
+			!queue.anyInQueue(BWAPI::UnitTypes::Protoss_Shield_Battery) &&
+			!BuildingManager::Instance().isBeingBuilt(BWAPI::UnitTypes::Protoss_Shield_Battery))
+			{
+			queue.queueAsHighestPriority(BWAPI::UnitTypes::Protoss_Shield_Battery);
+			}
 			}
 			*/
 		}
 
-		const BWAPI::UnitType resourceDepotType = _selfRace == BWAPI::Races::Terran
-			? BWAPI::UnitTypes::Terran_Command_Center
-			: BWAPI::UnitTypes::Protoss_Nexus;
-		const int numDepots = UnitUtil::GetAllUnitCount(resourceDepotType);
 		if (numDepots > _highWaterBases)
 		{
 			_highWaterBases = numDepots;
@@ -716,26 +757,14 @@ void StrategyManager::handleUrgentProductionIssues(BuildOrderQueue & queue)
 			!BuildingManager::Instance().isBeingBuilt(resourceDepotType))
 		{
 			queue.queueAsHighestPriority(MacroAct(resourceDepotType));
+			return;    // and don't do anything else just yet
 		}
-	}
-}
-
-// Called to refill the production queue when it is empty.
-void StrategyManager::freshProductionPlan()
-{
-	if (_selfRace == BWAPI::Races::Zerg)
-	{
-		ProductionManager::Instance().setBuildOrder(StrategyBossZerg::Instance().freshProductionPlan());
-	}
-	else
-	{
-		performBuildOrderSearch();
 	}
 }
 
 // Return true if we're supply blocked and should build supply.
 // Note: This understands zerg supply but is not used when we are zerg.
-bool StrategyManager::detectSupplyBlock(BuildOrderQueue & queue)
+bool StrategyManager::detectSupplyBlock(BuildOrderQueue & queue) const
 {
 	// If the _queue is empty or supply is maxed, there is no block.
 	if (queue.isEmpty() || BWAPI::Broodwar->self()->supplyTotal() >= 400)
@@ -788,7 +817,7 @@ bool StrategyManager::detectSupplyBlock(BuildOrderQueue & queue)
 	{
 		// If we're zerg, check to see if a building is planned to be built.
 		// Only count it as releasing supply very early in the game.
-		if (BWAPI::Broodwar->self()->getRace() == BWAPI::Races::Zerg
+		if (_selfRace == BWAPI::Races::Zerg
 			&& BuildingManager::Instance().buildingsQueued().size() > 0
 			&& BWAPI::Broodwar->self()->supplyTotal() <= 18)
 		{
@@ -798,6 +827,57 @@ bool StrategyManager::detectSupplyBlock(BuildOrderQueue & queue)
 	}
 
 	return false;
+}
+
+// This tries to cope with 1 kind of severe emergency: We have desperately few workers.
+// The caller promises that we have a resource depot, so we may be able to make more.
+bool StrategyManager::handleExtremeEmergency(BuildOrderQueue & queue)
+{
+	const int minWorkers = 3;
+	const BWAPI::UnitType workerType = _selfRace.getWorker();
+	const int nWorkers = UnitUtil::GetAllUnitCount(workerType);
+
+	// NOTE This doesn't check whether the map has resources remaining!
+	//      If not, we should produce workers only if needed for another purpose.
+	// NOTE If we don't have enough minerals to make a worker, then we don't
+	//      have enough minerals to make anything (since we're not zerg and can't make scourge).
+	//      So don't bother.
+	if (nWorkers < minWorkers && BWAPI::Broodwar->self()->minerals() >= 50)
+	{
+		// 1. If the next item in the queue is a worker, we're good. Otherwise, clear the queue.
+		// This is a severe emergency and it doesn't make sense to continue business as usual.
+		// But if we don't have enough 
+		if (queue.size() > 0)
+		{
+			const MacroAct & act = queue.getHighestPriorityItem().macroAct;
+			if (act.isUnit() && act.getUnitType() == workerType)
+			{
+				return false;
+			}
+			queue.clearAll();
+		}
+		// 2. Queue the minimum number of workers.
+		for (int i = nWorkers; i < minWorkers; ++i)
+		{
+			queue.queueAsHighestPriority(workerType);
+		}
+		return true;
+	}
+
+	return false;
+}
+
+// Called to refill the production queue when it is empty.
+void StrategyManager::freshProductionPlan()
+{
+	if (_selfRace == BWAPI::Races::Zerg)
+	{
+		ProductionManager::Instance().setBuildOrder(StrategyBossZerg::Instance().freshProductionPlan());
+	}
+	else
+	{
+		performBuildOrderSearch();
+	}
 }
 
 void StrategyManager::performBuildOrderSearch()

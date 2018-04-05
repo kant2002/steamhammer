@@ -148,6 +148,8 @@
     <ClCompile Include="..\Source\PlayerSnapshot.cpp" />
     <ClCompile Include="..\Source\MicroAirToAir.cpp" />
     <ClCompile Include="..\Source\OpponentPlan.cpp" />
+    <ClCompile Include="..\Source\Bases.cpp" />
+    <ClCompile Include="..\Source\DistanceMap.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Source\CombatCommander.h">
@@ -173,9 +175,6 @@
     </ClInclude>
     <ClInclude Include="..\Source\SquadData.h">
       <Filter>game\combat\squad</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Source\DistanceMap.hpp">
-      <Filter>game\util\map</Filter>
     </ClInclude>
     <ClInclude Include="..\Source\Common.h">
       <Filter>common</Filter>
@@ -266,5 +265,7 @@
     <ClInclude Include="..\Source\PlayerSnapshot.h" />
     <ClInclude Include="..\Source\MicroAirToAir.h" />
     <ClInclude Include="..\Source\OpponentPlan.h" />
+    <ClInclude Include="..\Source\Bases.h" />
+    <ClInclude Include="..\Source\DistanceMap.h" />
   </ItemGroup>
 </Project>

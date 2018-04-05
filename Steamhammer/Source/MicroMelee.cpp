@@ -158,6 +158,13 @@ BWAPI::Unit MicroMelee::getTarget(BWAPI::Unit meleeUnit, const BWAPI::Unitset & 
 			score -= 128;
 		}
 
+		// Prefer targets under dark swarm, on the expectation that then we'll be under it too.
+		// Workers are treated as ranged units for purposes of dark swarm, so exclude them.
+		if (target->isUnderDarkSwarm() && !meleeUnit->getType().isWorker())
+		{
+			score += 128;
+		}
+
 		// Prefer targets that are already hurt.
 		if (target->getType().getRace() == BWAPI::Races::Protoss && target->getShields() == 0)
 		{
@@ -194,6 +201,10 @@ int MicroMelee::getAttackPriority(BWAPI::Unit attacker, BWAPI::Unit target) cons
 			(BWAPI::Broodwar->self()->deadUnitCount(BWAPI::UnitTypes::Protoss_Dark_Templar) == 0))
 		{
 			return 9;
+		}
+		if (targetType == BWAPI::UnitTypes::Zerg_Spore_Colony)
+		{
+			return 8;
 		}
 		if (targetType.isWorker())
 		{

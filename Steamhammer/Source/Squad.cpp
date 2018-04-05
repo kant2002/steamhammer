@@ -12,8 +12,8 @@ Squad::Squad()
 	, _fightVisibleOnly(false)
 	, _hasAir(false)
 	, _hasGround(false)
-	, _hasAntiAir(false)
-	, _hasAntiGround(false)
+	, _canAttackAir(false)
+	, _canAttackGround(false)
 	, _attackAtMax(false)
     , _lastRetreatSwitch(0)
     , _lastRetreatSwitchVal(false)
@@ -33,8 +33,8 @@ Squad::Squad(const std::string & name, SquadOrder order, size_t priority)
 	, _fightVisibleOnly(false)
 	, _hasAir(false)
 	, _hasGround(false)
-	, _hasAntiAir(false)
-	, _hasAntiGround(false)
+	, _canAttackAir(false)
+	, _canAttackGround(false)
 	, _attackAtMax(false)
 	, _lastRetreatSwitch(0)
     , _lastRetreatSwitchVal(false)
@@ -162,8 +162,8 @@ void Squad::setAllUnits()
 {
 	_hasAir = false;
 	_hasGround = false;
-	_hasAntiAir = false;
-	_hasAntiGround = false;
+	_canAttackAir = false;
+	_canAttackGround = false;
 
 	BWAPI::Unitset goodUnits;
 	for (const auto unit : _units)
@@ -185,11 +185,11 @@ void Squad::setAllUnits()
 			}
 			if (UnitUtil::CanAttackAir(unit))
 			{
-				_hasAntiAir = true;
+				_canAttackAir = true;
 			}
 			if (UnitUtil::CanAttackGround(unit))
 			{
-				_hasAntiGround = true;
+				_canAttackGround = true;
 			}
 		}
 	}

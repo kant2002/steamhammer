@@ -4,14 +4,12 @@
 
 using namespace UAlbertaBot;
 
-// get an instance of this
 BOSSManager & BOSSManager::Instance() 
 {
 	static BOSSManager instance;
 	return instance;
 }
 
-// constructor
 BOSSManager::BOSSManager() 
 	: _previousSearchStartFrame(0)
     , _previousSearchFinishFrame(0)
@@ -221,13 +219,13 @@ void BOSSManager::update(double timeLimit)
 					return;
 				}
                 // and if that search doesn't work then we're out of luck, no build orders for us
-				catch (const BOSS::BOSSException &)
+				catch (const BOSS::BOSSException & exception)
                 {
-                    //UAB_ASSERT_WARNING(false, "BOSS Timeout Naive Search Exception: %s", exception.what());
                     _previousStatus += "\x08Naive Exception";
                     if (Config::Debug::DrawBuildOrderSearchInfo)
                     {
-					    BWAPI::Broodwar->drawTextScreen(0, 20, "No BuildOrder found, returning empty BuildOrder");
+						UAB_ASSERT_WARNING(false, "BOSS Timeout Naive Search Exception: %s", exception.what());
+						BWAPI::Broodwar->drawTextScreen(0, 20, "No BuildOrder found, returning empty BuildOrder");
                     }
 					_previousBuildOrder = BOSS::BuildOrder();
 					return;

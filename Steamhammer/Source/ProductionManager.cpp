@@ -52,7 +52,7 @@ void ProductionManager::update()
 			BWAPI::Broodwar->drawTextScreen(150, 10, "Nothing left to build, replanning.");
 		}
 
-		goOutOfBook();
+		goOutOfBookAndClearQueue();
 		StrategyManager::Instance().freshProductionPlan();
 	}
 
@@ -64,14 +64,23 @@ void ProductionManager::update()
 void ProductionManager::onUnitDestroy(BWAPI::Unit unit)
 {
 	// If it's not our unit, we don't care.
-	// This mostly works for zerg, but the extractor trick confuses it.
-	// So bail out if the extractor trick is underway.
-	if (!unit || unit->getPlayer() != BWAPI::Broodwar->self() ||
-		BWAPI::Broodwar->self()->getRace() == BWAPI::Races::Zerg)
+	if (!unit || unit->getPlayer() != BWAPI::Broodwar->self())
 	{
 		return;
 	}
 	
+	// If we're zerg, we break out of the opening if and only if a key tech building is lost.
+	if (BWAPI::Broodwar->self()->getRace() == BWAPI::Races::Zerg)
+	{
+		if (unit->getType() == BWAPI::UnitTypes::Zerg_Lair ||
+			unit->getType() == BWAPI::UnitTypes::Zerg_Spire ||
+			unit->getType() == BWAPI::UnitTypes::Zerg_Hydralisk_Den)
+		{
+			goOutOfBook();
+		}
+		return;
+	}
+
 	// If it's a worker or a building, it affects the production plan.
 	if (unit->getType().isWorker() && !_outOfBook)
 	{
@@ -118,7 +127,7 @@ void ProductionManager::onUnitDestroy(BWAPI::Unit unit)
 		unit->getType().supplyProvided() == 0)
 	{
 		// We lost a building other than static defense or supply. It may be serious. Replan from scratch.
-		goOutOfBook();
+		goOutOfBookAndClearQueue();
 	}
 }
 
@@ -146,6 +155,17 @@ void ProductionManager::manageBuildOrderQueue()
 	while (!_queue.isEmpty()) 
 	{
 		const BuildOrderItem & currentItem = _queue.getHighestPriorityItem();
+
+		// WORKAROUND for BOSS bug of making too many gateways: Limit the count to 10.
+		// Idea borrowed from Locutus by Bruce Nielsen.
+		if (currentItem.macroAct.isUnit() &&
+			currentItem.macroAct.getUnitType() == BWAPI::UnitTypes::Protoss_Gateway &&
+			UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Protoss_Gateway) >= 10)
+		{
+			_queue.doneWithHighestPriorityItem();
+			_lastProductionFrame = BWAPI::Broodwar->getFrameCount();
+			continue;
+		}
 
 		// If this is a command, execute it and keep going.
 		if (currentItem.macroAct.isCommand())
@@ -218,7 +238,7 @@ void ProductionManager::manageBuildOrderQueue()
 		{
 			// Looks very like a jam. Clear the queue and hope for better luck next time.
 			// BWAPI::Broodwar->printf("breaking a production jam");
-			goOutOfBook();
+			goOutOfBookAndClearQueue();
 		}
 
 		// TODO not much of a loop, eh? breaks on all branches
@@ -467,7 +487,7 @@ void ProductionManager::create(BWAPI::Unit producer, const BuildOrderItem & item
 	}
 	// If it's a building other than an add-on.
 	else if (act.isBuilding()                                    // implies act.isUnit()
-		&& !UnitUtil::IsMorphedBuildingType(act.getUnitType()))  // not morphed from another zerg building, not built
+		&& !UnitUtil::IsMorphedBuildingType(act.getUnitType()))  // not morphed from another zerg building
 	{
 		// Every once in a while, pick a new base as the "main" base to build in.
 		if (act.getRace() != BWAPI::Races::Protoss || act.getUnitType() == BWAPI::UnitTypes::Protoss_Pylon)
@@ -487,6 +507,11 @@ void ProductionManager::create(BWAPI::Unit producer, const BuildOrderItem & item
 			{
 				desiredLocation = natural->getTilePosition();
 			}
+		}
+		else if (act.getMacroLocation() == MacroLocation::Center)
+		{
+			// Near the center of the map.
+			desiredLocation = BWAPI::TilePosition(BWAPI::Broodwar->mapWidth()/2, BWAPI::Broodwar->mapHeight()/2);
 		}
 		
 		BuildingManager::Instance().addBuildingTask(act, desiredLocation, item.isGasSteal);
@@ -956,9 +981,20 @@ bool ProductionManager::nextIsBuilding() const
 
 // We have finished our book line, or are breaking out of it early.
 // Clear the queue, set _outOfBook, go aggressive.
-void ProductionManager::goOutOfBook()
+// NOTE This clears the queue even if we are already out of book.
+void ProductionManager::goOutOfBookAndClearQueue()
 {
 	_queue.clearAll();
 	_outOfBook = true;
 	CombatCommander::Instance().setAggression(true);
+}
+
+// If we're in book, leave it and clear the queue.
+// Otherwise do nothing.
+void ProductionManager::goOutOfBook()
+{
+	if (!_outOfBook)
+	{
+		goOutOfBookAndClearQueue();
+	}
 }

@@ -116,6 +116,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\Source\Base.cpp" />
+    <ClCompile Include="..\Source\Bases.cpp" />
     <ClCompile Include="..\Source\BOSSManager.cpp" />
     <ClCompile Include="..\Source\BuildingData.cpp" />
     <ClCompile Include="..\source\BuildingManager.cpp" />
@@ -125,6 +126,7 @@
     <ClCompile Include="..\Source\CombatSimulation.cpp" />
     <ClCompile Include="..\Source\CombatCommander.cpp" />
     <ClCompile Include="..\Source\Common.cpp" />
+    <ClCompile Include="..\Source\DistanceMap.cpp" />
     <ClCompile Include="..\Source\Dll.cpp" />
     <ClCompile Include="..\Source\FAP.cpp" />
     <ClCompile Include="..\Source\GameCommander.cpp" />
@@ -168,6 +170,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Source\Base.h" />
+    <ClInclude Include="..\Source\Bases.h" />
     <ClInclude Include="..\Source\BOSSManager.h" />
     <ClInclude Include="..\Source\BuildingData.h" />
     <ClInclude Include="..\source\BuildingManager.h" />
@@ -177,7 +180,7 @@
     <ClInclude Include="..\Source\CombatSimulation.h" />
     <ClInclude Include="..\Source\CombatCommander.h" />
     <ClInclude Include="..\Source\Common.h" />
-    <ClInclude Include="..\Source\DistanceMap.hpp" />
+    <ClInclude Include="..\Source\DistanceMap.h" />
     <ClInclude Include="..\Source\FAP.h" />
     <ClInclude Include="..\Source\GameCommander.h" />
     <ClInclude Include="..\Source\GameRecord.h" />

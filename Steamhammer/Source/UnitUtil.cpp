@@ -33,6 +33,17 @@ bool UnitUtil::IsStaticDefense(BWAPI::UnitType type)
 		type == BWAPI::UnitTypes::Protoss_Shield_Battery;
 }
 
+// To stop static defense from being built, stop these things.
+bool UnitUtil::IsComingStaticDefense(BWAPI::UnitType type)
+{
+	return
+		type == BWAPI::UnitTypes::Zerg_Creep_Colony ||
+		type == BWAPI::UnitTypes::Terran_Bunker ||
+		type == BWAPI::UnitTypes::Terran_Missile_Turret ||
+		type == BWAPI::UnitTypes::Protoss_Photon_Cannon ||
+		type == BWAPI::UnitTypes::Protoss_Shield_Battery;
+}
+
 // This is a combat unit for purposes of combat simulation.
 bool UnitUtil::IsCombatSimUnit(BWAPI::Unit unit)
 {
@@ -101,18 +112,44 @@ bool UnitUtil::IsCombatUnit(BWAPI::UnitType type)
 bool UnitUtil::IsCombatUnit(BWAPI::Unit unit)
 {
 	UAB_ASSERT(unit != nullptr, "Unit was null");
-	if (!unit)
-	{
-		return false;
-	}
 
-	return IsCombatUnit(unit->getType());
+	return unit && IsCombatUnit(unit->getType());
 }
 
 // Check whether a unit variable points to a unit we control.
 // This is called only on units that we believe are ours.
 bool UnitUtil::IsValidUnit(BWAPI::Unit unit)
 {
+	if (!unit)
+	{
+		return false;
+	}
+	if (!unit->exists())
+	{
+		return false;
+	}
+	if (!(unit->isCompleted() || IsMorphedBuildingType(unit->getType())))
+	{
+		return false;
+	}
+	if (unit->getHitPoints() <= 0)
+	{
+		return false;
+	}
+	if (unit->getType() == BWAPI::UnitTypes::Unknown)
+	{
+		return false;
+	}
+	if (!(unit->getPosition().isValid() || unit->isLoaded()))
+	{
+		return false;
+	}
+	if (unit->getPlayer() != BWAPI::Broodwar->self())
+	{
+		return false;
+	}
+	return true;
+
 	return unit
 		&& unit->exists()
 		&& (unit->isCompleted() || IsMorphedBuildingType(unit->getType()))

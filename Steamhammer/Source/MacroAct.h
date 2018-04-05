@@ -12,8 +12,9 @@ enum class MacroLocation
 	, Expo         // gas expansion hatchery
 	, MinOnly      // any expansion hatchery (mineral-only or gas, whatever's next)
 	, Hidden       // gas expansion hatchery far from both main bases
-	, Main         // starting base
+	, Main         // current main base
 	, Natural      // "natural" first expansion base
+	, Center       // middle of the map
 	};
 
 namespace MacroActs
