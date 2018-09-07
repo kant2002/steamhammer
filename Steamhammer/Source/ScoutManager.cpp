@@ -215,7 +215,7 @@ void ScoutManager::update()
 		}
 		if (moveScout)
 		{
-			moveGroundScout(_workerScout);
+			moveGroundScout();
 		}
 	}
 	else if (_gasStealOver)
@@ -226,7 +226,7 @@ void ScoutManager::update()
 
 	if (_overlordScout)
 	{
-		moveAirScout(_overlordScout);
+		moveAirScout();
 	}
 
     drawScoutInformation(200, 320);
@@ -322,7 +322,7 @@ void ScoutManager::drawScoutInformation(int x, int y)
 }
 
 // Move the worker scout.
-void ScoutManager::moveGroundScout(BWAPI::Unit scout)
+void ScoutManager::moveGroundScout()
 {
 	const int scoutDistanceThreshold = 30;    // in tiles
 
@@ -338,19 +338,19 @@ void ScoutManager::moveGroundScout(BWAPI::Unit scout)
 
 		UAB_ASSERT(enemyBaseLocation, "no enemy base");
 
-		int scoutDistanceToEnemy = MapTools::Instance().getGroundTileDistance(scout->getPosition(), enemyBaseLocation->getPosition());
+		int scoutDistanceToEnemy = MapTools::Instance().getGroundTileDistance(_workerScout->getPosition(), enemyBaseLocation->getPosition());
 		bool scoutInRangeOfenemy = scoutDistanceToEnemy <= scoutDistanceThreshold;
 
 		// we only care if the scout is under attack within the enemy region
 		// this ignores if their scout worker attacks it on the way to their base
-		int scoutHP = scout->getHitPoints() + scout->getShields();
+		int scoutHP = _workerScout->getHitPoints() + _workerScout->getShields();
 		if (scoutHP < _previousScoutHP)
 		{
 			_scoutUnderAttack = true;
 		}
 		_previousScoutHP = scoutHP;
 
-		if (!scout->isUnderAttack() && !enemyWorkerInRadius())
+		if (!_workerScout->isUnderAttack() && !enemyWorkerInRadius())
 		{
 			_scoutUnderAttack = false;
 		}
@@ -371,7 +371,7 @@ void ScoutManager::moveGroundScout(BWAPI::Unit scout)
 				{
 					_scoutStatus = "Harass enemy worker";
 					_currentRegionVertexIndex = -1;
-					Micro::CatchAndAttackUnit(scout, closestWorker);
+					Micro::CatchAndAttackUnit(_workerScout, closestWorker);
 				}
 				// otherwise keep circling the enemy region
 				else
@@ -396,7 +396,7 @@ void ScoutManager::moveGroundScout(BWAPI::Unit scout)
 }
 
 // Move the overlord scout.
-void ScoutManager::moveAirScout(BWAPI::Unit scout)
+void ScoutManager::moveAirScout()
 {
 	// get the enemy base location, if we have one
 	// Note: In case of an enemy proxy or weird map, this might be our own base. Roll with it.
@@ -804,7 +804,7 @@ void ScoutManager::calculateEnemyRegionVertices()
 
         std::vector<BWAPI::Position> temp;
 
-        for (size_t s(maxFarthestEnd); s != maxFarthestStart; s = (s+1) % sortedVertices.size())
+        for (int s(maxFarthestEnd); s != maxFarthestStart; s = (s+1) % sortedVertices.size())
         {
             temp.push_back(sortedVertices[s]);
         }

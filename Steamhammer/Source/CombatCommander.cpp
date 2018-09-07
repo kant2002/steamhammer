@@ -251,6 +251,7 @@ void CombatCommander::updateReconSquad()
 			if (unit->getType().isDetector())
 			{
 				reconSquad.removeUnit(unit);
+				break;
 			}
 		}
 		hasDetector = false;
@@ -460,6 +461,7 @@ void CombatCommander::updateAttackSquads()
 				if (unit->getType().isDetector())
 				{
 					groundSquad.removeUnit(unit);
+					break;
 				}
 			}
 			groundDetector = false;
@@ -471,6 +473,7 @@ void CombatCommander::updateAttackSquads()
 				if (unit->getType().isDetector())
 				{
 					flyingSquad.removeUnit(unit);
+					break;
 				}
 			}
 			flyingDetector = false;
@@ -525,7 +528,6 @@ void CombatCommander::updateAttackSquads()
 				if (flyingSquad.containsUnit(unit))
 				{
 					flyingSquad.removeUnit(unit);
-					UAB_ASSERT(_squadData.canAssignUnitToSquad(unit, groundSquad), "can't go to ground");
 				}
 				if (_squadData.canAssignUnitToSquad(unit, groundSquad))
 				{
@@ -713,11 +715,11 @@ void CombatCommander::updateScoutDefenseSquad()
 
 	if (assignScoutDefender)
 	{
-		// The enemy worker to catch.
-		BWAPI::Unit enemyWorker = *enemyUnitsInRegion.begin();
-
 		if (scoutDefenseSquad.isEmpty())
 		{
+			// The enemy worker to catch.
+			BWAPI::Unit enemyWorker = *enemyUnitsInRegion.begin();
+
 			BWAPI::Unit workerDefender = findClosestWorkerToTarget(_combatUnits, enemyWorker);
 
 			if (workerDefender)
@@ -743,7 +745,7 @@ void CombatCommander::updateBaseDefenseSquads()
     { 
         return; 
     }
-    
+     
     BWTA::BaseLocation * enemyBaseLocation = InformationManager::Instance().getEnemyMainBaseLocation();
     BWTA::Region * enemyRegion = nullptr;
     if (enemyBaseLocation)
@@ -766,15 +768,11 @@ void CombatCommander::updateBaseDefenseSquads()
 			continue;
 		}
 
-		// start off assuming all enemy units in region are just workers
-		const int numDefendersPerEnemyUnit = 2;
-
 		// all of the enemy units in this region
 		BWAPI::Unitset enemyUnitsInRegion;
         for (const auto unit : BWAPI::Broodwar->enemy()->getUnits())
         {
             // If it's a harmless air unit, don't worry about it for base defense.
-			// TODO something more sensible
             if (unit->getType() == BWAPI::UnitTypes::Zerg_Overlord ||
 				unit->getType() == BWAPI::UnitTypes::Protoss_Observer ||
 				unit->isLifted())  // floating terran building
@@ -789,8 +787,8 @@ void CombatCommander::updateBaseDefenseSquads()
         }
 
         // we ignore the first enemy worker in our region since we assume it is a scout
-		// This is because we can't catch it early. Should skip this check when we can. 
-		// TODO replace with something sensible
+		// This is because we can't catch it early. Should skip this check when we can.
+		// TODO drop this when we are able to catch it
         for (const auto unit : enemyUnitsInRegion)
         {
             if (unit->getType().isWorker())
@@ -813,7 +811,7 @@ void CombatCommander::updateBaseDefenseSquads()
 				_squadData.getSquad(squadName.str()).clear();
 			}
             
-            // and return, nothing to defend here
+            // Finished with this region, nothing to defend here.
             continue;
         }
         else 
@@ -834,7 +832,9 @@ void CombatCommander::updateBaseDefenseSquads()
 		UAB_ASSERT(_squadData.squadExists(squadName.str()), "Squad should exist: %s", squadName.str().c_str());
         Squad & defenseSquad = _squadData.getSquad(squadName.str());
 
-        // figure out how many units we need on defense
+		// A simpleminded way of figuring out how much defense we need.
+		const int numDefendersPerEnemyUnit = 2;
+
 	    int flyingDefendersNeeded = numDefendersPerEnemyUnit * numEnemyFlyingInRegion;
 	    int groundDefendersNeeded = numDefendersPerEnemyUnit * numEnemyGroundInRegion;
 
@@ -878,7 +878,7 @@ void CombatCommander::updateBaseDefenseSquads()
     }
 
     // for each of our defense squads, if there aren't any enemy units near the position, clear the squad
-	// TODO partially overlaps with "is enemy in region check" above
+	// TODO partially overlaps with "is enemy in region check" above, could cause oscillating behavior
 	for (const auto & kv : _squadData.getSquads())
 	{
 		const Squad & squad = kv.second;
@@ -925,6 +925,7 @@ void CombatCommander::updateDefenseSquadUnits(Squad & defenseSquad, const size_t
 			if (unit->getType().isDetector())
 			{
 				defenseSquad.removeUnit(unit);
+				break;
 			}
 		}
 		hasDetector = false;
@@ -954,7 +955,6 @@ void CombatCommander::updateDefenseSquadUnits(Squad & defenseSquad, const size_t
 	while (flyingDefendersNeeded > flyingDefendersInSquad + flyingDefendersAdded &&
 		(defenderToAdd = findClosestDefender(defenseSquad, defenseSquad.getSquadOrder().getPosition(), true, false, enemyHasAntiAir)))
 	{
-		UAB_ASSERT(!defenderToAdd->getType().isWorker(), "flying worker defender");
 		_squadData.assignUnitToSquad(defenderToAdd, defenseSquad);
 		++flyingDefendersAdded;
 	}

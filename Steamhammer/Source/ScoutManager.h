@@ -39,8 +39,8 @@ class ScoutManager
 	BWAPI::Unit						getTheEnemyGeyser() const;
 	BWAPI::Unit						enemyWorkerToHarass() const;
     void                            followPerimeter();
-	void                            moveGroundScout(BWAPI::Unit scout);
-	void                            moveAirScout(BWAPI::Unit scout);
+	void                            moveGroundScout();
+	void                            moveAirScout();
 	void                            drawScoutInformation(int x, int y);
     void                            calculateEnemyRegionVertices();
 

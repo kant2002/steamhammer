@@ -773,7 +773,7 @@ void BuildingManager::removeBuildings(const std::vector< std::reference_wrapper<
 {
     for (Building & b : toRemove)
     {
-		auto & it = std::find(_buildings.begin(), _buildings.end(), b);
+		auto it = std::find(_buildings.begin(), _buildings.end(), b);
 
 		if (it != _buildings.end())
 		{
