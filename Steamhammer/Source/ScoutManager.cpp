@@ -5,6 +5,7 @@
 #include "Micro.h"
 #include "OpponentModel.h"
 #include "ProductionManager.h"
+#include "The.h"
 
 // This class is responsible for early game scouting.
 // It controls any scouting worker and scouting overlord that it is given.
@@ -12,7 +13,8 @@
 using namespace UAlbertaBot;
 
 ScoutManager::ScoutManager() 
-	: _overlordScout(nullptr)
+	: the(The::Root())
+	, _overlordScout(nullptr)
     , _workerScout(nullptr)
 	, _scoutStatus("None")
 	, _gasStealStatus("None")
@@ -330,7 +332,7 @@ void ScoutManager::moveGroundScout()
 	{
 		// The target is valid exactly when we are still looking for the enemy base.
 		_scoutStatus = "Seeking enemy base";
-		Micro::Move(_workerScout, BWAPI::Position(_workerScoutTarget));
+		the.micro.Move(_workerScout, BWAPI::Position(_workerScoutTarget));
 	}
 	else
 	{
@@ -371,7 +373,7 @@ void ScoutManager::moveGroundScout()
 				{
 					_scoutStatus = "Harass enemy worker";
 					_currentRegionVertexIndex = -1;
-					Micro::CatchAndAttackUnit(_workerScout, closestWorker);
+					the.micro.CatchAndAttackUnit(_workerScout, closestWorker);
 				}
 				// otherwise keep circling the enemy region
 				else
@@ -412,7 +414,7 @@ void ScoutManager::moveAirScout()
 			{
 				_scoutStatus = "Overlord to enemy base";
 			}
-			Micro::Move(_overlordScout, enemyBaseLocation->getPosition());
+			the.micro.Move(_overlordScout, enemyBaseLocation->getPosition());
 			if (_overlordScout->getDistance(enemyBaseLocation->getPosition()) < 8)
 			{
 				_overlordAtEnemyBase = true;
@@ -437,7 +439,7 @@ void ScoutManager::moveAirScout()
 
 		if (_overlordScoutTarget.isValid())
 		{
-			Micro::Move(_overlordScout, BWAPI::Position(_overlordScoutTarget));
+			the.micro.Move(_overlordScout, BWAPI::Position(_overlordScoutTarget));
 		}
 	}
 }
@@ -464,7 +466,7 @@ void ScoutManager::followPerimeter()
 		}
 	}
 
-	Micro::Move(_workerScout, fleeTo);
+	the.micro.Move(_workerScout, fleeTo);
 }
 
 // Called only when a gas steal is requested.
@@ -514,14 +516,14 @@ bool ScoutManager::gasSteal()
 			_queuedGasSteal = true;
 			// Regardless, make sure we are moving toward the geyser.
 			// It makes life easier on the building manager.
-			Micro::Move(_workerScout, _enemyGeyser->getInitialPosition());
+			the.micro.Move(_workerScout, _enemyGeyser->getInitialPosition());
 		}
 		_gasStealStatus = "Stealing gas";
 	}
 	else
 	{
 		// We don't see the geyser yet. Move toward it.
-		Micro::Move(_workerScout, _enemyGeyser->getInitialPosition());
+		the.micro.Move(_workerScout, _enemyGeyser->getInitialPosition());
 		_gasStealStatus = "Moving to steal gas";
 	}
 	return true;

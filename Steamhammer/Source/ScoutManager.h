@@ -1,14 +1,15 @@
 #pragma once
 
-#include "Common.h"
+#include <BWAPI.h>
 #include "MacroCommand.h"
-#include "MicroManager.h"
-#include "InformationManager.h"
 
 namespace UAlbertaBot
 {
+class The;
+
 class ScoutManager 
 {
+	The &							the;
 	BWAPI::Unit						_overlordScout;
 	BWAPI::Unit						_workerScout;
     std::string                     _scoutStatus;
