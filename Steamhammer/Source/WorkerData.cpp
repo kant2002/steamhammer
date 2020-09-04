@@ -271,6 +271,19 @@ int WorkerData::getNumCombatWorkers() const
 	return num;
 }
 
+int WorkerData::getNumRepairWorkers() const
+{
+    size_t num = 0;
+    for (BWAPI::Unit unit : workers)
+    {
+        if (workerJobMap.at(unit) == WorkerData::Repair)
+        {
+            num++;
+        }
+    }
+    return num;
+}
+
 int WorkerData::getNumIdleWorkers() const
 {
 	size_t num = 0;

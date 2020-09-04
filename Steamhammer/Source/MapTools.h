@@ -50,6 +50,7 @@ public:
 	const std::vector<BWAPI::TilePosition> & getClosestTilesTo(BWAPI::Position pos);
 
 	void	drawHomeDistances();
+    void    drawExpoScores();
 
     Base *				nextExpansion(bool hidden, bool wantMinerals, bool wantGas) const;
     BWAPI::TilePosition	getNextExpansion(bool hidden, bool wantMinerals, bool wantGas) const;

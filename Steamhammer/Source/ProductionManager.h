@@ -67,6 +67,7 @@ public:
 	void	onUnitDestroy(BWAPI::Unit unit);
 	void	drawProductionInformation(int x, int y);
 	void	startExtractorTrick(BWAPI::UnitType type);
+    void    liftBuildings(BWAPI::UnitType type) const;
 
 	void	queueGasSteal();
 	bool	isGasStealInQueue() const;

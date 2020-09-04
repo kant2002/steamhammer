@@ -58,7 +58,8 @@ public:
     const GridDistances & getDistances() const { return distances; };
 	int getTileDistance(const BWAPI::Position & pos) const { return distances.at(pos); };
 	int getTileDistance(const BWAPI::TilePosition & pos) const { return distances.at(pos); };
-	int getDistance(const BWAPI::Position & pos) const { return 32 * getTileDistance(pos); };
+    int getDistance(const BWAPI::TilePosition & pos) const { return 32 * getTileDistance(pos); };
+    int getDistance(const BWAPI::Position & pos) const { return 32 * getTileDistance(pos); };
 
 	void setOwner(BWAPI::Unit depot, BWAPI::Player player);
 	void setInferredEnemyBase();

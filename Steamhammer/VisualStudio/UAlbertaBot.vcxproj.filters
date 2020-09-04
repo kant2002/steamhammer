@@ -171,11 +171,11 @@
     <ClCompile Include="..\Source\GridCreep.cpp" />
     <ClCompile Include="..\Source\ResourceInfo.cpp" />
     <ClCompile Include="..\Source\Skill.cpp" />
-    <ClCompile Include="..\Source\ScoutBoss.cpp" />
     <ClCompile Include="..\Source\SkillGasSteal.cpp" />
     <ClCompile Include="..\Source\SkillKit.cpp" />
     <ClCompile Include="..\Source\SkillUnitTimings.cpp" />
     <ClCompile Include="..\Source\GridBuildable.cpp" />
+    <ClCompile Include="..\Source\MacroCommand.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Source\CombatCommander.h">
@@ -315,7 +315,6 @@
     <ClInclude Include="..\Source\GridCreep.h" />
     <ClInclude Include="..\Source\ResourceInfo.h" />
     <ClInclude Include="..\Source\Skill.h" />
-    <ClInclude Include="..\Source\ScoutBoss.h" />
     <ClInclude Include="..\Source\SkillGasSteal.h" />
     <ClInclude Include="..\Source\SkillKit.h" />
     <ClInclude Include="..\Source\SkillUnitTimings.h" />

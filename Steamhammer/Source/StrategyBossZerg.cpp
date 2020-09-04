@@ -44,6 +44,7 @@ StrategyBossZerg::StrategyBossZerg()
     , _recommendEnsnare(0)
     , _recommendBroodling(0)
     , _recommendQueens(0)
+    , _recommendSunkens(false)
 {
 	resetTechScores();
 	setUnitMix(BWAPI::UnitTypes::Zerg_Drone, BWAPI::UnitTypes::None);
@@ -2096,8 +2097,53 @@ void StrategyBossZerg::checkGroundDefenses(BuildOrderQueue & queue)
 		_emergencyStartFrame = _lastUpdateFrame;
 	}
 
-	// _emergencyNow is updated independently from _emergencyGroundDefense.
+	// _emergencyNow is updated independently of _emergencyGroundDefense.
 	_emergencyNow = enemyPowerInOurFace > ourPower;
+}
+
+// Possibly add static defenses at various bases.
+bool StrategyBossZerg::buildStaticDefense()
+{
+    if (!_recommendSunkens)
+    {
+        return false;
+    }
+
+    if (nDrones <= 10 ||
+        the.my.all.count(BWAPI::UnitTypes::Zerg_Creep_Colony) > 0 ||
+        the.my.all.count(BWAPI::UnitTypes::Zerg_Sunken_Colony) > the.my.completed.count(BWAPI::UnitTypes::Zerg_Sunken_Colony) ||
+        isBeingBuilt(BWAPI::UnitTypes::Zerg_Creep_Colony))
+    {
+        return false;
+    }
+
+    const bool expectDrop =
+        the.your.seen.count(BWAPI::UnitTypes::Terran_Dropship) > 0 ||
+        the.your.seen.count(BWAPI::UnitTypes::Protoss_Shuttle) > 0;
+
+    for (Base * base : the.bases.getAll())
+    {
+        if (base->getOwner() == the.self() &&
+            base->getDepot() &&
+            base->getDepot()->isCompleted() &&
+            (expectDrop || !base->getNatural() || base->getNatural()->getOwner() != the.self()))
+        {
+            BWAPI::Unitset sunks = BWAPI::Broodwar->getUnitsInRadius(
+                base->getCenter(),
+                7 * 32,
+                BWAPI::Filter::GetType == BWAPI::UnitTypes::Zerg_Sunken_Colony && BWAPI::Filter::GetPlayer == the.self()
+            );
+            if (sunks.empty())
+            {
+                // Post directly to building manager so we can control the position.
+                MacroAct act(BWAPI::UnitTypes::Zerg_Creep_Colony);
+                BuildingManager::Instance().addBuildingTask(act, base->getTilePosition(), nullptr, false);
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 // If the enemy expanded or made static defense, we can spawn extra drones.
@@ -2327,6 +2373,10 @@ void StrategyBossZerg::recommendTech()
             (the.your.seen.count(BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode) +
             the.your.seen.count(BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode) + 1)
                 / 3;
+
+        _recommendSunkens =
+            the.your.ever.count(BWAPI::UnitTypes::Terran_Vulture) > 0 ||    // assume vultures will keep coming
+            the.your.seen.count(BWAPI::UnitTypes::Terran_Dropship) > 0;     // assume dropships may give up
     }
     else if (_enemyRace == BWAPI::Races::Protoss)
     {
@@ -2346,6 +2396,10 @@ void StrategyBossZerg::recommendTech()
                 ? 1 : 0;
         _recommendBroodling =
             (the.your.seen.count(BWAPI::UnitTypes::Protoss_High_Templar) + 1) / 3;
+
+        _recommendSunkens =
+            the.your.seen.count(BWAPI::UnitTypes::Protoss_Dark_Templar) > 0 ||
+            the.your.seen.count(BWAPI::UnitTypes::Protoss_Shuttle) > 0 && the.your.seen.count(BWAPI::UnitTypes::Protoss_Reaver) > 0;
     }
     else
     {
@@ -2361,8 +2415,11 @@ void StrategyBossZerg::recommendTech()
             the.your.seen.count(BWAPI::UnitTypes::Zerg_Lurker) / 6 +
             the.your.seen.count(BWAPI::UnitTypes::Zerg_Defiler) / 2 +
             the.your.seen.count(BWAPI::UnitTypes::Zerg_Ultralisk) / 2;
+
+        _recommendSunkens = false;
     }
 
+    // Queen counts.
     // Don't recommend high numbers unless we've already started the research.
     if (!_self->hasResearched(BWAPI::TechTypes::Ensnare) && !_self->isResearching(BWAPI::TechTypes::Ensnare))
     {
@@ -2381,7 +2438,7 @@ void StrategyBossZerg::recommendTech()
 
 void StrategyBossZerg::vProtossTechScores(const PlayerSnapshot & snap)
 {
-	_wantAirArmor = snap.count(BWAPI::UnitTypes::Protoss_Corsair) >= 5;
+	_wantAirArmor = snap.count(BWAPI::UnitTypes::Protoss_Corsair) >= 4;
 
 	// Bias.
 	techScores[int(TechUnit::Hydralisks)] =  11;
@@ -2522,7 +2579,7 @@ void StrategyBossZerg::vProtossTechScores(const PlayerSnapshot & snap)
 // Decide what units counter the terran unit mix.
 void StrategyBossZerg::vTerranTechScores(const PlayerSnapshot & snap)
 {
-	_wantAirArmor = snap.count(BWAPI::UnitTypes::Terran_Valkyrie) >= 4;
+	_wantAirArmor = snap.count(BWAPI::UnitTypes::Terran_Valkyrie) >= 3;
     
     // Bias.
 	techScores[int(TechUnit::Mutalisks)]  =  11;   // default lair tech
@@ -3580,6 +3637,7 @@ void StrategyBossZerg::produceOtherStuff(int & mineralsLeft, int & gasLeft, bool
             nGas >= 3 && (nDrones >= 60 || nDrones >= 30 && nQueens >= 4) &&
             !_emergencyGroundDefense && !_emergencyNow && enoughArmy())
         {
+            // NOTE We only get here if ensnare or broodling is already researched.
             produce(BWAPI::UpgradeTypes::Gamete_Meiosis);
             mineralsLeft -= 150;
             gasLeft -= 150;
@@ -4183,18 +4241,6 @@ BuildOrder & StrategyBossZerg::freshProductionPlan()
 
 	updateGameState();
 
-	// Special adaptations to specific opponent plans.
-	if (adaptToEnemyOpeningPlan())
-	{
-		return _latestBuildOrder;
-	}
-
-	// We always want at least 9 drones and a spawning pool.
-	if (rebuildCriticalLosses())
-	{
-		return _latestBuildOrder;
-	}
-
 	// If we have enough idle drones, might as well put them to work gathering gas.
 	if (!WorkerManager::Instance().isCollectingGas() &&
 		WorkerManager::Instance().getNumIdleWorkers() >= 3 * nGas)
@@ -4202,7 +4248,25 @@ BuildOrder & StrategyBossZerg::freshProductionPlan()
 		produce(MacroCommandType::StartGas);
 	}
 
-	// Set the tech target and unit mix.
+    // Special adaptations to specific opponent plans.
+    if (adaptToEnemyOpeningPlan())
+    {
+        return _latestBuildOrder;
+    }
+
+    // We always want at least 9 drones and a spawning pool.
+    if (rebuildCriticalLosses())
+    {
+        return _latestBuildOrder;
+    }
+
+    // Possibly add ststic defense at many or all bases.
+    if (buildStaticDefense())
+    {
+        return _latestBuildOrder;
+    }
+    
+    // Set the tech target and unit mix.
 	chooseStrategy();
 
 	// If we're making gas units, short on gas, and not gathering gas, fix that first.

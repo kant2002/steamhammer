@@ -36,7 +36,9 @@ class MacroAct
 
 	MacroLocation		_macroLocation;
 
-	MacroLocation		getMacroLocationFromString(const std::string & s);
+    void                initializeUnitTypesByName();
+	MacroLocation		getMacroLocationFromString(const std::string & s) const;
+    BWAPI::UnitType     getUnitTypeFromString(const std::string & s) const;
 
 public:
 
@@ -48,6 +50,7 @@ public:
 	MacroAct(BWAPI::UpgradeType t);
 	MacroAct(MacroCommandType t);
 	MacroAct(MacroCommandType t, int amount);
+    MacroAct(MacroCommandType t, BWAPI::UnitType type);
 
 	bool    isUnit()			const;
 	bool	isWorker()			const;

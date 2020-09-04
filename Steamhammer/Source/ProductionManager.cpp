@@ -249,8 +249,8 @@ void ProductionManager::manageBuildOrderQueue()
         // if (currentItem.macroAct.isAddon() || currentItem.macroAct.isUpgrade() || currentItem.macroAct.isTech())
         if (currentItem.macroAct.isAddon())
 		{
-			_goals.push_front(ProductionGoal(currentItem.macroAct));
-			_queue.doneWithHighestPriorityItem();
+            _goals.push_front(ProductionGoal(currentItem.macroAct));
+            _queue.doneWithHighestPriorityItem();
             _lastProductionFrame = the.now();
             continue;
 		}
@@ -847,6 +847,10 @@ void ProductionManager::executeCommand(const MacroAct & act)
 	{
 		StrategyBossZerg::Instance().setNonadaptive(true);
 	}
+    else if (cmd == MacroCommandType::Lift)
+    {
+        liftBuildings(act.getCommandType().getUnitType());
+    }
 	else if (cmd == MacroCommandType::QueueBarrier)
 	{
 		// It does nothing! Every command is a queue barrier.
@@ -1101,6 +1105,17 @@ void ProductionManager::doExtractorTrick()
 	{
 		UAB_ASSERT(false, "unexpected extractor trick state (possibly None)");
 	}
+}
+
+void ProductionManager::liftBuildings(BWAPI::UnitType type) const
+{
+    for (BWAPI::Unit u : the.self()->getUnits())
+    {
+        if (u->getType() == type && u->canLift())
+        {
+            (void)the.micro.Lift(u);
+        }
+    }
 }
 
 void ProductionManager::queueGasSteal()

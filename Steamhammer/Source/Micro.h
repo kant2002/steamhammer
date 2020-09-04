@@ -90,6 +90,7 @@ public:
 	bool Build(BWAPI::Unit builder, BWAPI::UnitType building, const BWAPI::TilePosition & location);
 	bool Make(BWAPI::Unit producer, BWAPI::UnitType type);
 	bool Cancel(BWAPI::Unit unit);
+    bool Lift(BWAPI::Unit terranBuilding);
 
 	bool Burrow(BWAPI::Unit unit);
 	bool Unburrow(BWAPI::Unit unit);

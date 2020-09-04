@@ -118,6 +118,7 @@ void GameCommander::drawDebugInterface()
     drawUnitCounts(345, 30);
     Bases::Instance().drawBaseInfo();
 	Bases::Instance().drawBaseOwnership(575, 30);
+    the.map.drawExpoScores();
     InformationManager::Instance().drawResourceAmounts();
     BuildingManager::Instance().drawBuildingInformation(200, 50);
 	the.placer.drawReservedTiles();

@@ -90,6 +90,7 @@ namespace Config
 		extern bool DrawMapDistances;
         extern bool DrawTerrainHeights;
 		extern bool DrawBaseInfo;
+        extern bool DrawExpoScores;
 		extern bool DrawStrategyBossInfo;
 		extern bool DrawSquadInfo;
 		extern bool DrawClusters;

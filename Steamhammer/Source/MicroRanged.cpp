@@ -158,7 +158,7 @@ BWAPI::Unit MicroRanged::getTarget(BWAPI::Unit rangedUnit, const BWAPI::Unitset 
     int bestScore = INT_MIN;
 	BWAPI::Unit bestTarget = nullptr;
 
-	for (const auto target : targets)
+	for (BWAPI::Unit target : targets)
 	{
 		// Skip targets under dark swarm that we can't hit.
 		if (target->isUnderDarkSwarm() && !target->getType().isBuilding() && !goodUnderDarkSwarm(rangedUnit->getType()))
@@ -276,18 +276,18 @@ BWAPI::Unit MicroRanged::getTarget(BWAPI::Unit rangedUnit, const BWAPI::Unitset 
 		{
 			if (target->getType().size() == BWAPI::UnitSizeTypes::Large)
 			{
-				score += 32;
+				score += 48;
 			}
 		}
 		else if (damage == BWAPI::DamageTypes::Concussive)
 		{
 			if (target->getType().size() == BWAPI::UnitSizeTypes::Small)
 			{
-				score += 32;
+				score += 48;
 			}
 			else if (target->getType().size() == BWAPI::UnitSizeTypes::Large)
 			{
-				score -= 32;
+				score -= 48;
 			}
 		}
 
@@ -389,14 +389,6 @@ int MicroRanged::getAttackPriority(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 		}
 	}
 
-	// Failing, that, give higher priority to air units hitting tanks.
-	// Not quite as high a priority as hitting reavers or high templar, though.
-	if (rangedType.isFlyer() &&
-		(targetType == BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode || targetType == BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode))
-	{
-		return 10;
-	}
-
 	if (targetType == BWAPI::UnitTypes::Protoss_High_Templar ||
 		targetType == BWAPI::UnitTypes::Zerg_Defiler)
 	{
@@ -404,7 +396,9 @@ int MicroRanged::getAttackPriority(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 	}
 
 	if (targetType == BWAPI::UnitTypes::Protoss_Reaver ||
-		targetType == BWAPI::UnitTypes::Protoss_Arbiter)
+		targetType == BWAPI::UnitTypes::Protoss_Arbiter ||
+        targetType == BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode ||
+        targetType == BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode)
 	{
 		return 11;
 	}
@@ -467,10 +461,9 @@ int MicroRanged::getAttackPriority(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 
   		return 9;
 	}
-	// Important combat units that we may not have targeted above (esp. if we're a flyer).
-	if (targetType == BWAPI::UnitTypes::Protoss_Carrier ||
-		targetType == BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode ||
-		targetType == BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode)
+
+	// Important combat units that we may not have targeted above.
+	if (targetType == BWAPI::UnitTypes::Protoss_Carrier)
 	{
 		return 8;
 	}

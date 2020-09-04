@@ -124,7 +124,8 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
 		JSONTools::ReadBool("DrawMapDistances", debug, Config::Debug::DrawMapDistances);
         JSONTools::ReadBool("DrawTerrainHeights", debug, Config::Debug::DrawTerrainHeights);
         JSONTools::ReadBool("DrawBaseInfo", debug, Config::Debug::DrawBaseInfo);
-		JSONTools::ReadBool("DrawStrategyBossInfo", debug, Config::Debug::DrawStrategyBossInfo);
+        JSONTools::ReadBool("DrawExpoScores", debug, Config::Debug::DrawExpoScores);
+        JSONTools::ReadBool("DrawStrategyBossInfo", debug, Config::Debug::DrawStrategyBossInfo);
 		JSONTools::ReadBool("DrawUnitTargets", debug, Config::Debug::DrawUnitTargets);
 		JSONTools::ReadBool("DrawUnitOrders", debug, Config::Debug::DrawUnitOrders);
 		JSONTools::ReadBool("DrawMicroState", debug, Config::Debug::DrawMicroState);
@@ -467,7 +468,8 @@ void ParseUtils::ParseTextCommand(const std::string & commandString)
 		else if (variableName == "drawmapdistances") { Config::Debug::DrawMapDistances = GetBoolFromString(val); }
         else if (variableName == "drawterrainheights") { Config::Debug::DrawTerrainHeights = GetBoolFromString(val); }
         else if (variableName == "drawbaseinfo") { Config::Debug::DrawBaseInfo = GetBoolFromString(val); }
-		else if (variableName == "drawstrategybossinfo") { Config::Debug::DrawStrategyBossInfo = GetBoolFromString(val); }
+        else if (variableName == "drawexposcores") { Config::Debug::DrawExpoScores = GetBoolFromString(val); }
+        else if (variableName == "drawstrategybossinfo") { Config::Debug::DrawStrategyBossInfo = GetBoolFromString(val); }
 		else if (variableName == "drawsquadinfo") { Config::Debug::DrawSquadInfo = GetBoolFromString(val); }
 		else if (variableName == "drawclusters") { Config::Debug::DrawClusters = GetBoolFromString(val); }
 		else if (variableName == "drawworkerinfo") { Config::Debug::DrawWorkerInfo = GetBoolFromString(val); }

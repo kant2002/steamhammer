@@ -12,7 +12,7 @@ namespace Config
     {
         bool ConfigFileFound                = false;
         bool ConfigFileParsed               = false;
-        std::string ConfigFileLocation      = "bwapi-data/AI/Steamhammer_3.0.2.json";
+        std::string ConfigFileLocation      = "bwapi-data/AI/Steamhammer_3.1.json";
     }
 
 	namespace IO
@@ -96,6 +96,7 @@ namespace Config
 		bool DrawMapDistances				= false;
         bool DrawTerrainHeights             = false;
 		bool DrawBaseInfo					= false;
+		bool DrawExpoScores					= false;
 		bool DrawStrategyBossInfo			= false;
 		bool DrawUnitTargets				= false;
 		bool DrawUnitOrders					= false;

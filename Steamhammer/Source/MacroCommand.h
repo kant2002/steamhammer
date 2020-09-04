@@ -26,7 +26,7 @@ enum class MacroCommandType
     , PostWorker
     , UnpostWorkers
     , Nonadaptive
-    , Attack
+    , Lift
 	, QueueBarrier
 	};
 
@@ -34,180 +34,25 @@ class MacroCommand
 {
 	MacroCommandType	_type;
     int                 _amount;
+    BWAPI::UnitType     _unitType;
 
 public:
 
-	static const std::list<MacroCommandType> allCommandTypes()
-	{
-		return std::list<MacroCommandType>
-			{ MacroCommandType::Scout
-			, MacroCommandType::ScoutIfNeeded
-			, MacroCommandType::ScoutLocation
-			, MacroCommandType::ScoutOnceOnly
-			, MacroCommandType::ScoutWhileSafe
-			, MacroCommandType::StartGas
-			, MacroCommandType::StopGas
-			, MacroCommandType::GasUntil
-			, MacroCommandType::StealGas
-			, MacroCommandType::ExtractorTrickDrone
-			, MacroCommandType::ExtractorTrickZergling
-			, MacroCommandType::Aggressive
-			, MacroCommandType::Defensive
-			, MacroCommandType::PullWorkers
-			, MacroCommandType::PullWorkersLeaving
-			, MacroCommandType::ReleaseWorkers
-            , MacroCommandType::PostWorker
-            , MacroCommandType::UnpostWorkers
-            , MacroCommandType::Nonadaptive
-            , MacroCommandType::Attack
-			, MacroCommandType::QueueBarrier
-		};
-	}
+    MacroCommand();
+    MacroCommand(MacroCommandType type);
+    MacroCommand(MacroCommandType type, int amount);
+    MacroCommand(MacroCommandType type, BWAPI::UnitType unitType);
 
-	// Default constructor for when the value doesn't matter.
-	MacroCommand()
-		: _type(MacroCommandType::None)
-		, _amount(0)
-	{
-	}
+    static const std::list<MacroCommandType> allCommandTypes();
+    static bool hasNumericArgument(MacroCommandType t);
+    static bool hasUnitArgument(MacroCommandType t);
+    static const std::string getName(MacroCommandType t);
 
-	MacroCommand(MacroCommandType type)
-		: _type(type)
-        , _amount(0)
-	{
-		UAB_ASSERT(!hasArgument(type), "missing MacroCommand argument");
-	}
+    MacroCommandType getType() const { return _type; }
+    int getAmount() const { return _amount; }
+    BWAPI::UnitType getUnitType() const { return _unitType; }
 
-	MacroCommand(MacroCommandType type, int amount)
-		: _type(type)
-		, _amount(amount)
-	{
-		UAB_ASSERT(hasArgument(type), "extra MacroCommand argument");
-	}
-
-    const int getAmount() const
-    {
-        return _amount;
-    }
-
-	const MacroCommandType & getType() const
-    {
-        return _type;
-    }
-
-	// The command has a numeric argument, the _amount.
-	static const bool hasArgument(MacroCommandType t)
-	{
-		return
-			t == MacroCommandType::GasUntil ||
-			t == MacroCommandType::PullWorkers || 
-			t == MacroCommandType::PullWorkersLeaving;
-	}
-
-	static const std::string getName(MacroCommandType t)
-	{
-		if (t == MacroCommandType::Scout)
-		{
-			return "go scout";
-		}
-		if (t == MacroCommandType::ScoutIfNeeded)
-		{
-			return "go scout if needed";
-		}
-		if (t == MacroCommandType::ScoutLocation)
-		{
-			return "go scout location";
-		}
-		if (t == MacroCommandType::ScoutOnceOnly)
-		{
-			return "go scout once around";
-		}
-		if (t == MacroCommandType::ScoutWhileSafe)
-		{
-			return "go scout while safe";
-		}
-		if (t == MacroCommandType::StartGas)
-		{
-			return "go start gas";
-		}
-		if (t == MacroCommandType::StopGas)
-		{
-			return "go stop gas";
-		}
-		if (t == MacroCommandType::GasUntil)
-		{
-			return "go gas until";
-		}
-		if (t == MacroCommandType::StealGas)
-		{
-			return "go steal gas";
-		}
-		if (t == MacroCommandType::ExtractorTrickDrone)
-		{
-			return "go extractor trick drone";
-		}
-		if (t == MacroCommandType::ExtractorTrickZergling)
-		{
-			return "go extractor trick zergling";
-		}
-		if (t == MacroCommandType::Aggressive)
-		{
-			return "go aggressive";
-		}
-		if (t == MacroCommandType::Defensive)
-		{
-			return "go defensive";
-		}
-		if (t == MacroCommandType::PullWorkers)
-		{
-			return "go pull workers";
-		}
-		if (t == MacroCommandType::PullWorkersLeaving)
-		{
-			return "go pull workers leaving";
-		}
-		if (t == MacroCommandType::ReleaseWorkers)
-		{
-			return "go release workers";
-		}
-        if (t == MacroCommandType::PostWorker)
-        {
-            return "go post worker";
-        }
-        if (t == MacroCommandType::UnpostWorkers)
-        {
-            return "go unpost workers";
-        }
-        if (t == MacroCommandType::Nonadaptive)
-		{
-			return "go nonadaptive";
-		}
-        if (t == MacroCommandType::Attack)
-		{
-			return "go attack";
-		}
-        if (t == MacroCommandType::QueueBarrier)
-        {
-            return "go queue barrier";
-        }
-
-		UAB_ASSERT(t == MacroCommandType::None, "unrecognized MacroCommandType");
-		return "go none";
-	}
-
-	const std::string getName() const
-	{
-		if (hasArgument(_type))
-		{
-			std::stringstream name;
-			name << getName(_type) << " " << _amount;
-			return name.str();
-		}
-		else
-		{
-			return getName(_type);
-		}
-	}
+    const std::string getName() const;
 
 };
-}
+};

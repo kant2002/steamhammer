@@ -215,6 +215,15 @@ void MapTools::drawHomeDistances()
     BWAPI::Broodwar->drawBoxMap(homePosition.x, homePosition.y, homePosition.x + 33, homePosition.y + 33, BWAPI::Colors::Yellow);
 }
 
+// Make the assumption that we are looking for a mineral-only base.
+void MapTools::drawExpoScores()
+{
+    if (Config::Debug::DrawExpoScores)
+    {
+        (void)nextExpansion(false, true, false);
+    }
+}
+
 Base * MapTools::nextExpansion(bool hidden, bool wantMinerals, bool wantGas) const
 {
 	UAB_ASSERT(wantMinerals || wantGas, "unwanted expansion");
@@ -222,6 +231,7 @@ Base * MapTools::nextExpansion(bool hidden, bool wantMinerals, bool wantGas) con
 	// Abbreviations.
 	BWAPI::Player player = BWAPI::Broodwar->self();
 	BWAPI::Player enemy = BWAPI::Broodwar->enemy();
+    BWAPI::Position offset(-32, -8);
 
 	// We'll go through the bases and pick the one with the best score.
 	Base * bestBase = nullptr;
@@ -235,13 +245,21 @@ Base * MapTools::nextExpansion(bool hidden, bool wantMinerals, bool wantGas) con
 		// Don't expand to an existing base, or a reserved base.
 		if (base->getOwner() != BWAPI::Broodwar->neutral() || base->isReserved())
 		{
+            if (Config::Debug::DrawExpoScores)
+            {
+                BWAPI::Broodwar->drawTextMap(base->getCenter()+offset, "%ctaken", red);
+            }
 			continue;
 		}
 
 		// Do we demand a gas base?
 		if (wantGas && base->getInitialGas() == 0)
 		{
-			continue;
+            if (Config::Debug::DrawExpoScores)
+            {
+                BWAPI::Broodwar->drawTextMap(base->getCenter()+offset+offset, "%cno gas", red);
+            }
+            continue;
 		}
 
         const int estimatedMinerals = base->getLastKnownMinerals();
@@ -250,7 +268,11 @@ Base * MapTools::nextExpansion(bool hidden, bool wantMinerals, bool wantGas) con
 		// The constant is an arbitrary limit "enough minerals to be worth it".
         if (wantMinerals && estimatedMinerals < 500)
 		{
-			continue;
+            if (Config::Debug::DrawExpoScores)
+            {
+                BWAPI::Broodwar->drawTextMap(base->getCenter()+offset, "%cno minerals", red);
+            }
+            continue;
 		}
 
         BWAPI::TilePosition topLeft = base->getTilePosition();
@@ -259,6 +281,10 @@ Base * MapTools::nextExpansion(bool hidden, bool wantMinerals, bool wantGas) con
         // No good if the building location is known to be in range of enemy static defense.
         if (the.groundAttacks.inRange(player->getRace().getCenter(), topLeft))
         {
+            if (Config::Debug::DrawExpoScores)
+            {
+                BWAPI::Broodwar->drawTextMap(base->getCenter()+offset, "%cendangered", red);
+            }
             continue;
         }
 
@@ -278,6 +304,10 @@ Base * MapTools::nextExpansion(bool hidden, bool wantMinerals, bool wantGas) con
                         lastTilePos.y >= topLeft.y &&
                         lastTilePos.y < bottomRight.y)
                     {
+                        if (Config::Debug::DrawExpoScores)
+                        {
+                            BWAPI::Broodwar->drawTextMap(base->getCenter()+offset, "%cblocked (known)", red);
+                        }
                         buildingInTheWay = true;
                         goto buildingLoopExit;
                     }
@@ -292,7 +322,11 @@ Base * MapTools::nextExpansion(bool hidden, bool wantMinerals, bool wantGas) con
             {
                 if (the.placer.isReserved(topLeft.x + x, topLeft.y + y))
 				{
-					// This happens if we were already planning to expand here. Try somewhere else.
+                    if (Config::Debug::DrawExpoScores)
+                    {
+                        BWAPI::Broodwar->drawTextMap(base->getCenter()+offset, "%creserved tiles", yellow);
+                    }
+                    // This happens if we were already planning to expand here. Try somewhere else.
 					buildingInTheWay = true;
                     goto buildingLoopExit;
 				}
@@ -306,6 +340,10 @@ Base * MapTools::nextExpansion(bool hidden, bool wantMinerals, bool wantGas) con
                         // TODO This is waiting until the code to lift is written.
                         // !(unit->getPlayer() == BWAPI::Broodwar->self() && unit->canLift()))
                     {
+                        if (Config::Debug::DrawExpoScores)
+                        {
+                            BWAPI::Broodwar->drawTextMap(base->getCenter()+offset, "%cblocked (tile)a", red);
+                        }
                         buildingInTheWay = true;
                         goto buildingLoopExit;
                     }
@@ -330,7 +368,8 @@ buildingLoopExit:
 		// as a backup.
 
 		// Want to be close to our own base (unless this is to be a hidden base).
-        int distanceFromUs = the.bases.myStart()->getTileDistance(topLeft);
+        // Pixel distance.
+        int distanceFromUs = the.bases.myStart()->getDistance(topLeft);
 
         // If it is not connected by ground, skip this potential base.
 		if (distanceFromUs < 0)
@@ -348,46 +387,58 @@ buildingLoopExit:
 
 		// Want to be far from the enemy base.
         Base * enemyBase = the.bases.enemyStart();  // may be null or no longer enemy-owned
-        double distanceFromEnemy = 0.0;
+        // Pixel distance.
+        int distanceFromEnemy = 0;
 		if (enemyBase) {
-			BWAPI::TilePosition enemyTile = enemyBase->getTilePosition();
-            distanceFromEnemy = enemyBase->getTileDistance(topLeft);
+            distanceFromEnemy = enemyBase->getDistance(topLeft);
 			if (distanceFromEnemy < 0)
 			{
 				// No ground distance found, so again substitute air distance.
+                BWAPI::TilePosition enemyTile = enemyBase->getTilePosition();
                 if (the.partitions.id(topLeft) == the.partitions.id(enemyTile))
 				{
-                    distanceFromEnemy = enemyTile.getDistance(topLeft);
+                    distanceFromEnemy = enemyTile.getApproxDistance(topLeft);
 				}
 				else
 				{
-					distanceFromEnemy = 0.0;
+					distanceFromEnemy = 0;
 				}
 			}
 		}
 
 		// Add up the score.
-		score = hidden ? (distanceFromEnemy + distanceFromUs / 2.0) : (distanceFromEnemy / 2.0 - distanceFromUs);
+		score = hidden ? (distanceFromEnemy + distanceFromUs / 2) : (distanceFromEnemy / 2 - distanceFromUs);
 
 		// Far from the edge of the map -> worse.
 		// It's a proxy for "how wide open is this base?" Usually a base on the edge is
 		// relatively sheltered and a base in the middle is more open (though not always).
         int edgeXdist = std::min(topLeft.x, BWAPI::Broodwar->mapWidth() - topLeft.x);
         int edgeYdist = std::min(topLeft.y, BWAPI::Broodwar->mapHeight() - topLeft.y);
-		int edgeDistance = std::min(edgeXdist, edgeYdist);
-		score += -3.0 * edgeDistance;
+		int edgeDistance = std::min(edgeXdist, edgeYdist);  // tile distance
+        edgeDistance = std::max(0, edgeDistance - 12);      // within this distance is always OK
+        if (edgeDistance > std::min(BWAPI::Broodwar->mapWidth(), BWAPI::Broodwar->mapHeight()) / 3)
+        {
+            // If we're very far from the edge, it's worse.
+            edgeDistance *= 4;
+        }
+		score -= 12.0 * edgeDistance;
 
 		// More resources -> better.
         // NOTE The number of mineral patchers/geysers controls how fast we can mine.
         //      The resource amount controls how long we can keep mining.
 		if (wantMinerals)
 		{
-            score += 10.0 * base->getMinerals().size() + 0.01 * estimatedMinerals;
+            score += 5.0 * base->getMinerals().size() + 0.005 * estimatedMinerals;
 		}
 		if (wantGas)
 		{
-            score += 50.0 * base->getGeysers().size() + 0.025 * base->getLastKnownGas();
+            score += 20.0 * base->getGeysers().size() + 0.01 * base->getLastKnownGas();
 		}
+        else
+        {
+            // We didn't ask for gas, but it may be useful anyway.
+            score += 5.0 * base->getGeysers().size() + 0.0025 * base->getLastKnownGas();
+        }
 
 		/* TODO on a flat map, all mains may be in the same zone
 		// Big penalty for enemy buildings in the same region.
@@ -398,6 +449,10 @@ buildingLoopExit:
 		*/
 
 		// BWAPI::Broodwar->printf("base score %d, %d -> %f",  tile.x, tile.y, score);
+        if (Config::Debug::DrawExpoScores)
+        {
+            BWAPI::Broodwar->drawTextMap(base->getCenter()+offset, "%c%g", green, score);
+        }
 
 		if (score > bestScore)
         {

@@ -439,7 +439,8 @@ goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Terran_Infantry_Wea
 			// The rush is over, transition out on the next call.
 			_openingGroup = "tanks";
 		}
-	}
+        ProductionManager::Instance().liftBuildings(BWAPI::UnitTypes::Terran_Barracks);
+    }
 	else if (_openingGroup == "tanks")
 	{
 		goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Vulture, numVultures + 4));
@@ -462,6 +463,11 @@ goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Terran_Infantry_Wea
 		{
 			makeVessel = true;
 		}
+        ProductionManager::Instance().liftBuildings(BWAPI::UnitTypes::Terran_Barracks);
+        if (hasEBay)
+        {
+            ProductionManager::Instance().liftBuildings(BWAPI::UnitTypes::Terran_Engineering_Bay);
+        }
 	}
 	else if (_openingGroup == "drop")
 	{

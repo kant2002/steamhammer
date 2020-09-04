@@ -9,7 +9,10 @@
 
 using namespace UAlbertaBot;
 
-MacroLocation MacroAct::getMacroLocationFromString(const std::string & s)
+// Map unit type names to unit types.
+static std::map<std::string, BWAPI::UnitType> _unitTypesByName;
+
+MacroLocation MacroAct::getMacroLocationFromString(const std::string & s) const
 {
 	if (s == "main")
 	{
@@ -65,6 +68,30 @@ MacroLocation MacroAct::getMacroLocationFromString(const std::string & s)
 	return MacroLocation::Anywhere;
 }
 
+void MacroAct::initializeUnitTypesByName()
+{
+    if (_unitTypesByName.size() == 0)       // if not already initialized
+    {
+        for (BWAPI::UnitType unitType : BWAPI::UnitTypes::allUnitTypes())
+        {
+            std::string typeName = TrimRaceName(unitType.getName());
+            std::replace(typeName.begin(), typeName.end(), '_', ' ');
+            std::transform(typeName.begin(), typeName.end(), typeName.begin(), ::tolower);
+            _unitTypesByName[typeName] = unitType;
+        }
+    }
+}
+
+BWAPI::UnitType MacroAct::getUnitTypeFromString(const std::string & s) const
+{
+    auto it = _unitTypesByName.find(s);
+    if (it != _unitTypesByName.end())
+    {
+        return (*it).second;
+    }
+    return BWAPI::UnitTypes::Unknown;
+}
+
 MacroAct::MacroAct () 
 	: _type(MacroActs::Default)
 	, _macroLocation(MacroLocation::Anywhere)
@@ -77,9 +104,24 @@ MacroAct::MacroAct(const std::string & name)
 	: _type(MacroActs::Default)
 	, _macroLocation(MacroLocation::Anywhere)
 {
+    initializeUnitTypesByName();
+
+    // Normalize the input string.
     std::string inputName(name);
     std::replace(inputName.begin(), inputName.end(), '_', ' ');
 	std::transform(inputName.begin(), inputName.end(), inputName.begin(), ::tolower);
+    if (inputName.substr(0, 7) == "terran ")
+    {
+        inputName = inputName.substr(7, std::string::npos);
+    }
+    else if (inputName.substr(0, 8) == "protoss ")
+    {
+        inputName = inputName.substr(8, std::string::npos);
+    }
+    else if (inputName.substr(0, 5) == "zerg ")
+    {
+        inputName = inputName.substr(5, std::string::npos);
+    }
 
     // You can specify a location, like "hatchery @ expo" or "go post worker @ enemy natural".
     MacroLocation specifiedMacroLocation(MacroLocation::Anywhere);    // the default
@@ -98,20 +140,38 @@ MacroAct::MacroAct(const std::string & name)
 		for (MacroCommandType t : MacroCommand::allCommandTypes())
 		{
 			std::string commandName = MacroCommand::getName(t);
-			if (MacroCommand::hasArgument(t))
+			if (MacroCommand::hasNumericArgument(t))
 			{
 				// There's an argument. Match the command name and parse out the argument.
 				std::regex commandWithArgRegex(commandName + " (\\d+)");
 				std::smatch m;
-				if (std::regex_match(inputName, m, commandWithArgRegex)) {
+				if (std::regex_match(inputName, m, commandWithArgRegex))
+                {
 					int amount = GetIntFromString(m[1].str());
-					if (amount >= 0) {
+					if (amount >= 0)
+                    {
 						*this = MacroAct(t, amount);
                         _macroLocation = specifiedMacroLocation;
                         return;
 					}
 				}
 			}
+            else if (MacroCommand::hasUnitArgument(t))
+            {
+                // There's an argument. Match the command name and parse out the argument.
+                std::regex commandWithArgRegex(commandName + " ([A-Za-z_ ]+)");
+                std::smatch m;
+                if (std::regex_match(inputName, m, commandWithArgRegex))
+                {
+                    BWAPI::UnitType unitType = getUnitTypeFromString(m[1].str());
+                    if (unitType != BWAPI::UnitTypes::Unknown && unitType != BWAPI::UnitTypes::None)
+                    {
+                        *this = MacroAct(t, unitType);
+                        _macroLocation = specifiedMacroLocation;
+                        return;
+                    }
+                }
+            }
 			else
 			{
 				// No argument. Just compare for equality.
@@ -125,28 +185,12 @@ MacroAct::MacroAct(const std::string & name)
 		}
 	}
 
-    for (BWAPI::UnitType unitType : BWAPI::UnitTypes::allUnitTypes())
+    BWAPI::UnitType unitType = getUnitTypeFromString(inputName);
+    if (unitType != BWAPI::UnitTypes::Unknown && unitType != BWAPI::UnitTypes::None)
     {
-        // Check whether the names match exactly.
-        std::string typeName = unitType.getName();
-        std::replace(typeName.begin(), typeName.end(), '_', ' ');
-		std::transform(typeName.begin(), typeName.end(), typeName.begin(), ::tolower);
-		if (typeName == inputName)
-        {
-            *this = MacroAct(unitType);
-			_macroLocation = specifiedMacroLocation;
-            return;
-        }
-
-        // Check whether the names match without the race prefix.
-        std::string raceName = unitType.getRace().getName();
-		std::transform(raceName.begin(), raceName.end(), raceName.begin(), ::tolower);
-		if ((typeName.length() > raceName.length()) && (typeName.compare(raceName.length() + 1, typeName.length(), inputName) == 0))
-        {
-            *this = MacroAct(unitType);
-			_macroLocation = specifiedMacroLocation;
-			return;
-        }
+        *this = MacroAct(unitType);
+        _macroLocation = specifiedMacroLocation;
+        return;
     }
 
     for (BWAPI::TechType techType : BWAPI::TechTypes::allTechTypes())
@@ -164,7 +208,7 @@ MacroAct::MacroAct(const std::string & name)
 
     for (BWAPI::UpgradeType upgradeType : BWAPI::UpgradeTypes::allUpgradeTypes())
     {
-        std::string typeName = upgradeType.getName();
+        std::string typeName = TrimRaceName(upgradeType.getName());
         std::replace(typeName.begin(), typeName.end(), '_', ' ');
 		std::transform(typeName.begin(), typeName.end(), typeName.begin(), ::tolower);
 		if (typeName == inputName)
@@ -217,6 +261,13 @@ MacroAct::MacroAct(MacroCommandType t, int amount)
 	: _macroCommandType(t, amount)
 	, _type(MacroActs::Command)
 	, _macroLocation(MacroLocation::Anywhere)
+{
+}
+
+MacroAct::MacroAct(MacroCommandType t, BWAPI::UnitType type)
+    : _macroCommandType(t, type)
+    , _type(MacroActs::Command)
+    , _macroLocation(MacroLocation::Anywhere)
 {
 }
 
@@ -541,7 +592,7 @@ bool MacroAct::hasEventualProducer() const
         // any condition that makes it unable to produce ever.
         if (unit->getType() == producerType &&
             unit->isPowered() &&     // replacing a pylon is a separate queue item
-            !unit->isLifted() &&     // lifting/landing a building will be a separate queue item when implemented
+            !unit->isLifted() &&     // lifting/landing a building is a separate queue item
             (!producerType.isAddon() || unit->getAddon() == nullptr))
         {
             return true;

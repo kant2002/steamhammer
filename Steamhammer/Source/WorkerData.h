@@ -64,7 +64,8 @@ public:
 	int				getNumGasWorkers() const;
 	int				getNumReturnCargoWorkers() const;
 	int				getNumCombatWorkers() const;
-	int				getNumIdleWorkers() const;
+    int             getNumRepairWorkers() const;
+    int				getNumIdleWorkers() const;
     bool            anyUnblocker() const;
 
 	void			getMineralWorkers(std::set<BWAPI::Unit> & mw);

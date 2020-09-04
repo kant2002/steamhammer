@@ -1,4 +1,3 @@
-#include "Micro.h"
 
 #include "Base.h"
 #include "InformationManager.h"
@@ -13,7 +12,7 @@ size_t TotalCommands = 0;  // not all commands are counted
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
 // Complain if there is an "obvious" problem.
-// So far, the only problem is issuing two orders during the same frame.
+// So far, the only problem detected is issuing two orders during the same frame.
 void MicroState::check(BWAPI::Unit u, BWAPI::Order o) const
 {
     return;	// TODO only check when debugging
@@ -824,6 +823,7 @@ bool Micro::Build(BWAPI::Unit builder, BWAPI::UnitType building, const BWAPI::Ti
         builder->getPlayer() != BWAPI::Broodwar->self() ||
 		!building.isBuilding() || !location.isValid())
 	{
+        // TODO this error happens sometimes - fix it
 		UAB_ASSERT(false, "bad building");
 		return false;
 	}
@@ -877,6 +877,21 @@ bool Micro::Cancel(BWAPI::Unit unit)
 	orders[unit].setOrder(unit, BWAPI::Orders::Stop);
 
 	return unit->cancelConstruction();
+}
+
+bool Micro::Lift(BWAPI::Unit terranBuilding)
+{
+    if (!terranBuilding || !terranBuilding->exists() ||
+        !terranBuilding->getType().isBuilding() ||
+        terranBuilding->getPlayer() != the.self())
+    {
+        UAB_ASSERT(false, "bad unit");
+        return false;
+    }
+
+    orders[terranBuilding].setOrder(terranBuilding, BWAPI::Orders::LiftingOff);
+
+    return terranBuilding->lift();
 }
 
 // Burrow a zerg unit.

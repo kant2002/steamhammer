@@ -114,7 +114,7 @@ void WorkerManager::updateWorkerStatus()
 
 		// Idleness.
 		// Order can be PlayerGuard for a drone that tries to build and fails.
-		// There are other causes.
+		// There are other causes, e.g. being done with a job like repair.
 		if ((worker->isIdle() || worker->getOrder() == BWAPI::Orders::PlayerGuard) &&
 			job != WorkerData::Minerals &&
 			job != WorkerData::Build &&
@@ -387,18 +387,49 @@ void WorkerManager::handleReturnCargoWorkers()
 // Terran can assign SCVs to repair.
 void WorkerManager::handleRepairWorkers()
 {
-    if (BWAPI::Broodwar->self()->getRace() != BWAPI::Races::Terran)
+    if (BWAPI::Broodwar->self()->getRace() != BWAPI::Races::Terran ||
+        the.my.completed.count(BWAPI::UnitTypes::Terran_SCV) == 0 ||
+        the.self()->minerals() == 0)
     {
         return;
     }
 
+    size_t maxRepairers =
+        1 + the.my.completed.count(BWAPI::UnitTypes::Terran_SCV) / 6;
+    int nAlreadyRepairing = workerData.getNumRepairWorkers();
+    if (size_t(nAlreadyRepairing) >= maxRepairers)
+    {
+        return;
+    }
+    maxRepairers -= nAlreadyRepairing;
+
     for (BWAPI::Unit unit : BWAPI::Broodwar->self()->getUnits())
     {
-        if (unit->getType().isBuilding() && (unit->getHitPoints() < unit->getType().maxHitPoints()))
+        if (unit->getType().isBuilding() &&
+            unit->getHitPoints() < unit->getType().maxHitPoints() &&
+            unit->isCompleted())
         {
-            BWAPI::Unit repairWorker = getClosestMineralWorkerTo(unit);
-            setRepairWorker(repairWorker, unit);
-			break;
+            size_t nRepairers = 0;
+            if (unit->getType() == BWAPI::UnitTypes::Terran_Bunker ||
+                unit->getType() == BWAPI::UnitTypes::Terran_Missile_Turret)
+            {
+                nRepairers = std::max(size_t(1), the.info.getEnemyFireteam(unit).size());
+            }
+            else if (unit->getHitPoints() < unit->getType().maxHitPoints() / 2)
+            {
+                nRepairers = 1;
+            }
+
+            for (size_t i = nRepairers; i > 0; --i)
+            {
+                BWAPI::Unit repairWorker = getClosestMineralWorkerTo(unit);
+                setRepairWorker(repairWorker, unit);
+                maxRepairers -= 1;
+                if (maxRepairers == 0)
+                {
+                    return;
+                }
+            }
         }
     }
 }
@@ -439,7 +470,8 @@ void WorkerManager::handleUnblockWorkers()
             }
             else
             {
-                BWAPI::Unitset patches = BWAPI::Broodwar->getUnitsOnTile(tile);
+                BWAPI::Unitset patches =
+                    BWAPI::Broodwar->getUnitsOnTile(tile, BWAPI::Filter::IsMineralField);
                 if (patches.empty() || the.groundAttacks.at(tile) > 0)
                 {
                     //BWAPI::Broodwar->printf("releasing unblock worker");

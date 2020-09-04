@@ -141,6 +141,7 @@ class StrategyBossZerg
     int _recommendEnsnare;
     int _recommendBroodling;
     int _recommendQueens;       // max of the above 3
+    int _recommendSunkens;      // at each base
 
 	// For choosing the tech target and the unit mix.
 	std::array<int, int(TechUnit::Size)> techScores;
@@ -181,6 +182,7 @@ class StrategyBossZerg
 
 	bool adaptToEnemyOpeningPlan();
 	bool rebuildCriticalLosses();
+    bool buildStaticDefense();
 
 	void checkGroundDefenses(BuildOrderQueue & queue);
 	void analyzeExtraDrones();

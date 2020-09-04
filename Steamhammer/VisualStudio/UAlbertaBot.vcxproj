@@ -147,6 +147,7 @@
     <ClCompile Include="..\source\JSONTools.cpp" />
     <ClCompile Include="..\Source\Logger.cpp" />
     <ClCompile Include="..\Source\MacroAct.cpp" />
+    <ClCompile Include="..\Source\MacroCommand.cpp" />
     <ClCompile Include="..\Source\MapGrid.cpp" />
     <ClCompile Include="..\Source\MapPartitions.cpp" />
     <ClCompile Include="..\Source\MapTools.cpp" />
@@ -176,7 +177,6 @@
     <ClCompile Include="..\source\ProductionManager.cpp" />
     <ClCompile Include="..\Source\Random.cpp" />
     <ClCompile Include="..\Source\ResourceInfo.cpp" />
-    <ClCompile Include="..\Source\ScoutBoss.cpp" />
     <ClCompile Include="..\source\ScoutManager.cpp" />
     <ClCompile Include="..\Source\Skill.cpp" />
     <ClCompile Include="..\Source\SkillGasSteal.cpp" />
@@ -257,7 +257,6 @@
     <ClInclude Include="..\source\ProductionManager.h" />
     <ClInclude Include="..\Source\Random.h" />
     <ClInclude Include="..\Source\ResourceInfo.h" />
-    <ClInclude Include="..\Source\ScoutBoss.h" />
     <ClInclude Include="..\source\ScoutManager.h" />
     <ClInclude Include="..\Source\Skill.h" />
     <ClInclude Include="..\Source\SkillGasSteal.h" />
