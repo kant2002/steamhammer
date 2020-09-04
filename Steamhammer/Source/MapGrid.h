@@ -1,12 +1,9 @@
 #pragma once
 
-#include "Common.h"
-#include "MicroManager.h"
+#include <BWAPI.h>
 
 namespace UAlbertaBot
 {
-class The;
-
 class GridCell
 {
 public:
@@ -33,8 +30,6 @@ class MapGrid
 {
 	MapGrid();
 	MapGrid(int mapWidth, int mapHeight, int cellSize);
-
-	The &						the;
 
 	int							cellSize;
 	int							mapWidth, mapHeight;

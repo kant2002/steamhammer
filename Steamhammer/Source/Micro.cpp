@@ -1,7 +1,6 @@
 #include "Micro.h"
 
 #include "Base.h"
-#include "GridDistances.h"
 #include "InformationManager.h"
 #include "MapGrid.h"
 #include "The.h"
@@ -19,10 +18,10 @@ void MicroState::check(BWAPI::Unit u, BWAPI::Order o) const
 {
     return;	// TODO only check when debugging
 
-	if (orderFrame == BWAPI::Broodwar->getFrameCount())
+	if (orderFrame == the.now())
 	{
 		BWAPI::Broodwar->printf(">1 order for %s %d frame %d, %s -> %s",
-			UnitTypeName(u).c_str(), u->getID(), BWAPI::Broodwar->getFrameCount(),
+			UnitTypeName(u).c_str(), u->getID(), the.now(),
 			order.getName().c_str(), o.getName().c_str());
 	}
 }
@@ -32,11 +31,11 @@ void MicroState::execute(BWAPI::Unit u)
 {
 	if (order == BWAPI::Orders::Move)
 	{
-        if (u->getPosition() != targetPosition && BWAPI::Broodwar->getFrameCount() >= lastActionFrame + framesBetweenActions)
+        if (u->getPosition() != targetPosition && the.now() >= lastActionFrame + framesBetweenActions)
 		{
             if (u->move(getNextMovePosition(u)))
             {
-                lastCheckFrame = executeFrame = BWAPI::Broodwar->getFrameCount();
+                lastCheckFrame = executeFrame = the.now();
                 needsMonitoring = true;
             }
             lastActionFrame = executeFrame;
@@ -55,9 +54,9 @@ void MicroState::monitor(BWAPI::Unit u)
 {
 	if (order == BWAPI::Orders::Move)
 	{
-        if (u->isFlying())
+        if (u->isFlying() || u->getType() == BWAPI::UnitTypes::Protoss_Reaver)
         {
-            // Flying units do not have problems.
+            // Units that don't benefit.
             needsMonitoring = false;
         }
         else if (u->getPosition() == targetPosition)
@@ -79,14 +78,14 @@ void MicroState::monitor(BWAPI::Unit u)
 				u->getLastCommand().getTargetPosition().x, u->getLastCommand().getTargetPosition().y);
 			*/
 			u->move(targetPosition);
-			lastCheckFrame = BWAPI::Broodwar->getFrameCount();
+			lastCheckFrame = the.now();
             lastActionFrame = lastCheckFrame;
         }
 		// 2. The unit could be "stuck", moving randomly to escape overlapping with other units.
 		else if (u->isStuck())
 		{
 			// Wait for the trouble to pass.
-			lastCheckFrame = BWAPI::Broodwar->getFrameCount();
+			lastCheckFrame = the.now();
 			// NOTE It's said that spamming move can help. It's worth a try.
 		}
 		// 3. The unit could be frozen in place "for no reason".
@@ -95,7 +94,7 @@ void MicroState::monitor(BWAPI::Unit u)
 		{
 			// BWAPI::Broodwar->printf("moving unit %d froze velocity %g,%g", u->getID(), u->getVelocityX(), u->getVelocityY());
 			u->stop();
-			lastCheckFrame = BWAPI::Broodwar->getFrameCount();
+			lastCheckFrame = the.now();
             lastActionFrame = lastCheckFrame;
             // On the next retry, the order will not be Move and the Move order will be reissued.
 		}
@@ -118,9 +117,12 @@ bool MicroState::positionsNearlyEqual(BWAPI::Unit u,  BWAPI::Position & pos1, co
     UAB_ASSERT(pos1.isValid() && pos2.isValid(), "bad position");
 
     int dist = u->getDistance(pos2);
-    int tolerance = dist <= 12 * 32     // within tank range?
-        ? 3                             // yes, tight tolerance
-        : std::min(96, dist / 32);      // no, be looser
+    int tolerance =
+        dist <= 6 * 32
+          ? 3                              // tightest tolerance
+          : (dist <= 12 * 32               // within tank range?
+              ? 6                          // yes, close tolerance
+              : std::min(96, dist / 32));  // no, be looser
 
     return
         abs(pos1.x - pos2.x) <= tolerance &&
@@ -172,7 +174,7 @@ void MicroState::setOrder(BWAPI::Unit u, BWAPI::Order o)
 	    targetPosition = BWAPI::Positions::None;
 		targetUnit = nullptr;
 
-		orderFrame = BWAPI::Broodwar->getFrameCount();
+		orderFrame = the.now();
 		executeFrame = -1;
 
 		startPosition = u->getPosition();
@@ -190,7 +192,7 @@ void MicroState::setOrder(BWAPI::Unit u, BWAPI::Order o, BWAPI::Unit t)
         targetPosition = BWAPI::Positions::None;
         targetUnit = t;
 
-		orderFrame = BWAPI::Broodwar->getFrameCount();
+		orderFrame = the.now();
 		executeFrame = -1;
 
 		startPosition = u->getPosition();
@@ -210,7 +212,7 @@ void MicroState::setOrder(BWAPI::Unit u, BWAPI::Order o, BWAPI::Position p)
         targetPosition = p;
 		targetUnit = nullptr;
 
-		orderFrame = BWAPI::Broodwar->getFrameCount();
+		orderFrame = the.now();
 		executeFrame = -1;
 
 		startPosition = u->getPosition();
@@ -224,7 +226,7 @@ void MicroState::update(BWAPI::Unit u)
 		// Not executed yet. Do that.
 		execute(u);
 	}
-	else if (needsMonitoring && BWAPI::Broodwar->getFrameCount() > lastCheckFrame + 2 * BWAPI::Broodwar->getLatencyFrames())
+	else if (needsMonitoring && the.now() > lastCheckFrame + 2 * BWAPI::Broodwar->getLatencyFrames())
 	{
 		// Executed and should be working. Make sure it is.
 		monitor(u);
@@ -306,7 +308,6 @@ BWAPI::Position Micro::GetKiteVector(BWAPI::Unit unit, BWAPI::Unit target) const
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
 Micro::Micro()
-	: the(The::Root())
 {
 }
 
@@ -320,7 +321,7 @@ bool Micro::alreadyCommanded(BWAPI::Unit unit) const
 		return false;
 	}
 
-	return (*it).second.getOrderFrame() >= BWAPI::Broodwar->getFrameCount();
+	return (*it).second.getOrderFrame() >= the.now();
 }
 
 // If our ground unit is next to an undetected dark templar, run it away and return true.
@@ -372,7 +373,7 @@ void Micro::Stop(BWAPI::Unit unit)
 	}
 
 	// if we have issued a command to this unit already this frame, ignore this one
-	if (unit->getLastCommandFrame() >= BWAPI::Broodwar->getFrameCount() || unit->isAttackFrame())
+	if (unit->getLastCommandFrame() >= the.now() || unit->isAttackFrame())
 	{
 		return;
 	}
@@ -399,7 +400,7 @@ void Micro::HoldPosition(BWAPI::Unit unit)
 	}
 
 	// if we have issued a command to this unit already this frame, ignore this one
-	if (unit->getLastCommandFrame() >= BWAPI::Broodwar->getFrameCount() || unit->isAttackFrame())
+	if (unit->getLastCommandFrame() >= the.now() || unit->isAttackFrame())
 	{
 		return;
 	}
@@ -473,7 +474,7 @@ void Micro::AttackUnit(BWAPI::Unit attacker, BWAPI::Unit target)
 	// Do nothing if we've already issued a command this frame, or the unit is busy attacking.
 	// NOTE A lurker attacking a fixed target is ALWAYS on an attack frame.
 	//      According to Arrak, sunken colonies behave the same.
-    if (attacker->getLastCommandFrame() >= BWAPI::Broodwar->getFrameCount() ||
+    if (attacker->getLastCommandFrame() >= the.now() ||
 		(attacker->isAttackFrame() && attacker->getType() != BWAPI::UnitTypes::Zerg_Lurker))
     {
 		return;
@@ -494,7 +495,7 @@ void Micro::AttackUnit(BWAPI::Unit attacker, BWAPI::Unit target)
     attacker->attack(target);
     TotalCommands++;
 
-    if (Config::Debug::DrawUnitTargetInfo) 
+    if (Config::Debug::DrawUnitTargets) 
     {
         BWAPI::Broodwar->drawCircleMap(attacker->getPosition(), dotRadius, BWAPI::Colors::Red, true);
         BWAPI::Broodwar->drawCircleMap(target->getPosition(), dotRadius, BWAPI::Colors::Red, true);
@@ -511,7 +512,7 @@ void Micro::AttackMove(BWAPI::Unit attacker, const BWAPI::Position & targetPosit
     }
 
 	// if we have issued a command to this unit already this frame, ignore this one
-    if (attacker->getLastCommandFrame() >= BWAPI::Broodwar->getFrameCount() || attacker->isAttackFrame())
+    if (attacker->getLastCommandFrame() >= the.now() || attacker->isAttackFrame())
     {
         return;
     }
@@ -531,7 +532,7 @@ void Micro::AttackMove(BWAPI::Unit attacker, const BWAPI::Position & targetPosit
 	attacker->attack(targetPosition);
     TotalCommands++;
 
-    if (Config::Debug::DrawUnitTargetInfo) 
+    if (Config::Debug::DrawUnitTargets) 
     {
         BWAPI::Broodwar->drawCircleMap(attacker->getPosition(), dotRadius, BWAPI::Colors::Orange, true);
         BWAPI::Broodwar->drawCircleMap(targetPosition, dotRadius, BWAPI::Colors::Orange, true);
@@ -569,7 +570,7 @@ void Micro::Move(BWAPI::Unit attacker, const BWAPI::Position & targetPosition)
 	}
 
     // if we have issued a command to this unit already this frame, ignore this one
-    if (attacker->getLastCommandFrame() >= BWAPI::Broodwar->getFrameCount() ||
+    if (attacker->getLastCommandFrame() >= the.now() ||
 		attacker->isAttackFrame() && !Micro::AlwaysKite(attacker->getType()))
 	{
         return;
@@ -596,7 +597,7 @@ void Micro::Move(BWAPI::Unit attacker, const BWAPI::Position & targetPosition)
 
     TotalCommands++;
 
-    if (Config::Debug::DrawUnitTargetInfo) 
+    if (Config::Debug::DrawUnitTargets) 
     {
         BWAPI::Broodwar->drawCircleMap(attacker->getPosition(), dotRadius, BWAPI::Colors::White, true);
         BWAPI::Broodwar->drawCircleMap(targetPosition, dotRadius, BWAPI::Colors::White, true);
@@ -623,7 +624,7 @@ void Micro::MoveNear(BWAPI::Unit unit, const BWAPI::Position & targetPosition)
         MicroState & state = it->second;
 
         if (state.getOrder() != BWAPI::Orders::Move ||
-            BWAPI::Broodwar->getFrameCount() - state.getOrderFrame() >= 18 ||
+            the.now() - state.getOrderFrame() >= 18 ||
             state.getTargetPosition().getApproxDistance(targetPosition) > 2 * 32)
         {
             Move(unit, targetPosition);
@@ -637,7 +638,7 @@ void Micro::TransferWorker(BWAPI::Unit worker, const Base * base)
     UAB_ASSERT(worker && worker->getType().isWorker() && worker->getPlayer() == BWAPI::Broodwar->self(), "bad unit");
     UAB_ASSERT(base && base->getOwner() == BWAPI::Broodwar->self(), "bad base");
 
-
+    // TODO
 }
 
 void Micro::RightClick(BWAPI::Unit unit, BWAPI::Unit target)
@@ -650,7 +651,7 @@ void Micro::RightClick(BWAPI::Unit unit, BWAPI::Unit target)
 	}
 
     // if we have issued a command to this unit already this frame, ignore this one
-    if (unit->getLastCommandFrame() >= BWAPI::Broodwar->getFrameCount() || unit->isAttackFrame())
+    if (unit->getLastCommandFrame() >= the.now() || unit->isAttackFrame())
     {
         return;
     }
@@ -680,7 +681,7 @@ void Micro::RightClick(BWAPI::Unit unit, BWAPI::Unit target)
     unit->rightClick(target);
     TotalCommands++;
 
-    if (Config::Debug::DrawUnitTargetInfo) 
+    if (Config::Debug::DrawUnitTargets) 
     {
         BWAPI::Broodwar->drawCircleMap(unit->getPosition(), dotRadius, BWAPI::Colors::Cyan, true);
         BWAPI::Broodwar->drawCircleMap(target->getPosition(), dotRadius, BWAPI::Colors::Cyan, true);
@@ -700,7 +701,7 @@ void Micro::MineMinerals(BWAPI::Unit unit, BWAPI::Unit mineralPatch)
 	}
 
 	// if we have issued a command to this unit already this frame, ignore this one
-	if (unit->getLastCommandFrame() >= BWAPI::Broodwar->getFrameCount() || unit->isAttackFrame())
+	if (unit->getLastCommandFrame() >= the.now() || unit->isAttackFrame())
 	{
 		return;
 	}
@@ -710,7 +711,7 @@ void Micro::MineMinerals(BWAPI::Unit unit, BWAPI::Unit mineralPatch)
 	unit->rightClick(mineralPatch);
 	TotalCommands++;
 
-	if (Config::Debug::DrawUnitTargetInfo)
+	if (Config::Debug::DrawUnitTargets)
 	{
 		BWAPI::Broodwar->drawLineMap(unit->getPosition(), mineralPatch->getPosition(), BWAPI::Colors::Cyan);
 	}
@@ -752,7 +753,7 @@ void Micro::Repair(BWAPI::Unit unit, BWAPI::Unit target)
 	}
 
     // if we have issued a command to this unit already this frame, ignore this one
-    if (unit->getLastCommandFrame() >= BWAPI::Broodwar->getFrameCount() || unit->isAttackFrame())
+    if (unit->getLastCommandFrame() >= the.now() || unit->isAttackFrame())
     {
         return;
     }
@@ -772,7 +773,7 @@ void Micro::Repair(BWAPI::Unit unit, BWAPI::Unit target)
     unit->repair(target);
     TotalCommands++;
 
-    if (Config::Debug::DrawUnitTargetInfo) 
+    if (Config::Debug::DrawUnitTargets) 
     {
         BWAPI::Broodwar->drawCircleMap(unit->getPosition(), dotRadius, BWAPI::Colors::Cyan, true);
         BWAPI::Broodwar->drawCircleMap(target->getPosition(), dotRadius, BWAPI::Colors::Cyan, true);
@@ -796,7 +797,7 @@ void Micro::ReturnCargo(BWAPI::Unit worker)
 	}
 
 	// if we have issued a command to this unit already this frame, ignore this one
-	if (worker->getLastCommandFrame() >= BWAPI::Broodwar->getFrameCount() || worker->isAttackFrame())
+	if (worker->getLastCommandFrame() >= the.now() || worker->isAttackFrame())
 	{
 		return;
 	}
@@ -852,7 +853,8 @@ bool Micro::Make(BWAPI::Unit producer, BWAPI::UnitType type)
 		return producer->buildAddon(type);
 	}
 
-	if (type.getRace() == BWAPI::Races::Zerg)
+    // Zerg morphs units, except for the infested terran, which is trained. Tricky!
+	if (type.getRace() == BWAPI::Races::Zerg && type != BWAPI::UnitTypes::Zerg_Infested_Terran)
 	{
 		orders[producer].setOrder(producer, type.isBuilding() ? BWAPI::Orders::ZergBuildingMorph : BWAPI::Orders::ZergUnitMorph);
 		return producer->morph(type);
@@ -1003,7 +1005,7 @@ bool Micro::Scan(const BWAPI::Position & targetPosition)
 	// If we're not terran, we're unlikely to have any comsats....
 	int maxEnergy = 49;      // anything greater is enough energy for a scan
 	BWAPI::Unit comsat = nullptr;
-	for (const auto unit : BWAPI::Broodwar->self()->getUnits())
+	for (BWAPI::Unit unit : BWAPI::Broodwar->self()->getUnits())
 	{
 		if (unit->getType() == BWAPI::UnitTypes::Terran_Comsat_Station &&
 			unit->getEnergy() > maxEnergy &&
@@ -1042,7 +1044,7 @@ bool Micro::Stim(BWAPI::Unit unit)
 	}
 
 	// if we have issued a command to this unit already this frame, ignore this one
-	if (unit->getLastCommandFrame() >= BWAPI::Broodwar->getFrameCount())
+	if (unit->getLastCommandFrame() >= the.now())
 	{
 		return false;
 	}
@@ -1050,7 +1052,7 @@ bool Micro::Stim(BWAPI::Unit unit)
 	// Allow a small latency for a previous stim command to take effect.
 	// Marines and firebats have only 1 tech to use, so we don't need to check which.
 	if (unit->getLastCommand().getType() == BWAPI::UnitCommandTypes::Use_Tech &&
-		BWAPI::Broodwar->getFrameCount() - unit->getLastCommandFrame() < 8)
+		the.now() - unit->getLastCommandFrame() < 8)
 	{
 		return false;
 	}
@@ -1075,8 +1077,8 @@ bool Micro::MergeArchon(BWAPI::Unit templar1, BWAPI::Unit templar2)
 	}
 
 	// If we have issued a command already this frame, ignore this one.
-	if (templar1->getLastCommandFrame() >= BWAPI::Broodwar->getFrameCount() ||
-		templar2->getLastCommandFrame() >= BWAPI::Broodwar->getFrameCount())
+	if (templar1->getLastCommandFrame() >= the.now() ||
+		templar2->getLastCommandFrame() >= the.now())
 	{
 		return false;
 	}
@@ -1223,7 +1225,7 @@ void Micro::KiteTarget(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 	{
 		// Run away.
 		BWAPI::Position fleePosition(rangedUnit->getPosition() - target->getPosition() + rangedUnit->getPosition());
-		if (Config::Debug::DrawUnitTargetInfo)
+		if (Config::Debug::DrawUnitTargets)
 		{
 			BWAPI::Broodwar->drawLineMap(rangedUnit->getPosition(), fleePosition, BWAPI::Colors::Cyan);
 		}
@@ -1283,6 +1285,6 @@ void Micro::MutaDanceTarget(BWAPI::Unit muta, BWAPI::Unit target)
 		BWAPI::Position fleeVector = GetKiteVector(target, muta);
 		BWAPI::Position moveToPosition(muta->getPosition() + fleeVector);
 		//BWAPI::Broodwar->drawLineMap(muta->getPosition(), moveToPosition, BWAPI::Colors::Purple);
-		Micro::Move(muta, moveToPosition);
+		Micro::MoveNear(muta, moveToPosition);
 	}
 }

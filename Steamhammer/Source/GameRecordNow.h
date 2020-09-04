@@ -55,6 +55,10 @@ private:
 
     bool enemyScoutedUs() const;
 
+protected:
+
+    void writeSkills(std::ostream & output) const override;
+
 public:
 	GameRecordNow();
 

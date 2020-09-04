@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Common.h"
+#include "UABAssert.h"
 #include "rapidjson/rapidjson.h"
 #include "rapidjson/document.h"
 

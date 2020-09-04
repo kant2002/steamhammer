@@ -58,7 +58,7 @@ void MicroAirToAir::assignTargets(const BWAPI::Unitset & airUnits, const BWAPI::
 			if (target)
 			{
 				// A target was found.
-				if (Config::Debug::DrawUnitTargetInfo)
+				if (Config::Debug::DrawUnitTargets)
 				{
 					BWAPI::Broodwar->drawLineMap(airUnit->getPosition(), airUnit->getTargetPosition(), BWAPI::Colors::Purple);
 				}
@@ -77,7 +77,7 @@ void MicroAirToAir::assignTargets(const BWAPI::Unitset & airUnits, const BWAPI::
 // This could return null if no target is worth attacking, but doesn't happen to.
 BWAPI::Unit MicroAirToAir::getTarget(BWAPI::Unit airUnit, const BWAPI::Unitset & targets)
 {
-	int bestScore = -999999;
+    int bestScore = INT_MIN;
 	BWAPI::Unit bestTarget = nullptr;
 
 	for (const auto target : targets)

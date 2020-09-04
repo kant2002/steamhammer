@@ -34,22 +34,22 @@ void MicroTransports::calculateWaypoints()
 	// Add vertices down the left edge.
 	for (int y = minY; y <= maxY; y += WaypointSpacing)
 	{
-		_waypoints.push_back(BWAPI::Position(BWAPI::TilePosition(minX, y)) + BWAPI::Position(16, 16));
+		_waypoints.push_back(TileCenter(BWAPI::TilePosition(minX, y)));
 	}
 	// Add vertices across the bottom.
 	for (int x = minX; x <= maxX; x += WaypointSpacing)
 	{
-		_waypoints.push_back(BWAPI::Position(BWAPI::TilePosition(x, maxY)) + BWAPI::Position(16, 16));
+        _waypoints.push_back(TileCenter(BWAPI::TilePosition(x, maxY)));
 	}
 	// Add vertices up the right edge.
 	for (int y = maxY; y >= minY; y -= WaypointSpacing)
 	{
-		_waypoints.push_back(BWAPI::Position(BWAPI::TilePosition(maxX, y)) + BWAPI::Position(16, 16));
+        _waypoints.push_back(TileCenter(BWAPI::TilePosition(maxX, y)));
 	}
 	// Add vertices across the top back to the origin.
 	for (int x = maxX; x >= minX; x -= WaypointSpacing)
 	{
-		_waypoints.push_back(BWAPI::Position(BWAPI::TilePosition(x, minY)) + BWAPI::Position(16, 16));
+        _waypoints.push_back(TileCenter(BWAPI::TilePosition(x, minY)));
 	}
 }
 
@@ -72,7 +72,7 @@ const BWAPI::Position & MicroTransports::waypoint(int i)
 
 void MicroTransports::drawTransportInformation()
 {
-	if (!Config::Debug::DrawUnitTargetInfo)
+	if (!Config::Debug::DrawUnitTargets)
 	{
 		return;
 	}
@@ -250,7 +250,7 @@ void MicroTransports::followPerimeter()
 		// Aim for the second waypoint ahead.
 		const BWAPI::Position & destination = waypoint(_nextWaypointIndex + _direction);
 
-		if (Config::Debug::DrawUnitTargetInfo)
+		if (Config::Debug::DrawUnitTargets)
 		{
 			BWAPI::Broodwar->drawCircleMap(destination, 5, BWAPI::Colors::Yellow, true);
 		}

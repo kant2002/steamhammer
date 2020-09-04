@@ -1,4 +1,4 @@
-#include <BWAPI.h>
+//#include <BWAPI.h>
 #include "Random.h"
 
 // Simple random number utility class.

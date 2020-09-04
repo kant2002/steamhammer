@@ -45,7 +45,7 @@ void SquadData::removeSquad(const std::string & squadName)
         return;
     }
 
-    for (const auto unit : squadPtr->second.getUnits())
+    for (BWAPI::Unit unit : squadPtr->second.getUnits())
     {
         if (unit->getType().isWorker())
         {
@@ -128,7 +128,7 @@ void SquadData::verifySquadUniqueMembership()
 
     for (const auto & kv : _squads)
     {
-        for (const auto unit : kv.second.getUnits())
+        for (BWAPI::Unit unit : kv.second.getUnits())
         {
             if (assigned.contains(unit))
             {

@@ -158,7 +158,6 @@ void GridZone::sanityCheck()
 // Necessary if a Grid subclass is created before BWAPI is initialized.
 GridZone::GridZone()
 	: Grid()
-	, the(The::Root())
 {
 }
 

@@ -4,9 +4,6 @@
 #include "Grid.h"
 #include "UnitData.h"
 
-// NOTE
-// This class is unused and untested! Test carefully before use.
-
 namespace UAlbertaBot
 {
 class GridAttacks : public Grid

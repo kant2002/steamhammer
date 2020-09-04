@@ -92,7 +92,7 @@ void MicroMelee::assignTargets(const BWAPI::Unitset & meleeUnits, const BWAPI::U
 				{
 					// Clustering overrides the retreat once the melee unit retreats far enough to be outside
 					// attack range. So it rarely goes far. The retreat location rarely matters much.
-					BWAPI::Position fleeTo(Bases::Instance().myMainBase()->getPosition());
+					BWAPI::Position fleeTo(the.bases.myMain()->getPosition());
 					the.micro.Move(meleeUnit, fleeTo);
 				}
             }
@@ -111,7 +111,7 @@ void MicroMelee::assignTargets(const BWAPI::Unitset & meleeUnits, const BWAPI::U
 			}
 		}
 
-		if (Config::Debug::DrawUnitTargetInfo)
+		if (Config::Debug::DrawUnitTargets)
 		{
 			BWAPI::Broodwar->drawLineMap(meleeUnit->getPosition(), meleeUnit->getTargetPosition(),
 				Config::Debug::ColorLineTarget);
@@ -123,7 +123,7 @@ void MicroMelee::assignTargets(const BWAPI::Unitset & meleeUnits, const BWAPI::U
 // underThreat is true if any of the melee units is under immediate threat of attack.
 BWAPI::Unit MicroMelee::getTarget(BWAPI::Unit meleeUnit, const BWAPI::Unitset & targets, bool underThreat)
 {
-	int bestScore = -999999;
+    int bestScore = INT_MIN;
 	BWAPI::Unit bestTarget = nullptr;
 
 	for (const auto target : targets)

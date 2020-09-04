@@ -2,9 +2,15 @@
 
 #include "Bases.h"
 #include "GameCommander.h"
-#include "InformationManager.h"
+#include "OpponentModel.h"
+#include "ScoutManager.h"
 
 using namespace UAlbertaBot;
+
+void GameRecordNow::writeSkills(std::ostream & output) const
+{
+    the.skillkit.write(output);
+}
 
 // Take a digest snapshot of the game situation.
 void GameRecordNow::takeSnapshot()
@@ -15,7 +21,7 @@ void GameRecordNow::takeSnapshot()
 // Figure out whether the enemy has seen our base yet.
 bool GameRecordNow::enemyScoutedUs() const
 {
-	Base * base = Bases::Instance().myStartingBase();
+	Base * base = Bases::Instance().myStart();
 
 	for (const auto & kv : InformationManager::Instance().getUnitData(BWAPI::Broodwar->enemy()).getUnits())
 	{
@@ -57,28 +63,31 @@ void GameRecordNow::update()
 		{
 			enemyRace = BWAPI::Broodwar->enemy()->getRace();
 		}
+        if (!enemyStartingBaseID && the.bases.enemyStart())
+        {
+            enemyStartingBaseID = the.bases.enemyStart()->getID();
+        }
 		enemyPlan = OpponentModel::Instance().getEnemyPlan();
-		if (!frameEnemyScoutsOurBase)
+        if (!frameWeMadeFirstCombatUnit && InformationManager::Instance().weHaveCombatUnits())
+        {
+            frameWeMadeFirstCombatUnit = now;
+        }
+        if (!frameWeGatheredGas && BWAPI::Broodwar->self()->gatheredGas() > 0)
+        {
+            frameWeGatheredGas = now;
+        }
+        if (!frameEnemyScoutsOurBase && enemyScoutedUs())
 		{
-			if (enemyScoutedUs())
-			{
-				frameEnemyScoutsOurBase = now;
-			}
-		}
-		if (!frameScoutSentForGasSteal && GameCommander::Instance().getScoutTime() && ScoutManager::Instance().tryGasSteal())
-		{
-			// Not now, but the time when the scout was first sent out.
-			frameScoutSentForGasSteal = GameCommander::Instance().getScoutTime();
-		}
-		if (ScoutManager::Instance().gasStealQueued())
-		{
-			// We at least got close enough to queue up the building. Let's pretend that means it started.
-			gasStealHappened = true;
-		}
+            frameEnemyScoutsOurBase = now;
+        }
 		if (!frameEnemyGetsCombatUnits && InformationManager::Instance().enemyHasCombatUnits())
 		{
 			frameEnemyGetsCombatUnits = now;
 		}
+        if (!frameEnemyUsesGas && InformationManager::Instance().enemyGasTiming() > 0)
+        {
+            frameEnemyUsesGas = InformationManager::Instance().enemyGasTiming();
+        }
 		if (!frameEnemyGetsAirUnits && InformationManager::Instance().enemyHasAirTech())
 		{
 			frameEnemyGetsAirUnits = now;
@@ -105,10 +114,12 @@ void GameRecordNow::update()
 		}
 	}
 
+    /* disabled
 	// If it's time, take a snapshot.
 	int sinceFirst = now - firstSnapshotTime;
 	if (sinceFirst >= 0 && sinceFirst % snapshotInterval == 0)
 	{
 		takeSnapshot();
 	}
+    */
 }

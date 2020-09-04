@@ -91,7 +91,6 @@ void CombatSimulation::drawWhichEnemies(const BWAPI::Position & center) const
 		whichEnemies = "Scourge Enemies";
 	}
 	BWAPI::Broodwar->drawTextMap(center + BWAPI::Position(0, 8), "%c %s", white, whichEnemies.c_str());
-
 }
 
 // Include an enemy unit if we can hit it, or it can hit us.
@@ -206,7 +205,7 @@ BWAPI::Position CombatSimulation::getClosestEnemyCombatUnit(const BWAPI::Positio
 		const int dist = center.getApproxDistance(ui.lastPosition);
 		if (dist < closestDistance &&
 			!ui.goneFromLastPosition &&
-			ui.completed &&
+			ui.isCompleted() &&
 			UnitUtil::IsCombatSimUnit(ui) &&
 			includeEnemy(_whichEnemies, ui.type))
 		{
@@ -257,7 +256,6 @@ void CombatSimulation::setCombatUnits
 	if (visibleOnly)
 	{
         // Static defense that is out of sight.
-        // NOTE getNearbyForce() includes completed units and uncompleted buildings which are out of vision.
         std::vector<UnitInfo> enemyStaticDefense;
         InformationManager::Instance().getNearbyForce(enemyStaticDefense, center, BWAPI::Broodwar->enemy(), radius);
         for (const UnitInfo & ui : enemyStaticDefense)
@@ -309,7 +307,6 @@ void CombatSimulation::setCombatUnits
 		InformationManager::Instance().getNearbyForce(enemyCombatUnits, center, BWAPI::Broodwar->enemy(), radius);
 		for (const UnitInfo & ui : enemyCombatUnits)
 		{
-			// The check is careful about seen units and assumes that unseen units are completed and powered.
 			if ((ui.unit->exists() || ui.lastPosition.isValid() && !ui.goneFromLastPosition) &&
                 ui.unit->isVisible() ? includeEnemy(_whichEnemies, ui.unit) : includeEnemy(_whichEnemies, ui.type))
 			{
@@ -372,7 +369,7 @@ void CombatSimulation::setCombatUnits
         BWAPI::Broodwar->drawCircleMap(center, 6, BWAPI::Colors::Red, true);
         BWAPI::Broodwar->drawCircleMap(center, radius, BWAPI::Colors::Red);
 
-        drawWhichEnemies(ourCenter + BWAPI::Position(-20, 28));
+        // drawWhichEnemies(ourCenter + BWAPI::Position(-20, 28));
         //BWAPI::Broodwar->drawTextMap(ourCenter + BWAPI::Position(-20, 44), "%c %s v %s%s", yellow,
         //    (_allFriendliesFlying ? "flyers" : ""),
         //    (_allEnemiesUndetected ? "unseen" : ""),

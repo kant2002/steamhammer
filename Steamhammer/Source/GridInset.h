@@ -6,13 +6,8 @@
 
 namespace UAlbertaBot
 {
-class The;
-
 class GridInset : public GridWalk
 {
-private:
-	The & the;
-
 public:
 	GridInset();
 

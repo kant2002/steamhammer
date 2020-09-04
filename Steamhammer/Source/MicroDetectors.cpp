@@ -106,7 +106,7 @@ void MicroDetectors::go(const BWAPI::Unitset & squadUnits)
 		}
 		else
 		{
-			destination = Bases::Instance().myMainBase()->getPosition();
+			destination = the.bases.myMain()->getPosition();
 		}
 		the.micro.MoveNear(detectorUnit, destination);
 	}

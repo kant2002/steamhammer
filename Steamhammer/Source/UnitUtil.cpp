@@ -25,6 +25,17 @@ bool UnitUtil::IsMorphedUnitType(BWAPI::UnitType type)
 		type == BWAPI::UnitTypes::Zerg_Devourer;
 }
 
+// A partial substitute for t2.isSuccessorOf(t1) from BWAPI 4.2.0.
+bool UnitUtil::BuildingIsMorphedFrom(BWAPI::UnitType t2, BWAPI::UnitType t1)
+{
+    return
+        t1 == BWAPI::UnitTypes::Zerg_Creep_Colony && t2 == BWAPI::UnitTypes::Zerg_Sunken_Colony ||
+        t1 == BWAPI::UnitTypes::Zerg_Creep_Colony && t2 == BWAPI::UnitTypes::Zerg_Spore_Colony ||
+        t1 == BWAPI::UnitTypes::Zerg_Hatchery     && t2 == BWAPI::UnitTypes::Zerg_Lair ||
+        t1 == BWAPI::UnitTypes::Zerg_Lair         && t2 == BWAPI::UnitTypes::Zerg_Hive ||
+        t1 == BWAPI::UnitTypes::Zerg_Spire        && t2 == BWAPI::UnitTypes::Zerg_Greater_Spire;
+}
+
 // A lair or hive is a completed resource depot even if not a completed unit.
 bool UnitUtil::IsCompletedResourceDepot(BWAPI::Unit unit)
 {
@@ -69,6 +80,22 @@ bool UnitUtil::IsComingStaticDefense(BWAPI::UnitType type)
 		type == BWAPI::UnitTypes::Protoss_Shield_Battery;
 }
 
+// Buildings have this much extra latency after reaching 100% HP before becoming complete.
+// For a friendly building, building->getRemainingBuildTime() gives the time to 100% HP only.
+int UnitUtil::ExtraBuildingLatency(BWAPI::Race race)
+{
+    if (race == BWAPI::Races::Terran)
+    {
+        return 2;
+    }
+    if (race == BWAPI::Races::Protoss)
+    {
+        return 72;
+    }
+    // Zerg.
+    return 9;
+}
+
 // This is an enemy combat unit for purposes of combat simulation.
 // If it's our unit, it's better to call IsCombatSimUnit() directly with the BWAPI::Unit.
 bool UnitUtil::IsCombatSimUnit(const UnitInfo & ui)
@@ -87,8 +114,10 @@ bool UnitUtil::IsCombatSimUnit(BWAPI::Unit unit)
 {
 	if (!unit->isCompleted() ||
 		!unit->isPowered() ||
-		unit->isMaelstrommed() ||
-		unit->isUnderDisruptionWeb())
+        unit->isLockedDown() |
+        unit->isMaelstrommed() ||
+		unit->isUnderDisruptionWeb() ||
+        unit->isStasised())
 	{
 		return false;
 	}
@@ -99,7 +128,8 @@ bool UnitUtil::IsCombatSimUnit(BWAPI::Unit unit)
 		return
 			unit->getOrder() == BWAPI::Orders::AttackMove ||
 			unit->getOrder() == BWAPI::Orders::AttackTile ||
-			unit->getOrder() == BWAPI::Orders::AttackUnit;
+			unit->getOrder() == BWAPI::Orders::AttackUnit ||
+            unit->getOrder() == BWAPI::Orders::Patrol;
 	}
 
 	return IsCombatSimUnit(unit->getType());
@@ -168,7 +198,7 @@ bool UnitUtil::IsSuicideUnit(BWAPI::Unit unit)
     return IsSuicideUnit(unit->getType());
 }
 
-// Check whether a unit variable points to a unit we control.
+// Check whether a unit is a unit we control.
 // This is called only on units that we believe are ours (we may be wrong if it was mind controlled).
 bool UnitUtil::IsValidUnit(BWAPI::Unit unit)
 {
@@ -208,7 +238,8 @@ bool UnitUtil::CanAttackAir(BWAPI::Unit attacker)
 // Assume that a bunker is loaded and can shoot at air.
 bool UnitUtil::TypeCanAttackAir(BWAPI::UnitType attacker)
 {
-	return attacker.airWeapon() != BWAPI::WeaponTypes::None ||
+	return
+        attacker.airWeapon() != BWAPI::WeaponTypes::None ||
 		attacker == BWAPI::UnitTypes::Terran_Bunker ||
 		attacker == BWAPI::UnitTypes::Protoss_Carrier;
 }
@@ -224,7 +255,8 @@ bool UnitUtil::CanAttackGround(BWAPI::Unit attacker)
 // Assume that a bunker is loaded and can shoot at ground.
 bool UnitUtil::TypeCanAttackGround(BWAPI::UnitType attacker)
 {
-	return attacker.groundWeapon() != BWAPI::WeaponTypes::None ||
+	return
+        attacker.groundWeapon() != BWAPI::WeaponTypes::None ||
 		attacker == BWAPI::UnitTypes::Terran_Bunker ||
 		attacker == BWAPI::UnitTypes::Protoss_Carrier ||
 		attacker == BWAPI::UnitTypes::Protoss_Reaver;
@@ -238,6 +270,7 @@ bool UnitUtil::TypeCanAttack(BWAPI::UnitType type)
 }
 
 // Damage per frame.
+// NOTE This does not account for unit sizes, it's a generic "how hard does it hit?" value.
 double UnitUtil::DPF(BWAPI::Unit attacker, BWAPI::Unit target)
 {
 	BWAPI::WeaponType weapon = GetWeapon(attacker, target);
@@ -395,27 +428,25 @@ int UnitUtil::GetAttackRangeAssumingUpgrades(BWAPI::UnitType attacker, BWAPI::Un
         return 0;
     }
 
-    int range = weapon.maxRange();
-
 	// Assume that any upgrades are researched.
-	if (attacker == BWAPI::UnitTypes::Protoss_Dragoon)
+    if (attacker == BWAPI::UnitTypes::Terran_Marine)
+    {
+        return 5 * 32;
+    }
+    if (attacker == BWAPI::UnitTypes::Terran_Goliath && target.isFlyer())
+    {
+        return 8 * 32;
+    }
+    if (attacker == BWAPI::UnitTypes::Protoss_Dragoon)
 	{
-		range = 6 * 32;
+		return 6 * 32;
 	}
-	else if (attacker == BWAPI::UnitTypes::Terran_Marine)
+	if (attacker == BWAPI::UnitTypes::Zerg_Hydralisk)
 	{
-		range = 5 * 32;
-	}
-	else if (attacker == BWAPI::UnitTypes::Terran_Goliath && target.isFlyer())
-	{
-		range = 8 * 32;
-	}
-	else if (attacker == BWAPI::UnitTypes::Zerg_Hydralisk)
-	{
-		range = 5 * 32;
+        return 5 * 32;
 	}
 
-	return range;
+    return weapon.maxRange();
 }
 
 // Weapon range in pixels.
@@ -540,9 +571,36 @@ bool UnitUtil::AttackOrder(BWAPI::Unit unit)
 		order == BWAPI::Orders::ScarabAttack;
 }
 
+// The unit has an order associated with mining minerals
+// (though it might be doing something else in certain cases).
+bool UnitUtil::MineralOrder(BWAPI::Unit unit)
+{
+    BWAPI::Order order = unit->getOrder();
+    return
+        order == BWAPI::Orders::MoveToMinerals ||
+        order == BWAPI::Orders::WaitForMinerals ||
+        order == BWAPI::Orders::MiningMinerals ||
+        order == BWAPI::Orders::ReturnMinerals ||
+        order == BWAPI::Orders::ResetCollision;
+}
+
+// The unit has an order associated with mining gas
+// (though it might be doing something else in certain cases).
+bool UnitUtil::GasOrder(BWAPI::Unit unit)
+{
+    BWAPI::Order order = unit->getOrder();
+    return
+        order == BWAPI::Orders::MoveToGas ||
+        order == BWAPI::Orders::WaitForGas ||
+        order == BWAPI::Orders::HarvestGas ||
+        order == BWAPI::Orders::ReturnGas ||
+        order == BWAPI::Orders::ResetCollision;
+}
+
 // Return the unit or building's detection range in tiles, 0 if it is not a detector.
 // Detection range is independent of sight range. To detect a cloaked enemy, you
 // need to see it also: Any unit in sight range of it, plus a detector in detection range.
+// Sight also depends on high/low ground.
 int UnitUtil::GetDetectionRange(BWAPI::UnitType type)
 {
 	if (type.isDetector())
@@ -559,9 +617,10 @@ int UnitUtil::GetDetectionRange(BWAPI::UnitType type)
 // Can the enemy detect a unit at this position?
 // This is nearly accurate for known enemy detectors, possibly off at the edges.
 // It doesn't try to check whether the enemy can see the unit, which is independent of detection.
+// E.g., a lurker on a cliff might be detected but safe because it is unseen.
 bool UnitUtil::EnemyDetectorInRange(BWAPI::Position pos)
 {
-    if (The::Root().airAttacks.at(pos))
+    if (the.airAttacks.at(pos))
     {
         // For turrets, cannons, spore colonies: attack range == detection range.
         return true;
@@ -569,77 +628,21 @@ bool UnitUtil::EnemyDetectorInRange(BWAPI::Position pos)
 
     return nullptr != BWAPI::Broodwar->getClosestUnit(
         pos,
-        BWAPI::Filter::IsDetector && BWAPI::Filter::IsEnemy && BWAPI::Filter::IsFlyer,
+        BWAPI::Filter::IsDetector && BWAPI::Filter::IsEnemy && BWAPI::Filter::IsFlyer && !BWAPI::Filter::IsBlind,
         11 * 32
     );
 }
 
-// All our units, whether completed or not.
-int UnitUtil::GetAllUnitCount(BWAPI::UnitType type)
+bool UnitUtil::EnemyDetectorInRange(BWAPI::Unit unit)
 {
-    int count = 0;
-    for (const auto unit : BWAPI::Broodwar->self()->getUnits())
-    {
-        if (unit->getType() == type)
-        {
-            ++count;
-        }
-
-        // Units in the egg.
-        else if (unit->getType() == BWAPI::UnitTypes::Zerg_Egg && unit->getBuildType() == type)
-        {
-            count += type.isTwoUnitsInOneEgg() ? 2 : 1;
-        }
-
-		// Lurkers in the egg.
-		else if (unit->getType() == BWAPI::UnitTypes::Zerg_Lurker_Egg && type == BWAPI::UnitTypes::Zerg_Lurker)
-		{
-			++count;
-		}
-
-		// Guardians or devourers in the cocoon.
-		else if (unit->getType() == BWAPI::UnitTypes::Zerg_Cocoon && unit->getBuildType() == type)
-		{
-			++count;
-		}
-
-        // case where a building has started constructing a unit but it doesn't yet have a unit associated with it
-        else if (unit->getRemainingTrainTime() > 0)
-        {
-            BWAPI::UnitType trainType = unit->getLastCommand().getUnitType();
-
-			// NOTE Comparing the time like this could lead to miscounts if units start simultaneously.
-			//      But the original UAlbertaBot production system does not start units simultaneously.
-            if (trainType == type && unit->getRemainingTrainTime() == trainType.buildTime())
-            {
-                ++count;
-            }
-        }
-    }
-
-    return count;
-}
-
-// Only our completed units.
-int UnitUtil::GetCompletedUnitCount(BWAPI::UnitType type)
-{
-	int count = 0;
-	for (const auto unit : BWAPI::Broodwar->self()->getUnits())
-	{
-		if (unit->getType() == type && unit->isCompleted())
-		{
-			++count;
-		}
-	}
-
-	return count;
+    return EnemyDetectorInRange(unit->getPosition());
 }
 
 // Only our incomplete units.
 int UnitUtil::GetUncompletedUnitCount(BWAPI::UnitType type)
 {
 	int count = 0;
-	for (const auto unit : BWAPI::Broodwar->self()->getUnits())
+	for (BWAPI::Unit unit : BWAPI::Broodwar->self()->getUnits())
 	{
 		// Units in the egg.
 		if (unit->getType() == BWAPI::UnitTypes::Zerg_Egg && unit->getBuildType() == type)
@@ -690,16 +693,17 @@ bool UnitUtil::MobilizeUnit(BWAPI::Unit unit)
 	{
 		return unit->unsiege();
 	}
-	if (unit->isBurrowed() && unit->canUnburrow() &&
+	if (unit->canUnburrow() &&
 		!unit->isIrradiated() &&
 		(double(unit->getHitPoints()) / double(unit->getType().maxHitPoints()) > 0.25))  // very weak units stay burrowed
 	{
-		return The::Root().micro.Unburrow(unit);
+        //BWAPI::Broodwar->printf("mobilize %s %d", UnitTypeName(unit).c_str(), unit->getID());
+		return the.micro.Unburrow(unit);
 	}
 	return false;
 }
 
-// Immobilixe the unit: Siege a tank, burrow a lurker. Otherwise do nothing.
+// Immobilize the unit: Siege a tank, burrow a lurker. Otherwise do nothing.
 // Return whether any action was taken.
 // NOTE This used to be used, but turned out to be a bad idea in that use.
 bool UnitUtil::ImmobilizeUnit(BWAPI::Unit unit)
@@ -711,7 +715,7 @@ bool UnitUtil::ImmobilizeUnit(BWAPI::Unit unit)
 	if (unit->canBurrow() &&
 		(unit->getType() == BWAPI::UnitTypes::Zerg_Lurker || unit->isIrradiated()))
 	{
-		return The::Root().micro.Burrow(unit);
+		return the.micro.Burrow(unit);
 	}
 	return false;
 }

@@ -20,9 +20,6 @@ BuildOrder::BuildOrder(const BWAPI::Race race, const std::vector<MacroAct> & met
 
 void BuildOrder::add(const MacroAct & act)
 {
-	// Note: MacroAct commands are the same for all races.
-    UAB_ASSERT(act.getRace() == getRace() || act.isCommand(), "Trying to add different Race MacroAct to build order");
-
     _buildOrder.push_back(act);
 }
 

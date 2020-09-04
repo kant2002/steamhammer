@@ -11,7 +11,6 @@ namespace UAlbertaBot
 {
 class CombatCommander
 {
-	The &			the;
 	SquadData       _squadData;
     BWAPI::Unitset  _combatUnits;
     bool            _initialized;

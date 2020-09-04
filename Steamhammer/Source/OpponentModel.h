@@ -60,7 +60,6 @@ namespace UAlbertaBot
 		OpeningPlan _initialExpectedEnemyPlan;  // first predicted enemy plan, before play starts
 		OpeningPlan _expectedEnemyPlan;		    // in-game predicted enemy plan
 		// NOTE There is also an actual recognized enemy plan. It is kept in _planRecognizer.getPlan().
-		bool _recommendGasSteal;
 		std::string _recommendedOpening;
 
 		OpeningPlan predictEnemyPlan() const;
@@ -71,7 +70,6 @@ namespace UAlbertaBot
 		void multipleStrategyEnemyOpenings();
 		double weightedWinRate(double weightedWins, double weightedGames) const;
 		void reconsiderEnemyPlan();
-		void considerGasSteal();
 		void setBestMatch();
 
 		std::string getExploreOpening(const OpponentSummary & opponentSummary);
@@ -90,8 +88,11 @@ namespace UAlbertaBot
 
 		void predictEnemy(int lookaheadFrames, PlayerSnapshot & snap) const;
 
-		const OpponentSummary & getSummary() const { return _summary; };
-		bool		getEnemySingleStrategy() const { return _singleStrategy; };
+        const std::vector<GameRecord *> & getRecords() const { return _pastGameRecords; };
+        const OpponentSummary & getSummary() const { return _summary; };
+        bool        sameMatchup(const GameRecord & record) const;
+
+        bool		isEnemySingleStrategy() const { return _singleStrategy; };
 		OpeningPlan getEnemyPlan() const;
 		std::string getEnemyPlanString() const;
 		OpeningPlan getInitialExpectedEnemyPlan() const { return _initialExpectedEnemyPlan; };
@@ -100,7 +101,6 @@ namespace UAlbertaBot
 		OpeningPlan getBestGuessEnemyPlan() const;
 		OpeningPlan getDarnLikelyEnemyPlan() const;
 
-		bool getRecommendGasSteal() const { return _recommendGasSteal; };
 		const std::string & getRecommendedOpening() const { return _recommendedOpening; };
 
 		static OpponentModel & Instance();

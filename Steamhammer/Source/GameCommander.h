@@ -1,22 +1,11 @@
 #pragma once
 
-#include "Common.h"
-
-#include "BuildingManager.h"
+#include <BWAPI.h>
 #include "CombatCommander.h"
-#include "InformationManager.h"
-#include "MapGrid.h"
-#include "OpponentModel.h"
-#include "ProductionManager.h"
-#include "ScoutManager.h"
-#include "StrategyManager.h"
 #include "TimerManager.h"
-#include "WorkerManager.h"
 
 namespace UAlbertaBot
 {
-class The;
-
 class UnitToAssign
 {
 public:
@@ -33,25 +22,30 @@ public:
 
 class GameCommander 
 {
-	The &					the;
-	CombatCommander &		_combatCommander;
-	TimerManager		    _timerManager;
+	CombatCommander &	_combatCommander;
+	TimerManager		_timerManager;
 
-	BWAPI::Unitset          _validUnits;
-	BWAPI::Unitset          _combatUnits;
-	BWAPI::Unitset          _scoutUnits;
+	BWAPI::Unitset      _validUnits;
+	BWAPI::Unitset      _combatUnits;
+	BWAPI::Unitset      _scoutUnits;
 
-	int						_surrenderTime;     // for giving up early
-    int                     _myHighWaterSupply; // used for surrender decisions vs. a human
+	int					_surrenderTime;     // for giving up early
+    int                 _myHighWaterSupply; // used for surrender decisions vs. a human
 
-	int						_initialScoutTime;  // 0 until a scouting worker is assigned
+	int					_initialScoutTime;  // 0 until a scouting worker is assigned
 
-    void                    assignUnit(BWAPI::Unit unit, BWAPI::Unitset & set);
-	bool                    isAssigned(BWAPI::Unit unit) const;
+    void                assignUnit(BWAPI::Unit unit, BWAPI::Unitset & set);
+	bool                isAssigned(BWAPI::Unit unit) const;
 
-	bool					surrenderMonkey();
+	bool				surrenderMonkey();
 
-	BWAPI::Unit getAnyFreeWorker();
+	BWAPI::Unit         getAnyFreeWorker();
+
+    void                drawDebugInterface();
+    void                drawGameInformation(int x, int y);
+    void                drawUnitOrders();
+    void                drawUnitCounts(int x, int y) const;
+    void                drawTerrainHeights() const;
 
 public:
 
@@ -70,10 +64,6 @@ public:
 
 	void goScout();
 	int getScoutTime() const { return _initialScoutTime; };
-
-	void drawDebugInterface();
-    void drawGameInformation(int x, int y);
-	void drawUnitOrders();
 
 	void onUnitShow(BWAPI::Unit unit);
 	void onUnitHide(BWAPI::Unit unit);

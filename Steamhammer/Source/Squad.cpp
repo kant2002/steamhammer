@@ -3,9 +3,6 @@
 #include "Bases.h"
 #include "CombatSimulation.h"
 #include "MapTools.h"
-#include "Micro.h"
-#include "Random.h"
-#include "ScoutManager.h"
 #include "StrategyManager.h"
 #include "The.h"
 #include "UnitUtil.h"
@@ -13,8 +10,7 @@
 using namespace UAlbertaBot;
 
 Squad::Squad()
-	: the(The::Root())
-	, _name("Default")
+	: _name("Default")
 	, _combatSquad(false)
 	, _combatSimRadius(Config::Micro::CombatSimRadius)
 	, _fightVisibleOnly(false)
@@ -37,8 +33,7 @@ Squad::Squad()
 // The usual work of workers is managed by WorkerManager. If we put workers into
 // another squad, we have to notify WorkerManager.
 Squad::Squad(const std::string & name, SquadOrder order, size_t priority)
-	: the(The::Root())
-	, _name(name)
+	: _name(name)
 	, _combatSquad(name != "Idle" && name != "Overlord")
 	, _combatSimRadius(Config::Micro::CombatSimRadius)
 	, _fightVisibleOnly(false)
@@ -63,7 +58,6 @@ Squad::~Squad()
 
 void Squad::update()
 {
-	// update all necessary unit information within this squad
 	updateUnits();
 
 	// The vanguard (squad unit farthest forward) will be updated below if appropriate.
@@ -293,7 +287,7 @@ bool Squad::noCombatUnits(const UnitCluster & cluster) const
 {
 	for (BWAPI::Unit unit : cluster.units)
 	{
-		if (UnitUtil::CanAttackGround(unit) || UnitUtil::CanAttackAir(unit))
+		if (UnitUtil::TypeCanAttack(unit->getType()))
 		{
 			return false;
 		}
@@ -315,7 +309,7 @@ bool Squad::notNearEnemy(const UnitCluster & cluster)
 	return true;
 }
 
-// Try to merge this cluster with a nearby one. Return true for success.
+// Try to merge this cluster with one ahead of it. Return true for success.
 bool Squad::joinUp(const UnitCluster & cluster)
 {
 	if (_clusters.size() < 2)
@@ -325,7 +319,7 @@ bool Squad::joinUp(const UnitCluster & cluster)
 	}
 
 	// Move toward the closest other cluster which is closer to the goal.
-	int bestDistance = 99999;
+    int bestDistance = INT_MAX;
 	const UnitCluster * bestCluster = nullptr;
 
 	for (const UnitCluster & otherCluster : _clusters)
@@ -433,7 +427,7 @@ void Squad::setAllUnits()
 	_canAttackGround = false;
 
 	BWAPI::Unitset goodUnits;
-	for (const auto unit : _units)
+	for (BWAPI::Unit unit : _units)
 	{
 		if (UnitUtil::IsValidUnit(unit))
 		{
@@ -467,7 +461,7 @@ void Squad::setNearEnemyUnits()
 {
 	_nearEnemy.clear();
 
-	for (const auto unit : _units)
+	for (BWAPI::Unit unit : _units)
 	{
 		if (!unit->getPosition().isValid())   // excludes loaded units
 		{
@@ -663,8 +657,8 @@ bool Squad::needsToRegroup(const UnitCluster & cluster)
 	}
 
 	// If we're nearly maxed and have good income or cash, don't retreat.
-	if (BWAPI::Broodwar->self()->supplyUsed() >= 390 &&
-		(BWAPI::Broodwar->self()->minerals() > 1000 || WorkerManager::Instance().getNumMineralWorkers() > 12))
+	if (the.self()->supplyUsed() >= 390 &&
+		(the.self()->minerals() > 1000 || WorkerManager::Instance().getNumMineralWorkers() > 12))
 	{
 		_attackAtMax = true;
 	}
@@ -706,7 +700,7 @@ bool Squad::needsToRegroup(const UnitCluster & cluster)
 		// If there is static defense to retreat to, try to get behind it.
 		// Assume that the static defense is between the final regroup position and the enemy.
 		if (vanguard->getDistance(nearest) < 196 &&
-			vanguard->getDistance(final) < nearest->getDistance(final))
+            nearest->getDistance(final) - vanguard->getDistance(final) > 96)
 		{
 			_regroupStatus = green + std::string("Behind static defense");
 			return false;
@@ -760,21 +754,28 @@ BWAPI::Position Squad::calcRegroupPosition(const UnitCluster & cluster) const
 
 	// 2. Regroup toward another cluster.
 	// Look for a cluster nearby, and preferably closer to the enemy.
-	BWAPI::Unit closestEnemy = BWAPI::Broodwar->getClosestUnit(cluster.center, BWAPI::Filter::IsEnemy, 384);
-	const int safeRange = closestEnemy ? closestEnemy->getDistance(cluster.center) : 384;
-	const UnitCluster * bestCluster = nullptr;
-	int bestScore = -99999;
-	for (const UnitCluster & neighbor : _clusters)
+    const int riskRadius = 12 * 32;
+    BWAPI::Unit closestEnemy = BWAPI::Broodwar->getClosestUnit(cluster.center, BWAPI::Filter::IsEnemy, riskRadius);
+    const int distToEnemy = closestEnemy ? closestEnemy->getDistance(cluster.center) : riskRadius;
+    const int distToOrder = cluster.center.getApproxDistance(_order.getPosition());
+    const UnitCluster * bestCluster = nullptr;
+    int bestScore = INT_MIN;
+    for (const UnitCluster & neighbor : _clusters)
 	{
 		int distToNeighbor = cluster.center.getApproxDistance(neighbor.center);
-		int distToOrder = cluster.center.getApproxDistance(_order.getPosition());
-		// An air cluster may join a ground cluster, but not vice versa.
-		if (distToNeighbor < safeRange && distToNeighbor > 0 && cluster.air >= neighbor.air)
+        BWAPI::Unit neighborEnemy = BWAPI::Broodwar->getClosestUnit(neighbor.center, BWAPI::Filter::IsEnemy, riskRadius);;
+        int neighborToEnemy = neighborEnemy ? neighborEnemy->getDistance(neighbor.center) : riskRadius;
+        // An air cluster may join a ground cluster, but not vice versa.
+        if (distToNeighbor > 0 &&
+            (distToNeighbor < distToEnemy || distToEnemy > neighborToEnemy) &&
+            cluster.air >= neighbor.air)
 		{
-			int score = distToOrder - neighbor.center.getApproxDistance(_order.getPosition());
+			int score =
+                distToOrder - neighbor.center.getApproxDistance(_order.getPosition()) +
+                2 * (distToEnemy - neighborToEnemy);
 			if (neighbor.status == ClusterStatus::Attack)
 			{
-				score += 4 * 32;
+				score += 6 * 32;
 			}
 			else if (neighbor.status == ClusterStatus::Regroup)
 			{
@@ -793,11 +794,11 @@ BWAPI::Position Squad::calcRegroupPosition(const UnitCluster & cluster) const
 	}
 
 	// 3. Retreat to the location of the cluster unit not near the enemy which is
-	// closest to the order position. This tries to stay close while still out of range.
+	// closest to the order position. This tries to stay close while still out of enemy range.
 	// Units in the cluster are all air or all ground and exclude mobile detectors.
-	BWAPI::Position regroup(BWAPI::Positions::Origin);
-	int minDist = 100000;
-	for (const auto unit : cluster.units)
+	BWAPI::Position regroup(BWAPI::Positions::None);
+	int minDist = INT_MAX;
+	for (BWAPI::Unit unit : cluster.units)
 	{
 		// Count combat units only. Bug fix originally thanks to AIL, it's been rewritten since then.
 		if (unit->exists() &&
@@ -810,7 +811,7 @@ BWAPI::Position Squad::calcRegroupPosition(const UnitCluster & cluster) const
 			{
 				// If the squad has any ground units, don't try to retreat to the position of a unit
 				// which is in a place that we cannot reach.
-				if (!_hasGround || -1 != MapTools::Instance().getGroundTileDistance(unit->getPosition(), _order.getPosition()))
+				if (!_hasGround || -1 != the.map.getGroundTileDistance(unit->getPosition(), _order.getPosition()))
 				{
 					minDist = dist;
 					regroup = unit->getPosition();
@@ -818,7 +819,7 @@ BWAPI::Position Squad::calcRegroupPosition(const UnitCluster & cluster) const
 			}
 		}
 	}
-	if (regroup != BWAPI::Positions::Origin)
+	if (regroup.isValid())
 	{
 		return regroup;
 	}
@@ -831,19 +832,13 @@ BWAPI::Position Squad::calcRegroupPosition(const UnitCluster & cluster) const
 BWAPI::Position Squad::finalRegroupPosition() const
 {
 	// Retreat to the main base, unless we change our mind below.
-	Base * base = Bases::Instance().myMainBase();
+	Base * base = the.bases.myMain();
 
 	// If the natural has been taken, retreat there instead.
-	Base * natural = Bases::Instance().myNaturalBase();
+	Base * natural = the.bases.myNatural();
 	if (natural && natural->getOwner() == BWAPI::Broodwar->self())
 	{
 		base = natural;
-	}
-
-	// If neither, retreat to the starting base (never null, even if the buildings were destroyed).
-	if (!base)
-	{
-		base = Bases::Instance().myMainBase();
 	}
 
 	return base->getPosition();
@@ -877,7 +872,7 @@ BWAPI::Unit Squad::nearbyStaticDefense(const BWAPI::Position & pos) const
 
 bool Squad::containsUnitType(BWAPI::UnitType t) const
 {
-	for (const auto u : _units)
+	for (BWAPI::Unit u : _units)
 	{
 		if (u->getType() == t)
 		{
@@ -889,7 +884,7 @@ bool Squad::containsUnitType(BWAPI::UnitType t) const
 
 void Squad::clear()
 {
-	for (const auto unit : _units)
+	for (BWAPI::Unit unit : _units)
 	{
 		if (unit->getType().isWorker())
 		{
@@ -935,7 +930,7 @@ bool Squad::unitNearEnemy(BWAPI::Unit unit)
 int Squad::mapPartition() const
 {
 	// Default to our starting position.
-	BWAPI::Position pos = Bases::Instance().myStartingBase()->getPosition();
+	BWAPI::Position pos = the.bases.myStart()->getPosition();
 
 	// Pick any unit with a position on the map (not, for example, in a bunker).
 	for (BWAPI::Unit unit : _units)
@@ -956,11 +951,11 @@ BWAPI::Position Squad::calcCenter() const
 {
     if (_units.empty())
     {
-        return Bases::Instance().myStartingBase()->getPosition();
+        return the.bases.myStart()->getPosition();
     }
 
 	BWAPI::Position accum(0,0);
-	for (const auto unit : _units)
+	for (BWAPI::Unit unit : _units)
 	{
 		if (unit->getPosition().isValid())
 		{
@@ -971,14 +966,14 @@ BWAPI::Position Squad::calcCenter() const
 }
 
 // Return the unit closest to the order position (not actually closest to the enemy).
-BWAPI::Unit Squad::unitClosestToEnemy(const BWAPI::Unitset units) const
+BWAPI::Unit Squad::unitClosestToEnemy(const BWAPI::Unitset & units) const
 {
 	BWAPI::Unit closest = nullptr;
-	int closestDist = 999999;
+    int closestDist = INT_MAX;
 
 	UAB_ASSERT(_order.getPosition().isValid(), "bad order position");
 
-	for (const auto unit : units)
+	for (BWAPI::Unit unit : units)
 	{
 		// Non-combat units should be ignored for this calculation.
 		// If the cluster contains only these units, we'll return null.
@@ -996,13 +991,13 @@ BWAPI::Unit Squad::unitClosestToEnemy(const BWAPI::Unitset units) const
 		int dist;
 		if (_hasGround)
 		{
-			// A ground or air-ground squad. Use ground distance.
+			// A ground or air-ground group. Use ground distance.
 			// It is -1 if no ground path exists.
-			dist = MapTools::Instance().getGroundDistance(unit->getPosition(), _order.getPosition());
+			dist = the.map.getGroundDistance(unit->getPosition(), _order.getPosition());
 		}
 		else
 		{
-			// An all-air squad. Use air distance (which is what unit->getDistance() gives).
+			// An all-air group. Use air distance (which is what unit->getDistance() gives).
 			dist = unit->getDistance(_order.getPosition());
 		}
 
@@ -1088,22 +1083,35 @@ const std::string & Squad::getName() const
 // This is a watch squad. Handle special cases.
 // 1. If a unit is at its assigned watch position, burrow it if possible.
 // 2. If a unit is burrowed and no detector is in view, leave it there.
+// If there's an enemy detector, stay above ground to fight (or run away).
 bool Squad::maybeWatch()
 {
     for (BWAPI::Unit u : _units)
     {
-        if (!u->isBurrowed() &&
-            u->getDistance(_order.getPosition()) < 8 &&
-            u->canBurrow())
+        if (!u->isBurrowed())
         {
-            the.micro.Burrow(u);
-            return true;
+            if (u->getDistance(_order.getPosition()) < 8 &&
+                u->canBurrow() &&
+                !UnitUtil::EnemyDetectorInRange(u->getPosition()))
+            {
+                the.micro.Burrow(u);
+                return true;
+            }
         }
-        else if (u->isBurrowed() && !UnitUtil::EnemyDetectorInRange(u->getPosition()))
+        else
         {
-            // Return true to indicate that no action is to be taken.
-            // In particilar, don't unburrow to retreat.
-            return true;
+            // It's burrowed.
+            if (!UnitUtil::EnemyDetectorInRange(u->getPosition()) ||
+                nullptr == BWAPI::Broodwar->getClosestUnit(
+                    u->getPosition(),
+                    BWAPI::Filter::IsEnemy && BWAPI::Filter::GroundWeapon != BWAPI::WeaponTypes::None,
+                    6 * 32
+                ))
+            {
+                // Return true to indicate that no action is to be taken.
+                // In particular, don't unburrow to retreat.
+                return true;
+            }
         }
     }
 
@@ -1132,7 +1140,7 @@ void Squad::loadTransport()
 			continue;
 		}
 		
-		for (const auto unit : _units)
+		for (BWAPI::Unit unit : _units)
 		{
 			if (transport->getSpaceRemaining() == 0)
 			{
@@ -1240,7 +1248,7 @@ const bool Squad::isOverlordHunterSquad() const
 		return false;
 	}
 
-	for (const auto unit : _units)
+	for (BWAPI::Unit unit : _units)
 	{
 		const BWAPI::UnitType type = unit->getType();
 		if (!type.isFlyer())

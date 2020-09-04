@@ -47,7 +47,7 @@ void MicroScourge::assignTargets(const BWAPI::Unitset & scourge, const BWAPI::Un
 		if (target)
 		{
 			// A target was found. Attack it.
-			if (Config::Debug::DrawUnitTargetInfo)
+			if (Config::Debug::DrawUnitTargets)
 			{
 				BWAPI::Broodwar->drawLineMap(scourgeUnit->getPosition(), scourgeUnit->getTargetPosition(), BWAPI::Colors::Blue);
 			}
@@ -61,7 +61,7 @@ void MicroScourge::assignTargets(const BWAPI::Unitset & scourge, const BWAPI::Un
 			if (scourgeUnit->getDistance(order.getPosition()) > 3 * 32)
 			{
 				the.micro.MoveNear(scourgeUnit, order.getPosition());
-                if (Config::Debug::DrawUnitTargetInfo)
+                if (Config::Debug::DrawUnitTargets)
                 {
                     BWAPI::Broodwar->drawLineMap(scourgeUnit->getPosition(), order.getPosition(), BWAPI::Colors::Orange);
                 }
@@ -72,7 +72,7 @@ void MicroScourge::assignTargets(const BWAPI::Unitset & scourge, const BWAPI::Un
 
 BWAPI::Unit MicroScourge::getTarget(BWAPI::Unit scourge, const BWAPI::Unitset & targets)
 {
-	int bestScore = -999999;
+    int bestScore = INT_MIN;
 	BWAPI::Unit bestTarget = nullptr;
 
 	for (const auto target : targets)

@@ -5,12 +5,9 @@
 namespace UAlbertaBot
 {
 class Building;
-class The;
 
 class WorkerManager
 {
-	The &		the;
-
     WorkerData  workerData;
     BWAPI::Unit previousClosestWorker;
 	bool		_collectGas;
@@ -20,16 +17,22 @@ class WorkerManager
 	bool		refineryHasDepot(BWAPI::Unit refinery);
 	bool        isGasStealRefinery(BWAPI::Unit unit);
 
+    void        clearBlockingMinerals();
+
 	void        handleGasWorkers();
 	void        handleIdleWorkers();
 	void		handleReturnCargoWorkers();
 	void        handleRepairWorkers();
 	void		handleMineralWorkers();
+    void        handleUnblockWorkers();
+    void		handlePostedWorkers();
 
     // A worker within this distance of a target location is considered to be
     // "in the same base" as the target. Used by worker selection routines to avoid
     // transferring workers between bases.
     static const int thisBaseRange = 10 * 32;
+
+    bool        inIrradiateDanger(BWAPI::Unit worker) const;
 
 	BWAPI::Unit findEnemyTargetForWorker(BWAPI::Unit worker) const;
 	BWAPI::Unit findEscapeMinerals(BWAPI::Unit worker) const;
@@ -38,10 +41,14 @@ class WorkerManager
 	BWAPI::Unit getAnyClosestDepot(BWAPI::Unit worker);      // don't care whether it's full
 	BWAPI::Unit getClosestNonFullDepot(BWAPI::Unit worker);  // only if it can accept more mineral workers
 
-	BWAPI::Unit	getAnyWorker(BWAPI::Position pos, int range);
-	BWAPI::Unit	getUnencumberedWorker(BWAPI::Position pos, int range);
+    BWAPI::Unit	getAnyWorker(const BWAPI::Position & pos, int range);
+    BWAPI::Unit	getUnencumberedWorker(const BWAPI::Position & pos, int range);
+    BWAPI::Unit getPostedWorker(const BWAPI::Position & pos);
+    bool        postedWorkerBusy(const BWAPI::Position & pos);
 
-	WorkerManager();
+    void        drawWorkerInformation();
+    
+    WorkerManager();
 
 public:
 
@@ -53,9 +60,7 @@ public:
 
     void        finishedWithWorker(BWAPI::Unit unit);
 
-    void        drawResourceDebugInfo();
     void        updateWorkerStatus();
-    void        drawWorkerInformation(int x,int y);
 
     int         getNumMineralWorkers() const;
     int         getNumGasWorkers() const;
@@ -86,11 +91,11 @@ public:
     void        setRepairWorker(BWAPI::Unit worker,BWAPI::Unit unitToRepair);
     void        stopRepairing(BWAPI::Unit worker);
     void        setCombatWorker(BWAPI::Unit worker);
+    void        postWorker(MacroLocation loc);
+    void        unpostWorkers(MacroLocation loc);
 
     bool        willHaveResources(int mineralsRequired,int gasRequired,double distance);
     void        rebalanceWorkers();
-
-	bool		maybeMineMineralBlocks(BWAPI::Unit worker);
 
     static WorkerManager &  Instance();
 };

@@ -1,19 +1,14 @@
 #pragma once
 
-#include "Common.h"
-
-#include "Base.h"
+#include "ResourceInfo.h"
 #include "UnitData.h"
 
 namespace UAlbertaBot
 {
-class The;
 class Zone;
 
 class InformationManager
 {
-	The & the;
-
 	BWAPI::Player	_self;
 	BWAPI::Player	_enemy;
 
@@ -30,6 +25,7 @@ class InformationManager
 	bool			_enemyHasStaticDetection;
 	bool			_enemyHasMobileDetection;
 	bool			_enemyHasSiegeMode;
+    int             _enemyGasTiming;
 
 	std::map<BWAPI::Player, UnitData>                   _unitData;
 	std::map<BWAPI::Player, std::set<const Zone *> >	_occupiedRegions;	// contains any building
@@ -37,23 +33,33 @@ class InformationManager
 	BWAPI::Unitset										_ourPylons;
 	std::map<BWAPI::Unit, BWAPI::Unitset>				_theirTargets;		// our unit -> [enemy units targeting it]
 
-	InformationManager();
+    // Track a resource container (mineral patch or geyser) by its initial static unit.
+    // A mineral patch unit will disappear when it is mined out. A geyser unit will change when taken.
+    std::map<BWAPI::Unit, ResourceInfo> _resources;
 
-	void                    initializeRegionInformation();
+    InformationManager();
 
-	void					maybeClearNeutral(BWAPI::Unit unit);
+	void initializeRegionInformation();
+    void initializeResources();
 
-	void					maybeAddStaticDefense(BWAPI::Unit unit);
+	void maybeClearNeutral(BWAPI::Unit unit);
 
-	void                    updateUnit(BWAPI::Unit unit);
-	void                    updateUnitInfo();
-	void                    updateBaseLocationInfo();
-	void					enemyBaseLocationFromOverlordSighting();
-	void                    updateOccupiedRegions(const Zone * zone, BWAPI::Player player);
-	void					updateGoneFromLastPosition();
-	void					updateTheirTargets();
+	void maybeAddStaticDefense(BWAPI::Unit unit);
+
+	void updateUnit(BWAPI::Unit unit);
+	void updateUnitInfo();
+	void updateBaseLocationInfo();
+	void enemyBaseLocationFromOverlordSighting();
+	void updateOccupiedRegions(const Zone * zone, BWAPI::Player player);
+	void updateGoneFromLastPosition();
+	void updateTheirTargets();
+    void updateBullets();
+    void updateResources();
+    void updateEnemyGasTiming();
 
 public:
+
+    void                    initialize();
 
 	void                    update();
 
@@ -91,6 +97,7 @@ public:
 	bool					enemyHasStaticDetection();
 	bool					enemyHasMobileDetection();
 	bool					enemyHasSiegeMode();
+    int                     enemyGasTiming() const { return _enemyGasTiming; };
 
     bool                    weHaveCloakTech() const;
 
@@ -108,11 +115,14 @@ public:
 
     void                    drawExtendedInterface();
     void                    drawUnitInformation(int x,int y);
+    void                    drawResourceAmounts() const;
 
     const UnitData &        getUnitData(BWAPI::Player player) const;
 	const BWAPI::Unitset &	getEnemyFireteam(BWAPI::Unit ourUnit) const;
+    int                     getResourceAmount(BWAPI::Unit resource) const;
+    bool                    isMineralDestroyed(BWAPI::Unit resource) const;
+    bool                    isGeyserTaken(BWAPI::Unit resource) const;
 
-	// yay for singletons!
 	static InformationManager & Instance();
 };
 }

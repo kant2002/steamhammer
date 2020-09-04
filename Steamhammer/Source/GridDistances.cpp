@@ -1,6 +1,6 @@
 #include "GridDistances.h"
 
-#include "MapTools.h"
+#include "The.h"
 
 using namespace UAlbertaBot;
 
@@ -15,7 +15,7 @@ GridDistances::GridDistances()
 GridDistances::GridDistances(const BWAPI::TilePosition & start, bool neutralBlocks)
 	: Grid(BWAPI::Broodwar->mapWidth(), BWAPI::Broodwar->mapHeight(), -1)
 {
-	compute(start, 256 * 256 + 1, neutralBlocks);
+	compute(start, INT_MAX, neutralBlocks);
 }
 
 // Compute the map only up to the given distance limit.
@@ -50,7 +50,6 @@ const std::vector<BWAPI::TilePosition> & GridDistances::getSortedTiles() const
 
 // Computes grid[x][y] = Manhattan ground distance from the starting tile to (x,y),
 // up to the given limiting distance (and no farther, to save time).
-// Uses BFS, since the map is quite large and DFS may cause a stack overflow
 void GridDistances::compute(const BWAPI::TilePosition & start, int limit, bool neutralBlocks)
 {
 	const size_t LegalActions = 4;
@@ -83,7 +82,7 @@ void GridDistances::compute(const BWAPI::TilePosition & start, int limit, bool n
             // if the new tile is inside the map bounds, has not been visited yet, and is walkable
 			if (nextTile.isValid() &&
 				grid[nextTile.x][nextTile.y] == -1 &&
-				(neutralBlocks ? MapTools::Instance().isWalkable(nextTile) : MapTools::Instance().isTerrainWalkable(nextTile)))
+				(neutralBlocks ? the.map.isWalkable(nextTile) : the.map.isTerrainWalkable(nextTile)))
             {
 				fringe.push_back(nextTile);
 				grid[nextTile.x][nextTile.y] = currentDist + 1;

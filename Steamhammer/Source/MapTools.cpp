@@ -7,27 +7,14 @@
 
 using namespace UAlbertaBot;
 
-MapTools & MapTools::Instance()
+MapTools::MapTools()
 {
-    static MapTools instance;
-    return instance;
 }
 
-MapTools::MapTools()
-	: the(The::Root())
+void MapTools::initialize()
 {
-	// Figure out which tiles are walkable and buildable.
-	setBWAPIMapData();
-
-	_hasIslandBases = false;
-	for (Base * base : Bases::Instance().getBases())
-	{
-		if (!Bases::Instance().connectedToStart(base->getTilePosition()))
-		{
-			_hasIslandBases = true;
-			break;
-		}
-	}
+    // Figure out which tiles are walkable and buildable.
+    setBWAPIMapData();
 }
 
 // Read the map data from BWAPI and remember which 32x32 build tiles are walkable.
@@ -52,33 +39,32 @@ void MapTools::setBWAPIMapData()
 			_buildable[x][y] = buildable;
 			_depotBuildable[x][y] = buildable;
 
-			bool walkable = true;
-
 			// Check each 8x8 walk tile within this 32x32 TilePosition.
-			for (int i = 0; i < 4 && walkable; ++i)
+			for (int i = 0; i < 4; ++i)
 			{
-				for (int j = 0; j < 4 && walkable; ++j)
+				for (int j = 0; j < 4; ++j)
 				{
 					if (!BWAPI::Broodwar->isWalkable(x * 4 + i, y * 4 + j))
 					{
-						walkable = false;   // break out of both loops
 						_terrainWalkable[x][y] = false;
 						_walkable[x][y] = false;
+                        goto tileExit;
 					}
 				}
 			}
+        tileExit:;
 		}
 	}
 
 	// 3. Check neutral units: Do they block walkability?
 	// This affects _walkable but not _terrainWalkable. We don't update buildability here.
-	for (const auto unit : BWAPI::Broodwar->getStaticNeutralUnits())
+	for (BWAPI::Unit unit : BWAPI::Broodwar->getStaticNeutralUnits())
 	{
 		// The neutral units may include moving critters which do not permanently block tiles.
 		// Something immobile blocks tiles it occupies until it is destroyed. (Are there exceptions?)
-		if (!unit->getType().canMove() && !unit->isFlying())
+		if (!unit->getType().canMove() && !unit->getType().isFlyer())
 		{
-			BWAPI::TilePosition pos = unit->getTilePosition();
+			BWAPI::TilePosition pos = unit->getInitialTilePosition();
 			for (int x = pos.x; x < pos.x + unit->getType().tileWidth(); ++x)
 			{
 				for (int y = pos.y; y < pos.y + unit->getType().tileHeight(); ++y)
@@ -93,24 +79,23 @@ void MapTools::setBWAPIMapData()
 	}
 
 	// 4. Check static resources: Do they block buildability?
-	for (const BWAPI::Unit resource : BWAPI::Broodwar->getStaticNeutralUnits())
+	for (BWAPI::Unit resource : BWAPI::Broodwar->getStaticNeutralUnits())
 	{
-		if (!resource->getType().isResourceContainer())
+		if (!resource->getInitialType().isResourceContainer())
 		{
 			continue;
 		}
 
-		int tileX = resource->getTilePosition().x;
-		int tileY = resource->getTilePosition().y;
+		int tileX = resource->getInitialTilePosition().x;
+        int tileY = resource->getInitialTilePosition().y;
 
-		for (int x = tileX; x<tileX + resource->getType().tileWidth(); ++x)
+		for (int x = tileX; x < tileX + resource->getType().tileWidth(); ++x)
 		{
-			for (int y = tileY; y<tileY + resource->getType().tileHeight(); ++y)
+			for (int y = tileY; y < tileY + resource->getType().tileHeight(); ++y)
 			{
 				_buildable[x][y] = false;
 
-				// depots can't be built within 3 tiles of any resource
-				// TODO rewrite this to be less disgusting
+				// A resource depot can't be built within 3 tiles of any resource.
 				for (int dx = -3; dx <= 3; dx++)
 				{
 					for (int dy = -3; dy <= 3; dy++)
@@ -127,7 +112,7 @@ void MapTools::setBWAPIMapData()
 }
 
 // Ground distance in tiles, -1 if no path exists.
-// This is Manhattan distance, not walking distance. Still good for finding paths.
+// This is Manhattan distance, not true walking distance. Still good for finding paths.
 int MapTools::getGroundTileDistance(BWAPI::TilePosition origin, BWAPI::TilePosition destination)
 {
     // if we have too many maps, reset our stored maps in case we run out of memory
@@ -190,6 +175,7 @@ const std::vector<BWAPI::TilePosition> & MapTools::getClosestTilesTo(BWAPI::Posi
 	return getClosestTilesTo(BWAPI::TilePosition(pos));
 }
 
+// TODO deprecated method
 bool MapTools::isBuildable(BWAPI::TilePosition tile, BWAPI::UnitType type) const
 {
 	if (!tile.isValid())
@@ -220,32 +206,16 @@ bool MapTools::isBuildable(BWAPI::TilePosition tile, BWAPI::UnitType type) const
 
 void MapTools::drawHomeDistances()
 {
-	if (!Config::Debug::DrawMapDistances)
+	if (Config::Debug::DrawMapDistances)
 	{
-		return;
+        the.bases.myMain()->getDistances().draw();
 	}
 
-    BWAPI::TilePosition homePosition = Bases::Instance().myMainBase()->getTilePosition();
-
-    for (int x = 0; x < BWAPI::Broodwar->mapWidth(); ++x)
-    {
-        for (int y = 0; y < BWAPI::Broodwar->mapHeight(); ++y)
-        {
-            int dist = Bases::Instance().myMainBase()->getTileDistance(BWAPI::TilePosition(x,y));
-			char color = dist == -1 ? orange : white;
-
-			BWAPI::Position pos(BWAPI::TilePosition(x, y));
-			BWAPI::Broodwar->drawTextMap(pos + BWAPI::Position(12, 12), "%c%d", color, dist);
-
-			if (homePosition.x == x && homePosition.y == y)
-			{
-				BWAPI::Broodwar->drawBoxMap(pos.x, pos.y, pos.x+33, pos.y+33, BWAPI::Colors::Yellow);
-			}
-		}
-    }
+    BWAPI::TilePosition homePosition = the.bases.myMain()->getTilePosition();
+    BWAPI::Broodwar->drawBoxMap(homePosition.x, homePosition.y, homePosition.x + 33, homePosition.y + 33, BWAPI::Colors::Yellow);
 }
 
-Base * MapTools::nextExpansion(bool hidden, bool wantMinerals, bool wantGas)
+Base * MapTools::nextExpansion(bool hidden, bool wantMinerals, bool wantGas) const
 {
 	UAB_ASSERT(wantMinerals || wantGas, "unwanted expansion");
 
@@ -257,10 +227,10 @@ Base * MapTools::nextExpansion(bool hidden, bool wantMinerals, bool wantGas)
 	Base * bestBase = nullptr;
 	double bestScore = -999999.0;
 	
-	BWAPI::TilePosition homeTile = Bases::Instance().myStartingBase()->getTilePosition();
+	BWAPI::TilePosition homeTile = the.bases.myStart()->getTilePosition();
 	BWAPI::Position myBasePosition(homeTile);
 
-    for (Base * base : Bases::Instance().getBases())
+    for (Base * base : the.bases.getAll())
     {
 		// Don't expand to an existing base, or a reserved base.
 		if (base->getOwner() != BWAPI::Broodwar->neutral() || base->isReserved())
@@ -274,15 +244,23 @@ Base * MapTools::nextExpansion(bool hidden, bool wantMinerals, bool wantGas)
 			continue;
 		}
 
+        const int estimatedMinerals = base->getLastKnownMinerals();
+
 		// Do we demand a mineral base?
 		// The constant is an arbitrary limit "enough minerals to be worth it".
-		if (wantMinerals && base->getInitialMinerals() < 500)
+        if (wantMinerals && estimatedMinerals < 500)
 		{
 			continue;
 		}
 
         BWAPI::TilePosition topLeft = base->getTilePosition();
         BWAPI::TilePosition bottomRight = topLeft + BWAPI::TilePosition(4, 3);
+
+        // No good if the building location is known to be in range of enemy static defense.
+        if (the.groundAttacks.inRange(player->getRace().getCenter(), topLeft))
+        {
+            continue;
+        }
 
         // No good if an enemy building or burrowed unit is in the way (even if out of sight).
         bool buildingInTheWay = false;
@@ -312,7 +290,7 @@ Base * MapTools::nextExpansion(bool hidden, bool wantMinerals, bool wantGas)
         {
 			for (int y = 0; y < player->getRace().getCenter().tileHeight(); ++y)
             {
-                if (BuildingPlacer::Instance().isReserved(topLeft.x + x, topLeft.y + y))
+                if (the.placer.isReserved(topLeft.x + x, topLeft.y + y))
 				{
 					// This happens if we were already planning to expand here. Try somewhere else.
 					buildingInTheWay = true;
@@ -340,12 +318,6 @@ buildingLoopExit:
             continue;
         }
 
-		// No good if the building location is known to be in range of enemy static defense.
-        if (the.groundAttacks.inRange(player->getRace().getCenter(), topLeft))
-		{
-			continue;
-		}
-
 		double score = 0.0;
 
 		// NOTE Ground distances are computed at tile resolution, which is coarser than the walking
@@ -358,7 +330,7 @@ buildingLoopExit:
 		// as a backup.
 
 		// Want to be close to our own base (unless this is to be a hidden base).
-        int distanceFromUs = Bases::Instance().myStartingBase()->getTileDistance(topLeft);
+        int distanceFromUs = the.bases.myStart()->getTileDistance(topLeft);
 
         // If it is not connected by ground, skip this potential base.
 		if (distanceFromUs < 0)
@@ -375,7 +347,7 @@ buildingLoopExit:
         }
 
 		// Want to be far from the enemy base.
-        Base * enemyBase = Bases::Instance().enemyStart();  // may be null or no longer enemy-owned
+        Base * enemyBase = the.bases.enemyStart();  // may be null or no longer enemy-owned
         double distanceFromEnemy = 0.0;
 		if (enemyBase) {
 			BWAPI::TilePosition enemyTile = enemyBase->getTilePosition();
@@ -403,16 +375,18 @@ buildingLoopExit:
         int edgeXdist = std::min(topLeft.x, BWAPI::Broodwar->mapWidth() - topLeft.x);
         int edgeYdist = std::min(topLeft.y, BWAPI::Broodwar->mapHeight() - topLeft.y);
 		int edgeDistance = std::min(edgeXdist, edgeYdist);
-		score += -1.0 * edgeDistance;
+		score += -3.0 * edgeDistance;
 
 		// More resources -> better.
+        // NOTE The number of mineral patchers/geysers controls how fast we can mine.
+        //      The resource amount controls how long we can keep mining.
 		if (wantMinerals)
 		{
-			score += 0.01 * base->getInitialMinerals();
+            score += 10.0 * base->getMinerals().size() + 0.01 * estimatedMinerals;
 		}
 		if (wantGas)
 		{
-			score += 0.025 * base->getInitialGas();
+            score += 50.0 * base->getGeysers().size() + 0.025 * base->getLastKnownGas();
 		}
 
 		/* TODO on a flat map, all mains may be in the same zone
@@ -444,7 +418,7 @@ buildingLoopExit:
 	return nullptr;
 }
 
-BWAPI::TilePosition MapTools::getNextExpansion(bool hidden, bool wantMinerals, bool wantGas)
+BWAPI::TilePosition MapTools::getNextExpansion(bool hidden, bool wantMinerals, bool wantGas) const
 {
 	Base * base = nextExpansion(hidden, wantMinerals, wantGas);
 	if (base)

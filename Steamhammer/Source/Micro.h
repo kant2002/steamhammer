@@ -4,7 +4,6 @@
 
 namespace UAlbertaBot
 {
-class The;
 class GridDistances;
 
 class MicroState
@@ -22,7 +21,7 @@ private:
 	int lastCheckFrame;					// execute frame or latest monitored frame
     int lastActionFrame;                // time of issuing last order to BWAPI, persists across setOrder()
 
-    static const int framesBetweenActions = 3;
+    static const int framesBetweenActions = 2;
     static const int distanceStep = 8;  // travel long distances in steps of this size, in tiles
 
     // Debugging test: Complain if something looks bad.
@@ -59,8 +58,6 @@ class Base;
 
 class Micro
 {
-	The & the;
-
 	std::map<BWAPI::Unit, MicroState> orders;
 
 	bool AlwaysKite(BWAPI::UnitType type) const;

@@ -95,3 +95,5 @@ bool CanCatchUnit(BWAPI::Unit chaser, BWAPI::Unit runaway);
 
 int GroundHeight(int x, int y);  // TilePosition
 int GroundHeight(const BWAPI::TilePosition & tile);
+
+BWAPI::Position TileCenter(const BWAPI::TilePosition & tile);

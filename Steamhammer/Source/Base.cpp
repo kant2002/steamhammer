@@ -1,13 +1,9 @@
-#include "Common.h"
 #include "Base.h"
 
+#include "InformationManager.h"
 #include "WorkerManager.h"
 
 using namespace UAlbertaBot;
-
-// For setting base.id on initialization.
-// The first base gets base id 1.
-static int BaseID = 1;
 
 // Is the base one of the map's starting bases?
 // The only purpose of this method is to initialize the startingBase flag.
@@ -29,34 +25,34 @@ bool Base::findIsStartingBase() const
 // Create a base given its position and a set of resources that may belong to it.
 // The caller is responsible for eliminating resources which are too small to be worth it.
 Base::Base(BWAPI::TilePosition pos, const BWAPI::Unitset availableResources)
-    : id(BaseID)
+    : id(-1)        // invalid value, will be reset after bases are sorted
     , tilePosition(pos)
     , distances(pos)
     , reserved(false)
     , startingBase(findIsStartingBase())
+    , natural(nullptr)
     , workerDanger(false)
     , failedPlacements(0)
     , resourceDepot(nullptr)
     , owner(BWAPI::Broodwar->neutral())
 {
-    ++BaseID;
-
     GridDistances resourceDistances(pos, BaseResourceRange, false);
 
     for (BWAPI::Unit resource : availableResources)
     {
         if (resource->getInitialTilePosition().isValid() && resourceDistances.getStaticUnitDistance(resource) >= 0)
         {
-            if (resource->getType().isMineralField())
+            if (resource->getInitialType().isMineralField())
             {
                 minerals.insert(resource);
             }
-            else if (resource->getType() == BWAPI::UnitTypes::Resource_Vespene_Geyser)
+            else if (resource->getInitialType() == BWAPI::UnitTypes::Resource_Vespene_Geyser)
             {
-                geysers.insert(resource);
+                initialGeysers.insert(resource);
             }
         }
     }
+    geysers = initialGeysers;
 
     // Fill in the set of blockers, destructible neutral units that are very close to the base
     // and may interfere with its operation.
@@ -64,12 +60,12 @@ Base::Base(BWAPI::TilePosition pos, const BWAPI::Unitset availableResources)
     for (BWAPI::Unit unit : BWAPI::Broodwar->getStaticNeutralUnits())
     {
         // NOTE Khaydarin crystals are not destructible, and I don't know any way
-        // to find that out other than to check the name explicitly. Is there a way?
-        if (!unit->getType().canMove() &&
+        //      to find that out other than to check the name explicitly. Is there a way?
+        if (!unit->getInitialType().canMove() &&
             !unit->isInvincible() &&
             unit->isTargetable() &&
             !unit->isFlying() &&
-            unit->getType().getName().find("Khaydarin") == std::string::npos)
+            unit->getInitialType().getName().find("Khaydarin") == std::string::npos)
         {
             int dist = resourceDistances.getStaticUnitDistance(unit);
             if (dist >= 0 && dist <= 9)
@@ -80,10 +76,39 @@ Base::Base(BWAPI::TilePosition pos, const BWAPI::Unitset availableResources)
     }
 }
 
+// This is to be called exactly once at startup time.
+// With the initial -1 value set in the constructor, the checks here prevent multiple calls.
+void Base::setID(int baseID)
+{
+    UAB_ASSERT(id == -1, "BUG! base ID reset");
+    UAB_ASSERT(baseID >= 1, "BUG! bad base ID");
+    id = baseID;
+}
+
+// The closest non-starting base to this base is its natural.
+// This is only called (by Bases) if this is a starting base. Other bases have no natural.
+// NOTE Some maps have mains with two naturals. This may give unhelpful results for them.
+void Base::initializeNatural(const std::vector<Base *> & bases)
+{
+    int minDist = INT_MAX;
+    for (Base * base : bases)
+    {
+        if (!base->isAStartingBase())
+        {
+            int dist = base->getTileDistance(tilePosition);     // -1 if not connected by ground
+            if (dist > 0 && dist < minDist)
+            {
+                minDist = dist;
+                natural = base;
+            }
+        }
+    }
+}
+
 // The base is on an island, unconnected by ground to any starting base.
 bool Base::isIsland() const
 {
-    for (BWAPI::TilePosition tile : BWAPI::Broodwar->getStartLocations())
+    for (const BWAPI::TilePosition & tile : BWAPI::Broodwar->getStartLocations())
     {
         if (tile != getTilePosition() && getTileDistance(tile) > 0)
         {
@@ -96,8 +121,8 @@ bool Base::isIsland() const
 
 // Recalculate the base's set of geysers, including refineries (completed or not).
 // This only works for visible geysers, so it should be called only for bases we own.
-// Called to work around a bug related to BWAPI 4.1.2.
-void Base::findGeysers()
+// Called to work around BWAPI behavior (maybe not strictly a bug).
+void Base::updateGeysers()
 {
     geysers.clear();
 
@@ -112,10 +137,16 @@ void Base::findGeysers()
 	}
 }
 
-// Return the center of the resource depot location (whether one is there or not).
+// Return a tile near the center of the resource depot location. No tile is at the exact center.
+const BWAPI::TilePosition Base::getCenterTile() const
+{
+    return tilePosition + BWAPI::TilePosition(1, 1);
+}
+
+// Return the center of the resource depot location=.
 const BWAPI::Position Base::getCenter() const
 {
-	return BWAPI::Position(tilePosition) + BWAPI::Position(64, 48);
+    return BWAPI::Position(tilePosition) + BWAPI::Position(64, 48);
 }
 
 // The depot may be null. (That's why player is a separate argument, not depot->getPlayer().)
@@ -138,6 +169,34 @@ void Base::setInferredEnemyBase()
 	}
 }
 
+// The remaining minerals at the base, as of last report.
+// For bases we own, the result is up to date.
+int Base::getLastKnownMinerals() const
+{
+    int total = 0;
+
+    for (BWAPI::Unit min : minerals)
+    {
+        total += InformationManager::Instance().getResourceAmount(min);
+    }
+
+    return total;
+}
+
+// The remaining gas at the base, as of last report.
+// For bases we own, the result is up to date.
+int Base::getLastKnownGas() const
+{
+    int total = 0;
+
+    for (BWAPI::Unit gas : initialGeysers)
+    {
+        total += InformationManager::Instance().getResourceAmount(gas);
+    }
+
+    return total;
+}
+
 int Base::getInitialMinerals() const
 {
 	int total = 0;
@@ -151,7 +210,7 @@ int Base::getInitialMinerals() const
 int Base::getInitialGas() const
 {
 	int total = 0;
-	for (const BWAPI::Unit gas : geysers)
+	for (const BWAPI::Unit gas : initialGeysers)
 	{
 		total += gas->getInitialResources();
 	}

@@ -13,15 +13,11 @@
 
 namespace UAlbertaBot
 {
-enum class ExtractorTrick { None, Start, ExtractorOrdered, UnitOrdered, MakeUnitBypass };
-
-class The;
-
 class ProductionManager
 {
+    enum class ExtractorTrick { None, Start, ExtractorOrdered, UnitOrdered, MakeUnitBypass };
+
     ProductionManager();
-    
-	The & the;
 
     BuildOrderQueue						_queue;
 	std::forward_list<ProductionGoal>	_goals;
@@ -43,9 +39,8 @@ class ProductionManager
 	BWAPI::Unit         getFarthestUnitFromPosition(const std::vector<BWAPI::Unit> & units, BWAPI::Position farthest) const;
 	BWAPI::Unit         getClosestLarvaToPosition(BWAPI::Position closestTo) const;
 	
-	void				executeCommand(MacroCommand command);
+	void				executeCommand(const MacroAct & act);
 	void				updateGoals();
-    bool                meetsReservedResources(MacroAct type);
     void                create(BWAPI::Unit producer, const BuildOrderItem & item);
 	void				dropJammedItemsFromQueue();
 	bool				itemCanBeProduced(const MacroAct & act) const;
@@ -59,7 +54,7 @@ class ProductionManager
 
 	void				doExtractorTrick();
 
-	BWAPI::Unit getProducer(MacroAct t, BWAPI::Position closestTo = BWAPI::Positions::None) const;
+	BWAPI::Unit         getProducer(MacroAct t) const;
 
 public:
 
@@ -77,6 +72,8 @@ public:
 	bool	isGasStealInQueue() const;
 
 	bool	nextIsBuilding() const;
+
+    bool    meetsReservedResources(const MacroAct & act) const;
 
 	void	goOutOfBookAndClearQueue();
 	void	goOutOfBook();

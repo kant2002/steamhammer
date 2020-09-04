@@ -1,8 +1,6 @@
 #include "Logger.h"
-#include "UABAssert.h"
-#include <stdarg.h>
-#include <cstdio>
-#include <sstream>
+#include <BWAPI.h>
+#include <fstream>
 
 using namespace UAlbertaBot;
 

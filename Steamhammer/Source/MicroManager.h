@@ -4,7 +4,6 @@
 
 namespace UAlbertaBot
 {
-class The;
 class UnitCluster;
 
 enum class CasterSpell
@@ -46,8 +45,6 @@ class MicroManager
 	std::map<BWAPI::Unit, CasterState>	_casterState;
 
 protected:
-	
-	The &			the;
 
 	SquadOrder		order;
 
@@ -66,7 +63,8 @@ protected:
 	bool			spell(BWAPI::Unit caster, BWAPI::TechType techType, BWAPI::Unit target) const;
 
 	void			setReadyToCast(BWAPI::Unit caster, CasterSpell spell);
-	bool			isReadyToCast(BWAPI::Unit caster);
+    void            clearReadyToCast(BWAPI::Unit caster);
+    bool			isReadyToCast(BWAPI::Unit caster);
 	bool			isReadyToCastOtherThan(BWAPI::Unit caster, CasterSpell spellToAvoid);
 	void			updateCasters(const BWAPI::Unitset & casters);
 

@@ -3,9 +3,6 @@
 #include "InformationManager.h"
 #include "UnitUtil.h"
 
-// NOTE
-// This class is untested! Test carefully before use.
-
 using namespace UAlbertaBot;
 
 GroundAttacks::GroundAttacks()

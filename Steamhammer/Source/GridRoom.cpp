@@ -15,7 +15,6 @@ const int actionY[LegalActions] = { 0, 0, 1, -1 };
 // Necessary if a Grid subclass is created before BWAPI is initialized.
 GridRoom::GridRoom()
 	: GridWalk()
-	, the(The::Root())
 {
 }
 

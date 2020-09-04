@@ -1,7 +1,7 @@
 #include "Bases.h"
 
 #include "MapTools.h"
-#include "InformationManager.h"		// temporary until stuff is moved into this class
+#include "InformationManager.h"
 #include "The.h"
 #include "UnitUtil.h"
 
@@ -19,19 +19,43 @@ const int MinTotalGas = 500;
 
 // Most initialization happens in initialize() below.
 Bases::Bases()
-	: the(The::Root())
-
 	// These are set to their final values in initialize().
-	, startingBase(nullptr)
+	: startingBase(nullptr)
 	, mainBase(nullptr)
 	, naturalBase(nullptr)
 	, islandStart(false)
+    , islandBases(false)
 	, enemyStartingBase(nullptr)
 {
 }
 
-// Figure out whether we are starting on an island (or semi-island).
-bool Bases::checkIslandMap() const
+// For sorting bases in lexicographic order by y, x coordinates.
+// No two bases are in the same location, so there are no ties.
+bool compareBases(const Base * a, const Base * b)
+{
+    return
+        a->getTilePosition().y < b->getTilePosition().y ||
+        a->getTilePosition().y == b->getTilePosition().y && a->getTilePosition().x < b->getTilePosition().x;
+}
+
+// Give each base its ID number.
+// NOTE We write base IDs into opponent model files, so base IDs for a map need to be
+//      stable across runs. That's why we sort them first.
+void Bases::setBaseIDs()
+{
+    std::sort(bases.begin(), bases.end(), compareBases);
+
+    // Set the IDs.
+    int id = 1;
+    for (Base * base : bases)
+    {
+        base->setID(id);
+        ++id;
+    }
+}
+
+// Check whether we are starting on an island (or semi-island).
+bool Bases::checkIslandStart() const
 {
 	UAB_ASSERT(startingBase, "our base is unknown");
 
@@ -47,6 +71,19 @@ bool Bases::checkIslandMap() const
 	}
 
 	return true;
+}
+
+// Check whether the map has islands at all.
+bool Bases::checkIslandBases() const
+{
+    for (Base * base : bases)
+    {
+        if (!connectedToStart(base->getTilePosition()))
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 // Each base finds and remembers a set of blockers, neutral units that should be destroyed
@@ -134,15 +171,18 @@ void Bases::countResources(BWAPI::Unit resource, int & minerals, int & gas) cons
 // Given a set of resources (mineral patches and geysers), find a base position nearby if possible.
 // This identifies the spot for the resource depot.
 // Return BWAPI::TilePositions::Invalid if no acceptable place is found.
+// NOTE The found location affects the eventual ID the base is given, and base IDs must be stable
+//      across runs because they are written into opponent model files. So a change that affects
+//      where bases are placed may invalidate learned data.
 BWAPI::TilePosition Bases::findBasePosition(BWAPI::Unitset resources)
 {
 	UAB_ASSERT(resources.size() > 0, "no resources");
 
-	int left = 256 * 32 + 1;
+    // Find the bounding box of the resources.
+	int left = INT_MAX;
 	int right = 0;
-	int top = 256 * 32 + 1;
+	int top = INT_MAX;
 	int bottom = 0;
-
 	for (BWAPI::Unit resource : resources)
 	{
 		left = std::min(left, resource->getLeft());
@@ -158,13 +198,13 @@ BWAPI::TilePosition Bases::findBasePosition(BWAPI::Unitset resources)
 
 	GridDistances distances(centerOfResources, BasePositionRange, false);
 
-	int bestScore = 999999;               // smallest is best
+    int bestScore = INT_MAX;               // smallest is best
 	BWAPI::TilePosition bestTile = BWAPI::TilePositions::Invalid;
 
 	for (BWAPI::TilePosition tile : distances.getSortedTiles())
 	{
 		// NOTE Every resource depot is the same size, 4x3 tiles.
-		if (MapTools::Instance().isBuildable(tile, BWAPI::UnitTypes::Protoss_Nexus))
+		if (the.map.isBuildable(tile, BWAPI::UnitTypes::Protoss_Nexus))    // TODO deprecated call
 		{
 			int score = baseLocationScore(tile, resources);
 			if (score < bestScore)
@@ -245,12 +285,12 @@ bool Bases::inferEnemyBaseFromOverlord()
 {
 	const int now = BWAPI::Broodwar->getFrameCount();
 
-	if (BWAPI::Broodwar->enemy()->getRace() != BWAPI::Races::Zerg || now > 5 * 60 * 24)
+	if (the.enemy()->getRace() != BWAPI::Races::Zerg || now > 5 * 60 * 24)
 	{
 		return false;
 	}
 
-	for (const BWAPI::Unit unit : BWAPI::Broodwar->enemy()->getUnits())
+	for (const BWAPI::Unit unit : the.enemy()->getUnits())
 	{
 		if (unit->getType() != BWAPI::UnitTypes::Zerg_Overlord)
 		{
@@ -334,7 +374,7 @@ void Bases::updateEnemyStart()
 			if (startZone > 0)
 			{
 				// This runs every frame, so it only needs to consider visible enemies.
-				for (BWAPI::Unit enemy : BWAPI::Broodwar->enemy()->getUnits())
+				for (BWAPI::Unit enemy : the.enemy()->getUnits())
 				{
 					if (enemy->getType().isBuilding() &&
 						startZone == the.zone.at(enemy->getTilePosition()) &&
@@ -405,15 +445,15 @@ void Bases::updateBaseOwners()
 			else
 			{
 				// The base is empty.
-				base->setOwner(nullptr, BWAPI::Broodwar->neutral());
+				base->setOwner(nullptr, the.neutral());
 			}
 		}
 		else
 		{
 			// The base is out of sight. It's definitely not our base.
-			if (base->getOwner() == BWAPI::Broodwar->self())
+			if (base->getOwner() == the.self())
 			{
-				base->setOwner(nullptr, BWAPI::Broodwar->neutral());
+				base->setOwner(nullptr, the.neutral());
 			}
 		}
 	}
@@ -423,7 +463,7 @@ void Bases::updateBaseOwners()
 // The main base is initially the starting base. We change it if the main base is lost.
 void Bases::updateMainBase()
 {
-	if (mainBase->owner != BWAPI::Broodwar->self())
+	if (mainBase->owner != the.self())
 	{
 		// Choose a base we own which is as far away from the old main as possible.
 		// Maybe that will be safer.
@@ -432,7 +472,7 @@ void Bases::updateMainBase()
 
 		for (Base * base : bases)
 		{
-			if (base->owner == BWAPI::Broodwar->self())
+			if (base->owner == the.self())
 			{
 				int dist = base->getPosition().getApproxDistance(mainBase->getPosition());
 				if (dist > newMainDist)
@@ -452,6 +492,24 @@ void Bases::updateMainBase()
 	}
 }
 
+void Bases::updateSmallMinerals()
+{
+    if (the.now() % 27 == 0)
+    {
+        for (auto it = smallMinerals.begin(); it != smallMinerals.end(); )
+        {
+            if (the.info.isMineralDestroyed(*it))
+            {
+                it = smallMinerals.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+    }
+}
+
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
 // Find the bases on the map at the beginning of the game.
@@ -469,7 +527,7 @@ void Bases::initialize()
 		}
 		else
 		{
-			smallMinerals.push_back(unit);
+			smallMinerals.insert(unit);
 		}
 	}
 	for (BWAPI::Unit unit : BWAPI::Broodwar->getStaticGeysers())
@@ -489,7 +547,7 @@ void Bases::initialize()
 		startingBases.push_back(base);
 		removeUsedResources(resources, base);
 
-		if (pos == BWAPI::Broodwar->self()->getStartLocation())
+		if (pos == the.self()->getStartLocation())
 		{
 			startingBase = base;
 			mainBase = base;
@@ -535,7 +593,7 @@ void Bases::initialize()
 
 		if (basePosition.isValid())
 		{
-			// Make the base. The data structure lifetime is normally the rest of the runtime.
+			// Make the base. The data structure lifetime is normally the program lifetime.
 			base = new Base(basePosition, resources);
 
 			// Check whether the base actually grabbed enough resources to be useful.
@@ -574,9 +632,17 @@ void Bases::initialize()
 	}
 
 	// Fill in other map properties we want to remember.
-	islandStart = checkIslandMap();
-	rememberBaseBlockers();
-	setNaturalBase();
+    setBaseIDs();
+    islandStart = checkIslandStart();       // we start on an island
+    islandBases = checkIslandBases();       // the map includes islands
+    rememberBaseBlockers();
+
+    // Simple method to pick a natural for each starting base.
+    for (Base * start : startingBases)
+    {
+        start->initializeNatural(bases);
+    }
+    setNaturalBase();       // fancy method to pick our natural
 }
 
 void Bases::update()
@@ -584,6 +650,7 @@ void Bases::update()
 	updateEnemyStart();
 	updateBaseOwners();
 	updateMainBase();
+    updateSmallMinerals();
 }
 
 // When a building is placed, we are told the desired and actual location of the building.
@@ -611,9 +678,9 @@ void Bases::checkBuildingPosition(const BWAPI::TilePosition & desired, const BWA
 				// Protoss: The base must have a completed pylon.
 				// Zerg: The base must be completed, so it has some creep.
 				BWAPI::Unit pylon;
-				if (base->getOwner() == BWAPI::Broodwar->self() &&
-					(BWAPI::Broodwar->self()->getRace() != BWAPI::Races::Protoss || (pylon = base->getPylon()) && pylon->isCompleted()) &&
-					(BWAPI::Broodwar->self()->getRace() != BWAPI::Races::Zerg || base->getDepot() && base->getDepot()->isCompleted()))
+				if (base->getOwner() == the.self() &&
+					(the.self()->getRace() != BWAPI::Races::Protoss || (pylon = base->getPylon()) && pylon->isCompleted()) &&
+					(the.self()->getRace() != BWAPI::Races::Zerg || base->getDepot() && base->getDepot()->isCompleted()))
 				{
 					int fails = base->getFailedPlacements();
 					if (fails < bestFails)
@@ -648,17 +715,22 @@ void Bases::drawBaseInfo() const
 	for (const Base * base : bases)
 	{
 		base->drawBaseInfo();
-		if (base == frontBase())
+        BWAPI::Position center = base->getCenter();
+        if (base->getNatural())
+        {
+            BWAPI::Position natural = base->getNatural()->getCenter();
+            BWAPI::Broodwar->drawLineMap(center, natural, BWAPI::Colors::Grey);
+            BWAPI::Broodwar->drawCircleMap(natural, 64, BWAPI::Colors::Grey);
+        }
+        if (base == myFront())
 		{
-			BWAPI::Position center = base->getCenter();
 			BWAPI::Position defend = BWAPI::Position(frontPoint());
-			BWAPI::Broodwar->drawCircleMap(center, 32, BWAPI::Colors::Red);
 			BWAPI::Broodwar->drawCircleMap(defend, 32, BWAPI::Colors::Red);
 			BWAPI::Broodwar->drawLineMap(center, defend, BWAPI::Colors::Red);
 		}
 	}
 
-	for (const BWAPI::Unit small : smallMinerals)
+	for (BWAPI::Unit small : smallMinerals)
 	{
 		BWAPI::Broodwar->drawCircleMap(small->getInitialPosition() + BWAPI::Position(0, 0), 32, BWAPI::Colors::Green);
 	}
@@ -709,11 +781,11 @@ void Bases::drawBaseOwnership(int x, int y) const
 
 		char inferredChar = ' ';
 		BWAPI::Player player = base->owner;
-		if (player == BWAPI::Broodwar->self())
+		if (player == the.self())
 		{
 			color = green;
 		}
-		else if (player == BWAPI::Broodwar->enemy())
+		else if (player == the.enemy())
 		{
 			color = orange;
 			if (base->resourceDepot == nullptr)
@@ -740,17 +812,22 @@ void Bases::drawBaseOwnership(int x, int y) const
 
 // Our "frontmost" base, the base which we most want to defend from ground attack.
 // May be null if we do not own any bases!
-Base * Bases::frontBase() const
+Base * Bases::myFront() const
 {
-	if (naturalBase && naturalBase->getOwner() == BWAPI::Broodwar->self())
+    if (enemyStart() && enemyStart()->getNatural() && enemyStart()->getNatural()->getOwner() == the.self())
+    {
+        // We took the enemy natural. That's definitely our front base.
+        return enemyStart()->getNatural();
+    }
+	if (naturalBase && naturalBase->getOwner() == the.self())
 	{
 		return naturalBase;
 	}
-	if (startingBase->getOwner() == BWAPI::Broodwar->self())
+	if (startingBase->getOwner() == the.self())
 	{
 		return startingBase;
 	}
-	if (mainBase->getOwner() == BWAPI::Broodwar->self())
+	if (mainBase->getOwner() == the.self())
 	{
 		return mainBase;
 	}
@@ -758,7 +835,7 @@ Base * Bases::frontBase() const
     // Otherwise look for any base we own.
 	for (Base * base : bases)
 	{
-		if (base->getOwner() == BWAPI::Broodwar->self())
+		if (base->getOwner() == the.self())
 		{
 			return base;
 		}
@@ -773,7 +850,7 @@ Base * Bases::frontBase() const
 // Not too smart, so far.
 BWAPI::TilePosition Bases::frontPoint() const
 {
-	Base * front = frontBase();
+	Base * front = myFront();
 	if (!front)
 	{
 		return BWAPI::TilePositions::None;
@@ -859,7 +936,7 @@ int Bases::freeLandBaseCount() const
 
 	for (Base * base : bases)
 	{
-		if (base->getOwner() == BWAPI::Broodwar->neutral() && connectedToStart(base->getTilePosition()))
+		if (base->getOwner() == the.neutral() && connectedToStart(base->getTilePosition()))
 		{
 			++count;
 		}
@@ -876,7 +953,7 @@ int Bases::mineralPatchCount() const
 
 	for (Base * base : bases)
 	{
-		if (base->getOwner() == BWAPI::Broodwar->self())
+		if (base->getOwner() == the.self())
 		{
 			count += base->getMinerals().size();
 		}
@@ -885,19 +962,14 @@ int Bases::mineralPatchCount() const
 	return count;
 }
 
-// Current number of geysers at all my completed bases, whether taken or not.
-// Skip bases where the resource depot is not finished.
-int Bases::geyserCount() const
+// Current number of geysers at all bases of the given player, whether taken or not.
+int Bases::geyserCount(BWAPI::Player player) const
 {
 	int count = 0;
 
 	for (Base * base : bases)
 	{
-		BWAPI::Unit depot = base->getDepot();
-
-		if (base->getOwner() == BWAPI::Broodwar->self() &&
-			depot &&                // should never be null, but we check anyway
-			(depot->isCompleted() || UnitUtil::IsMorphedBuildingType(depot->getType())))
+		if (base->getOwner() == player)
 		{
 			count += base->getGeysers().size();
 		}
@@ -916,15 +988,15 @@ void Bases::gasCounts(int & nRefineries, int & nFreeGeysers) const
 
 	for (Base * base : bases)
 	{
-        if (base->getOwner() == BWAPI::Broodwar->self() && UnitUtil::IsCompletedResourceDepot(base->getDepot()))
+        if (base->getOwner() == the.self() && UnitUtil::IsCompletedResourceDepot(base->getDepot()))
 		{
 			// Recalculate the base's geysers every time.
 			// This is a slow but accurate way to work around the BWAPI geyser bug.
-			base->findGeysers();
+			base->updateGeysers();
 
 			for (BWAPI::Unit geyser : base->getGeysers())
 			{
-                if (geyser->getPlayer() == BWAPI::Broodwar->self() &&
+                if (geyser->getPlayer() == the.self() &&
                     geyser->getType().isRefinery() &&
                     geyser->isCompleted())
                 {
@@ -945,27 +1017,31 @@ void Bases::gasCounts(int & nRefineries, int & nFreeGeysers) const
 // Return whether the enemy has a building in our main or natural base.
 bool Bases::getEnemyProxy() const
 {
-	int mainZone = the.zone.at(myStartingBase()->getTilePosition());
-	int naturalZone = myNaturalBase() ? the.zone.at(myNaturalBase()->getTilePosition()) : 0;
+	int mainZone = the.zone.at(myStart()->getTilePosition());
+	int naturalZone = myNatural() ? the.zone.at(myNatural()->getTilePosition()) : 0;
 
-	for (const auto & kv : InformationManager::Instance().getUnitData(BWAPI::Broodwar->enemy()).getUnits())
+	for (const auto & kv : InformationManager::Instance().getUnitData(the.enemy()).getUnits())
 	{
 		const UnitInfo & ui(kv.second);
 
-		if (ui.type.isBuilding() && !ui.goneFromLastPosition)
+		if (ui.type.isBuilding() &&
+            !ui.goneFromLastPosition &&
+            ui.type != BWAPI::UnitTypes::Terran_Engineering_Bay &&
+            ui.type != BWAPI::UnitTypes::Terran_Supply_Depot &&
+            ui.type != BWAPI::UnitTypes::Protoss_Pylon)
 		{
 			int zone = the.zone.at(ui.lastPosition);
 			if (zone > 0)
 			{
-				const int mainDist = ui.lastPosition.getApproxDistance(myStartingBase()->getCenter());
+				const int mainDist = ui.lastPosition.getApproxDistance(myStart()->getCenter());
 				if (zone == mainZone && mainDist <= 24 * 32 || mainDist <= 13 * 32)
 				{
 					return true;
 				}
 
-				if (myNaturalBase())
+				if (myNatural())
 				{
-					const int natDist = ui.lastPosition.getApproxDistance(myNaturalBase()->getCenter());
+					const int natDist = ui.lastPosition.getApproxDistance(myNatural()->getCenter());
                     if (zone == naturalZone && natDist <= 24 * 32 || natDist <= 13 * 32)
 					{
 						return true;
@@ -984,7 +1060,7 @@ bool Bases::getEnemyProxy() const
 void Bases::clearNeutral(BWAPI::Unit unit)
 {
 	if (unit &&
-		unit->getPlayer() == BWAPI::Broodwar->neutral() &&
+		unit->getPlayer() == the.neutral() &&
 		unit->getType().isBuilding())
 	{
 		auto it = baseBlockers.find(unit);

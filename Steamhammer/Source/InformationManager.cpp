@@ -11,9 +11,7 @@
 using namespace UAlbertaBot;
 
 InformationManager::InformationManager()
-	: the(The::Root())
-
-    , _self(BWAPI::Broodwar->self())
+	: _self(BWAPI::Broodwar->self())
     , _enemy(BWAPI::Broodwar->enemy())
 	
 	, _weHaveCombatUnits(false)
@@ -28,15 +26,33 @@ InformationManager::InformationManager()
 	, _enemyHasStaticDetection(false)
 	, _enemyHasMobileDetection(_enemy->getRace() == BWAPI::Races::Zerg)
 	, _enemyHasSiegeMode(false)
+    , _enemyGasTiming(0)
 {
-	initializeRegionInformation();
+}
+
+void InformationManager::initialize()
+{
+    initializeRegionInformation();
+    initializeResources();
 }
 
 // Set up _occupiedLocations.
 void InformationManager::initializeRegionInformation()
 {
-	// push that region into our occupied vector
-	updateOccupiedRegions(the.zone.ptr(Bases::Instance().myStartingBase()->getTilePosition()), _self);
+	updateOccupiedRegions(the.zone.ptr(the.bases.myStart()->getTilePosition()), _self);
+}
+
+// Initial mineral and gas values.
+void InformationManager::initializeResources()
+{
+    for (BWAPI::Unit patch : BWAPI::Broodwar->getStaticMinerals())
+    {
+        _resources.insert(std::pair<BWAPI::Unit, ResourceInfo>(patch, ResourceInfo(patch)));
+    }
+    for (BWAPI::Unit geyser : BWAPI::Broodwar->getStaticGeysers())
+    {
+        _resources.insert(std::pair<BWAPI::Unit, ResourceInfo>(geyser, ResourceInfo(geyser)));
+    }
 }
 
 void InformationManager::update()
@@ -45,6 +61,9 @@ void InformationManager::update()
 	updateGoneFromLastPosition();
 	updateBaseLocationInfo();
 	updateTheirTargets();
+    updateBullets();
+    updateResources();
+    updateEnemyGasTiming();
 }
 
 void InformationManager::updateUnitInfo() 
@@ -52,23 +71,27 @@ void InformationManager::updateUnitInfo()
 	_unitData[_enemy].removeBadUnits();
 	_unitData[_self].removeBadUnits();
 
-	for (const auto unit : _enemy->getUnits())
+	for (BWAPI::Unit unit : _enemy->getUnits())
 	{
 		updateUnit(unit);
 	}
 
 	// Remove destroyed pylons from _ourPylons.
-	for (auto pylon = _ourPylons.begin(); pylon != _ourPylons.end(); ++pylon)
+    for (auto pylonIt = _ourPylons.begin(); pylonIt != _ourPylons.end(); )
 	{
-		if (!(*pylon)->exists())
+        if (!(*pylonIt)->exists())
 		{
-			pylon = _ourPylons.erase(pylon);
+            pylonIt = _ourPylons.erase(pylonIt);
 		}
+        else
+        {
+            ++pylonIt;
+        }
 	}
 
 	bool anyNewPylons = false;
 
-	for (const auto unit : _self->getUnits())
+	for (BWAPI::Unit unit : _self->getUnits())
 	{
 		updateUnit(unit);
 
@@ -98,7 +121,7 @@ void InformationManager::updateBaseLocationInfo()
 	{
 		const UnitInfo & ui(kv.second);
 
-		if (ui.type.isBuilding() && !ui.goneFromLastPosition)
+		if (ui.type.isBuilding() && !ui.goneFromLastPosition && !ui.lifted)
 		{
 			updateOccupiedRegions(the.zone.ptr(BWAPI::TilePosition(ui.lastPosition)), _enemy);
 		}
@@ -137,7 +160,7 @@ void InformationManager::updateGoneFromLastPosition()
 	//    a burrowed unit if we don't update often enough.
 	// 4. We also might miss a unit in the process of burrowing.
 	// All in all, we should check fairly often.
-	if (BWAPI::Broodwar->getFrameCount() % 6 == 5)
+	if (the.now() % 6 == 5)
 	{
 		_unitData[_enemy].updateGoneFromLastPosition();
 	}
@@ -202,6 +225,88 @@ void InformationManager::updateTheirTargets()
 	}
 }
 
+// TODO An unfinished experiment to locate undetected lurkers by their spines.
+void InformationManager::updateBullets()
+{
+    return;
+    BWAPI::Bulletset bullets = BWAPI::Broodwar->getBullets();
+
+    int x = 150;
+    int y = 30;
+    for (BWAPI::Bullet bullet : bullets)
+    {
+        if (bullet->getType() == BWAPI::BulletTypes::Subterranean_Spines)
+        {
+            char color = gray;
+            if (bullet->getPlayer() == the.self())
+            {
+                color = green;
+            }
+            else if (bullet->getPlayer() == the.enemy())
+            {
+                color = orange;
+            }
+
+            BWAPI::Broodwar->drawTextScreen(x, y, "%c%d %s %d,%d -> %d,%d @ %g remaining %d",
+                color,
+                bullet->getID(),
+                bullet->getType().getName().c_str(),
+                bullet->getPosition().x, bullet->getPosition().y,
+                bullet->getTargetPosition().x, bullet->getTargetPosition().y,
+                bullet->getAngle(),
+                bullet->getRemoveTimer());
+            y += 10;
+        }
+    }
+}
+
+// Update any visible mineral patches or vespene geysers with their remaining amounts.
+void InformationManager::updateResources()
+{
+    for (BWAPI::Unit patch : BWAPI::Broodwar->getStaticMinerals())
+    {
+        auto it = _resources.find(patch);
+        UAB_ASSERT(it != _resources.end(), "bad static minerals");
+        it->second.updateMinerals();
+    }
+    for (BWAPI::Unit geyser : BWAPI::Broodwar->getStaticGeysers())
+    {
+        auto it = _resources.find(geyser);
+        UAB_ASSERT(it != _resources.end(), "bad static gas");
+        it->second.updateGas();
+    }
+}
+
+// Find the earliest sign of the enemy spending gas (not merely mining gas).
+// For now, notice units that require gas. We don't try to detect enemy research.
+// Zero means the enemy has not visibly used gas yet.
+void InformationManager::updateEnemyGasTiming()
+{
+    if (_enemyGasTiming)
+    {
+        // Already know it.
+        return;
+    }
+
+    for (const std::pair<BWAPI::UnitType, int> & unitCount : the.your.seen.getCounts())
+    {
+        BWAPI::UnitType t = unitCount.first;
+
+        // A larva or egg says it costs 1 gas.
+        // So does a spider mine, but it does cost gas to research.
+        // I think other units tell the truth about their gas costs.
+        // The vulture and shuttle are the only non-gas units that need gas to make (for the factory or robo),
+        // so we don't need to look through all of the.your.inferred.getCounts().
+        if (t.gasPrice() > 0 && t != BWAPI::UnitTypes::Zerg_Larva && t != BWAPI::UnitTypes::Zerg_Egg ||
+            t == BWAPI::UnitTypes::Terran_Vulture ||
+            t == BWAPI::UnitTypes::Protoss_Shuttle)
+       {
+            _enemyGasTiming = the.now();
+            return;
+        }
+    }
+}
+
 bool InformationManager::isEnemyBuildingInRegion(const Zone * zone) 
 {
 	// Invalid zones aren't considered the same.
@@ -213,7 +318,7 @@ bool InformationManager::isEnemyBuildingInRegion(const Zone * zone)
 	for (const auto & kv : _unitData[_enemy].getUnits())
 	{
 		const UnitInfo & ui(kv.second);
-		if (ui.type.isBuilding() && !ui.goneFromLastPosition)
+		if (ui.type.isBuilding() && !ui.goneFromLastPosition && !ui.lifted)
 		{
 			if (zone->id() == the.zone.at(ui.lastPosition)) 
 			{
@@ -429,7 +534,6 @@ void InformationManager::drawUnitInformation(int x, int y)
 
 	int yspace = 0;
 
-	// for each unit in the queue
 	for (BWAPI::UnitType t : BWAPI::UnitTypes::allUnitTypes()) 
 	{
 		int numUnits = _unitData[_enemy].getNumUnits(t);
@@ -461,11 +565,37 @@ void InformationManager::drawUnitInformation(int x, int y)
     }
 }
 
+void InformationManager::drawResourceAmounts() const
+{
+    if (!Config::Debug::DrawResourceAmounts)
+    {
+        return;
+    }
+
+    const BWAPI::Position offset(-20, -16);
+    const BWAPI::Position nextLineOffset(-24, -6);
+
+    for (const std::pair<BWAPI::Unit, ResourceInfo> & r : _resources)
+    {
+        BWAPI::Position xy = r.first->getInitialPosition();
+        if (r.second.isAccessible())
+        {
+            BWAPI::Broodwar->drawTextMap(xy + offset, "%c%d", white, r.second.getAmount());
+        }
+        else
+        {
+            char color = r.second.isMineralPatch() ? (r.second.isDestroyed() ? darkRed : cyan) : green;
+            BWAPI::Broodwar->drawTextMap(xy + offset, "%c%d", color, r.second.getAmount());
+            BWAPI::Broodwar->drawTextMap(xy + nextLineOffset, "%c@ %d", color, r.second.getFrame());
+        }
+    }
+}
+
 void InformationManager::maybeClearNeutral(BWAPI::Unit unit)
 {
-	if (unit && unit->getPlayer() == BWAPI::Broodwar->neutral() && unit->getType().isBuilding())
+	if (unit && unit->getPlayer() == the.neutral() && unit->getType().isBuilding())
 	{
-		Bases::Instance().clearNeutral(unit);
+		the.bases.clearNeutral(unit);
 	}
 }
 
@@ -500,23 +630,21 @@ void InformationManager::onUnitDestroy(BWAPI::Unit unit)
 	else
 	{
 		// Should be neutral.
-		Bases::Instance().clearNeutral(unit);
+		the.bases.clearNeutral(unit);
 	}
 }
 
 // Only returns units expected to be completed.
-// A building is considered completed if it was last seen uncompleted and is now out of sight.
-// NOTE It could be more accurate if ui.completed were ui.completionTime or something similar.
+// A building is considered completed if its completeBy is now or earlier.
 void InformationManager::getNearbyForce(std::vector<UnitInfo> & unitsOut, BWAPI::Position p, BWAPI::Player player, int radius) 
 {
 	for (const auto & kv : getUnitData(player).getUnits())
 	{
 		const UnitInfo & ui(kv.second);
 
-		// if it's a combat unit we care about
-		// and it's finished! 
-		if (UnitUtil::IsCombatSimUnit(ui) && !ui.goneFromLastPosition &&
-			(ui.completed || ui.type.isBuilding() && !ui.unit->isVisible()))
+		if (UnitUtil::IsCombatSimUnit(ui) &&
+            !ui.goneFromLastPosition &&
+			ui.completeBy <= the.now())
 		{
 			if (ui.type == BWAPI::UnitTypes::Terran_Medic)
 			{
@@ -564,11 +692,11 @@ int InformationManager::getNumUnits(BWAPI::UnitType t, BWAPI::Player player) con
 
     return count;
 
-    // Buggy! The original method can be extremely wrong, even giving negative counts.
+    // Buggy original! The original method can be extremely wrong, even giving negative counts.
 	// return getUnitData(player).getNumUnits(t);
 }
 
-// We have complated combat units (excluding workers).
+// We have completed combat units (excluding workers).
 // This is a latch, initially false and set true forever when we get our first combat units.
 bool InformationManager::weHaveCombatUnits()
 {
@@ -578,7 +706,7 @@ bool InformationManager::weHaveCombatUnits()
 		return true;
 	}
 
-	for (const auto u : _self->getUnits())
+	for (BWAPI::Unit u : _self->getUnits())
 	{
 		if (!u->getType().isWorker() &&
 			!u->getType().isBuilding() &&
@@ -594,7 +722,7 @@ bool InformationManager::weHaveCombatUnits()
 	return false;
 }
 
-// Enemy has complated combat units (excluding workers).
+// Enemy has completed combat units (excluding workers).
 bool InformationManager::enemyHasCombatUnits()
 {
 	// Latch: Once they're known to have the tech, they always have it.
@@ -609,7 +737,7 @@ bool InformationManager::enemyHasCombatUnits()
 
 		if (!ui.type.isWorker() &&
 			!ui.type.isBuilding() &&
-			ui.completed &&
+			ui.isCompleted() &&
 			ui.type != BWAPI::UnitTypes::Zerg_Larva &&
 			ui.type != BWAPI::UnitTypes::Zerg_Overlord)
 		{
@@ -676,7 +804,7 @@ bool InformationManager::enemyHasAntiAir()
 
 			// Or a building for making such a unit.
             // The cyber core only counts once it is finished, other buildings earlier.
-			ui.type == BWAPI::UnitTypes::Protoss_Cybernetics_Core && ui.completed ||
+			ui.type == BWAPI::UnitTypes::Protoss_Cybernetics_Core && ui.isCompleted() ||
 			ui.type == BWAPI::UnitTypes::Protoss_Stargate ||
 			ui.type == BWAPI::UnitTypes::Protoss_Fleet_Beacon ||
 			ui.type == BWAPI::UnitTypes::Protoss_Arbiter_Tribunal ||
@@ -924,7 +1052,7 @@ int InformationManager::getEnemyBuildingTiming(BWAPI::UnitType type) const
     }
 
     // "Infinite" time in the future.
-    return 999999;
+    return INT_MAX;
 }
 
 // Enemy has spore colonies, photon cannons, turrets, or spider mines.
@@ -1029,8 +1157,8 @@ bool InformationManager::weHaveCloakTech() const
     return
         BWAPI::Broodwar->self()->hasResearched(BWAPI::TechTypes::Cloaking_Field) ||
         BWAPI::Broodwar->self()->hasResearched(BWAPI::TechTypes::Personnel_Cloaking) ||
-        UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Protoss_Dark_Templar) > 0 ||
-        UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Protoss_Arbiter) > 0 ||
+        the.my.completed.count(BWAPI::UnitTypes::Protoss_Dark_Templar) > 0 ||
+        the.my.completed.count(BWAPI::UnitTypes::Protoss_Arbiter) > 0 ||
         BWAPI::Broodwar->self()->hasResearched(BWAPI::TechTypes::Burrowing) ||
         BWAPI::Broodwar->self()->hasResearched(BWAPI::TechTypes::Lurker_Aspect);
 }
@@ -1040,7 +1168,7 @@ bool InformationManager::weHaveCloakTech() const
 // NOTE This assumes that we never put medics or SCVs into a bunker.
 BWAPI::Unit InformationManager::nearestGroundStaticDefense(BWAPI::Position pos) const
 {
-	int closestDist = 999999;
+    int closestDist = INT_MAX;
 	BWAPI::Unit closest = nullptr;
 	for (BWAPI::Unit building : _staticDefense)
 	{
@@ -1065,7 +1193,7 @@ BWAPI::Unit InformationManager::nearestGroundStaticDefense(BWAPI::Position pos) 
 // If we ever put firebats or SCVs or medics into a bunker, we'll have to do a fancier check.
 BWAPI::Unit InformationManager::nearestAirStaticDefense(BWAPI::Position pos) const
 {
-	int closestDist = 999999;
+    int closestDist = INT_MAX;
 	BWAPI::Unit closest = nullptr;
 	for (BWAPI::Unit building : _staticDefense)
 	{
@@ -1091,7 +1219,7 @@ BWAPI::Unit InformationManager::nearestShieldBattery(BWAPI::Position pos) const
 {
 	if (_self->getRace() == BWAPI::Races::Protoss)
 	{
-		int closestDist = 999999;
+        int closestDist = INT_MAX;
 		BWAPI::Unit closest = nullptr;
 		for (BWAPI::Unit building : _staticDefense)
 		{
@@ -1143,7 +1271,7 @@ const UnitData & InformationManager::getUnitData(BWAPI::Player player) const
 }
 
 // Return the set of enemy units targeting a given one of our units.
-const BWAPI::Unitset &	InformationManager::getEnemyFireteam(BWAPI::Unit ourUnit) const
+const BWAPI::Unitset & InformationManager::getEnemyFireteam(BWAPI::Unit ourUnit) const
 {
 	auto it = _theirTargets.find(ourUnit);
 	if (it != _theirTargets.end())
@@ -1151,6 +1279,56 @@ const BWAPI::Unitset &	InformationManager::getEnemyFireteam(BWAPI::Unit ourUnit)
 		return (*it).second;
 	}
 	return EmptyUnitSet;
+}
+
+// Return the last seen resource amount of a mineral patch or vespene geyser.
+// NOTE Pass in the static unit of the resource container, or it won't work.
+int InformationManager::getResourceAmount(BWAPI::Unit resource) const
+{
+    auto it = _resources.find(resource);
+    if (it == _resources.end())
+    {
+        return 0;
+    }
+    return it->second.getAmount();
+}
+
+// Return whether a mineral patch has been destroyed by being mined out.
+// NOTE Pass in the static unit of the resource container, or it won't work.
+bool InformationManager::isMineralDestroyed(BWAPI::Unit resource) const
+{
+    auto it = _resources.find(resource);
+    if (it == _resources.end())
+    {
+        return false;
+    }
+    return it->second.isDestroyed();
+}
+
+// Is this geyser, possibly out of sight, covered with a refinery (at last report)?
+// NOTE Pass in a static initial geyser unit, or else getInitialPosition() will not work.
+bool InformationManager::isGeyserTaken(BWAPI::Unit resource) const
+{
+    if (resource->isVisible())
+    {
+        // Our own refineries are always visible.
+        return resource->getType().isRefinery();
+    }
+
+    // The geyser is either neutral or enemy, but in any case out of sight.
+    // Check enemy units to see if it is known to be owned by the enemy.
+    for (const auto & kv : getUnitData(_enemy).getUnits())
+    {
+        const UnitInfo & ui(kv.second);
+
+        // If an enemy unit is at the same position, it can only be a refinery.
+        if (ui.lastPosition == resource->getInitialPosition())
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 InformationManager & InformationManager::Instance()

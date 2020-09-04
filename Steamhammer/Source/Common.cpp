@@ -109,7 +109,10 @@ std::string UnitTypeName(BWAPI::UnitType type)
 	if (type == BWAPI::UnitTypes::None   ) return "None";
 	if (type == BWAPI::UnitTypes::Unknown) return "Unknown";
 
-	return TrimRaceName(type.getName());
+    std::string nicer = TrimRaceName(type.getName());
+    std::replace(nicer.begin(), nicer.end(), '_', ' ');
+
+    return nicer;
 }
 
 std::string UnitTypeName(BWAPI::Unit unit)
@@ -164,7 +167,7 @@ double ApproachSpeed(const BWAPI::Position & pos, BWAPI::Unit u)
 
 BWAPI::Unit NearestOf(const BWAPI::Position & pos, const BWAPI::Unitset & set)
 {
-    int bestDistance = 999999;
+    int bestDistance = INT_MAX;
     BWAPI::Unit bestUnit = nullptr;
 
     for (BWAPI::Unit unit : set)
@@ -182,7 +185,7 @@ BWAPI::Unit NearestOf(const BWAPI::Position & pos, const BWAPI::Unitset & set)
 
 BWAPI::Unit NearestOf(const BWAPI::Position & pos, const BWAPI::Unitset & set, BWAPI::UnitType type)
 {
-    int bestDistance = 999999;
+    int bestDistance = INT_MAX;
     BWAPI::Unit bestUnit = nullptr;
 
     for (BWAPI::Unit unit : set)
@@ -207,7 +210,7 @@ BWAPI::Position CenterOfUnitset(const BWAPI::Unitset units)
 {
 	BWAPI::Position total = BWAPI::Positions::Origin;
 	int n = 0;
-	for (const auto unit : units)
+	for (BWAPI::Unit unit : units)
 	{
 		if (unit->isVisible() && unit->getPosition().isValid())
 		{
@@ -267,4 +270,9 @@ int GroundHeight(int x, int y)
 int GroundHeight(const BWAPI::TilePosition & tile)
 {
 	return BWAPI::Broodwar->getGroundHeight(tile) & (~0x01);
+}
+
+BWAPI::Position TileCenter(const BWAPI::TilePosition & tile)
+{
+    return BWAPI::Position(tile) + BWAPI::Position(16, 16);
 }

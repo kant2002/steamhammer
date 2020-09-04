@@ -6,9 +6,14 @@ namespace UAlbertaBot
 {
 class PlayerSnapshot
 {
-	bool excludeType(BWAPI::UnitType type);
+protected:
+	bool excludeType(BWAPI::UnitType type) const;
+
+    void reset(BWAPI::Player side);
+    void inferUnseenRequirements(const PlayerSnapshot & ever, BWAPI::UnitType t);
 
 public:
+    BWAPI::Player player;
 	int numBases;
 	std::map<BWAPI::UnitType, int> unitCounts;
 
@@ -17,10 +22,13 @@ public:
 	PlayerSnapshot();
 	PlayerSnapshot(BWAPI::Player);
 
-	void takeSelf();
-	void takeEnemy();
+    void takeSelf();
+    void takeSelfAll();
+    void takeEnemy();
+    void takeEnemyEver(const PlayerSnapshot & seen);
+    void takeEnemyInferred(const PlayerSnapshot & ever);
 
-	int getCount(BWAPI::UnitType type) const;
+	int count(BWAPI::UnitType type) const;
     int getSupply() const;
 
 	std::string debugString() const;

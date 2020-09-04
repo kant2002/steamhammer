@@ -1,7 +1,8 @@
 #include "Common.h"
 #include "BOSSManager.h"
 #include "BuildingManager.h"
-#include "UnitUtil.h"
+
+#include "The.h"
 
 using namespace UAlbertaBot;
 
@@ -29,10 +30,10 @@ void BOSSManager::reset()
 // start a new search for a new goal
 void BOSSManager::startNewSearch(const std::vector<MetaPair> & goalUnits)
 {
-    size_t numWorkers   = UnitUtil::GetAllUnitCount(BWAPI::Broodwar->self()->getRace().getWorker());
-    size_t numDepots    = UnitUtil::GetAllUnitCount(BWAPI::Broodwar->self()->getRace().getCenter())
-                        + UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Lair)
-                        + UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Hive);
+    size_t numWorkers   = the.my.all.count(BWAPI::Broodwar->self()->getRace().getWorker());
+    size_t numDepots    = the.my.all.count(BWAPI::Broodwar->self()->getRace().getCenter())
+                        + the.my.all.count(BWAPI::UnitTypes::Zerg_Lair)
+                        + the.my.all.count(BWAPI::UnitTypes::Zerg_Hive);
 
 	// TODO these are both solvable problems :-/
     if (numWorkers == 0)
@@ -102,19 +103,6 @@ void BOSSManager::drawSearchInformation(int x, int y)
     BWAPI::Broodwar->drawTextScreen(BWAPI::Position(x, y+25), "Time (ms): %.3lf", _totalPreviousSearchTime);
     BWAPI::Broodwar->drawTextScreen(BWAPI::Position(x, y+35), "Nodes: %d", _savedSearchResults.nodesExpanded);
     BWAPI::Broodwar->drawTextScreen(BWAPI::Position(x, y+45), "BO Size: %d", (int)_savedSearchResults.buildOrder.size());
-}
-
-void BOSSManager::drawStateInformation(int x, int y) 
-{
-	if (!Config::Debug::DrawBOSSStateInfo)
-    {
-        return;
-    }
-
-    BOSS::GameState currentState(BWAPI::Broodwar, BWAPI::Broodwar->self(), BuildingManager::Instance().buildingsQueued());
-    BWAPI::Broodwar->drawTextScreen(BWAPI::Position(x-100, y+30), "\x04%s", currentState.getBuildingData().toString().c_str());
-    BWAPI::Broodwar->drawTextScreen(BWAPI::Position(x+150, y), "\x04%s", currentState.toString().c_str());
-    
 }
 
 // tell the search to keep going for however long we have this frame

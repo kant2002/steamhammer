@@ -1,7 +1,8 @@
+#include <fstream>
+
 #include "ParseUtils.h"
 #include "JSONTools.h"
 
-#include "Bases.h"
 #include "BuildOrder.h"
 #include "OpponentModel.h"
 #include "Random.h"
@@ -107,7 +108,6 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
 		JSONTools::ReadBool("DrawBuildOrderSearchInfo", debug, Config::Debug::DrawBuildOrderSearchInfo);
 		JSONTools::ReadBool("DrawQueueFixInfo", debug, Config::Debug::DrawQueueFixInfo);
 		JSONTools::ReadBool("DrawUnitHealthBars", debug, Config::Debug::DrawUnitHealthBars);
-        JSONTools::ReadBool("DrawResourceInfo", debug, Config::Debug::DrawResourceInfo);
         JSONTools::ReadBool("DrawWorkerInfo", debug, Config::Debug::DrawWorkerInfo);
         JSONTools::ReadBool("DrawProductionInfo", debug, Config::Debug::DrawProductionInfo);
         JSONTools::ReadBool("DrawScoutInfo", debug, Config::Debug::DrawScoutInfo);
@@ -116,19 +116,20 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
 		JSONTools::ReadBool("DrawCombatSimInfo", debug, Config::Debug::DrawCombatSimulationInfo);
         JSONTools::ReadBool("DrawBuildingInfo", debug, Config::Debug::DrawBuildingInfo);
         JSONTools::ReadBool("DrawModuleTimers", debug, Config::Debug::DrawModuleTimers);
-        JSONTools::ReadBool("DrawMouseCursorInfo", debug, Config::Debug::DrawMouseCursorInfo);
         JSONTools::ReadBool("DrawEnemyUnitInfo", debug, Config::Debug::DrawEnemyUnitInfo);
-		JSONTools::ReadBool("DrawHiddenEnemies", debug, Config::Debug::DrawHiddenEnemies);
+        JSONTools::ReadBool("DrawUnitCounts", debug, Config::Debug::DrawUnitCounts);
+        JSONTools::ReadBool("DrawHiddenEnemies", debug, Config::Debug::DrawHiddenEnemies);
 		JSONTools::ReadBool("DrawMapInfo", debug, Config::Debug::DrawMapInfo);
         JSONTools::ReadBool("DrawMapGrid", debug, Config::Debug::DrawMapGrid);
 		JSONTools::ReadBool("DrawMapDistances", debug, Config::Debug::DrawMapDistances);
-		JSONTools::ReadBool("DrawBaseInfo", debug, Config::Debug::DrawBaseInfo);
+        JSONTools::ReadBool("DrawTerrainHeights", debug, Config::Debug::DrawTerrainHeights);
+        JSONTools::ReadBool("DrawBaseInfo", debug, Config::Debug::DrawBaseInfo);
 		JSONTools::ReadBool("DrawStrategyBossInfo", debug, Config::Debug::DrawStrategyBossInfo);
-		JSONTools::ReadBool("DrawUnitTargetInfo", debug, Config::Debug::DrawUnitTargetInfo);
+		JSONTools::ReadBool("DrawUnitTargets", debug, Config::Debug::DrawUnitTargets);
 		JSONTools::ReadBool("DrawUnitOrders", debug, Config::Debug::DrawUnitOrders);
 		JSONTools::ReadBool("DrawMicroState", debug, Config::Debug::DrawMicroState);
 		JSONTools::ReadBool("DrawReservedBuildingTiles", debug, Config::Debug::DrawReservedBuildingTiles);
-        JSONTools::ReadBool("DrawBOSSStateInfo", debug, Config::Debug::DrawBOSSStateInfo); 
+        JSONTools::ReadBool("DrawResourceAmounts", debug, Config::Debug::DrawResourceAmounts); 
     }
 
     // Parse the Tool options.
@@ -168,8 +169,7 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
         Config::Skills::SurrenderWhenHopeIsLost = GetBoolByRace("SurrenderWhenHopeIsLost", skills);
 
         Config::Skills::ScoutHarassEnemy = GetBoolByRace("ScoutHarassEnemy", skills);
-        Config::Skills::AutoGasSteal = GetBoolByRace("AutoGasSteal", skills);
-        Config::Skills::RandomGasStealRate = GetDoubleByRace("RandomGasStealRate", skills);
+        Config::Skills::GasSteal = GetBoolByRace("GasSteal", skills);
 
         JSONTools::ReadBool("Burrow", skills, Config::Skills::Burrow);
         JSONTools::ReadInt("MaxQueens", skills, Config::Skills::MaxQueens);
@@ -261,15 +261,11 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
 							}
 
 							MacroAct act(itemName);
-
-							if (act.getRace() != BWAPI::Races::None || act.isCommand())
-							{
-								for (int i = 0; i < unitCount; ++i)
-								{
-									buildOrder.add(act);
-								}
-							}
-						}
+                            for (int i = 0; i < unitCount; ++i)
+                            {
+                                buildOrder.add(act);
+                            }
+                        }
 						else
 						{
 							UAB_ASSERT_WARNING(false, "Build order item must be a string %s", name.c_str());
@@ -459,25 +455,25 @@ void ParseUtils::ParseTextCommand(const std::string & commandString)
 		else if (variableName == "drawscoutinfo") { Config::Debug::DrawScoutInfo = GetBoolFromString(val); }
 		else if (variableName == "drawqueuefixinfo") { Config::Debug::DrawQueueFixInfo = GetBoolFromString(val); }
 		else if (variableName == "drawenemyunitinfo") { Config::Debug::DrawEnemyUnitInfo = GetBoolFromString(val); }
-		else if (variableName == "drawhiddenenemies") { Config::Debug::DrawHiddenEnemies = GetBoolFromString(val); }
+        else if (variableName == "drawunitcounts") { Config::Debug::DrawUnitCounts = GetBoolFromString(val); }
+        else if (variableName == "drawhiddenenemies") { Config::Debug::DrawHiddenEnemies = GetBoolFromString(val); }
 		else if (variableName == "drawmoduletimers") { Config::Debug::DrawModuleTimers = GetBoolFromString(val); }
-        else if (variableName == "drawresourceinfo") { Config::Debug::DrawResourceInfo = GetBoolFromString(val); }
         else if (variableName == "drawcombatsiminfo") { Config::Debug::DrawCombatSimulationInfo = GetBoolFromString(val); }
-        else if (variableName == "drawunittargetinfo") { Config::Debug::DrawUnitTargetInfo = GetBoolFromString(val); }
+        else if (variableName == "drawunittargets") { Config::Debug::DrawUnitTargets = GetBoolFromString(val); }
 		else if (variableName == "drawunitorders") { Config::Debug::DrawUnitOrders = GetBoolFromString(val); }
 		else if (variableName == "drawmicrostate") { Config::Debug::DrawMicroState = GetBoolFromString(val); }
 		else if (variableName == "drawmapinfo") { Config::Debug::DrawMapInfo = GetBoolFromString(val); }
         else if (variableName == "drawmapgrid") { Config::Debug::DrawMapGrid = GetBoolFromString(val); }
 		else if (variableName == "drawmapdistances") { Config::Debug::DrawMapDistances = GetBoolFromString(val); }
-		else if (variableName == "drawbaseinfo") { Config::Debug::DrawBaseInfo = GetBoolFromString(val); }
+        else if (variableName == "drawterrainheights") { Config::Debug::DrawTerrainHeights = GetBoolFromString(val); }
+        else if (variableName == "drawbaseinfo") { Config::Debug::DrawBaseInfo = GetBoolFromString(val); }
 		else if (variableName == "drawstrategybossinfo") { Config::Debug::DrawStrategyBossInfo = GetBoolFromString(val); }
 		else if (variableName == "drawsquadinfo") { Config::Debug::DrawSquadInfo = GetBoolFromString(val); }
 		else if (variableName == "drawclusters") { Config::Debug::DrawClusters = GetBoolFromString(val); }
 		else if (variableName == "drawworkerinfo") { Config::Debug::DrawWorkerInfo = GetBoolFromString(val); }
-        else if (variableName == "drawmousecursorinfo") { Config::Debug::DrawMouseCursorInfo = GetBoolFromString(val); }
         else if (variableName == "drawbuildinginfo") { Config::Debug::DrawBuildingInfo = GetBoolFromString(val); }
         else if (variableName == "drawreservedbuildingtiles") { Config::Debug::DrawReservedBuildingTiles = GetBoolFromString(val); }
-		else if (variableName == "drawbossstateinfo") { Config::Debug::DrawBOSSStateInfo = GetBoolFromString(val); }
+        else if (variableName == "drawresourceamounts") { Config::Debug::DrawResourceAmounts = GetBoolFromString(val); }
 
         else { UAB_ASSERT_WARNING(false, "Unknown variable name for /set: %s", variableName.c_str()); }
     }

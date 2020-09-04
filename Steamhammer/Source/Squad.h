@@ -22,11 +22,8 @@
 
 namespace UAlbertaBot
 {
-class The;
-
 class Squad
 {
-	The &				the;
 	std::string         _name;
 	BWAPI::Unitset      _units;
 	bool				_combatSquad;
@@ -67,7 +64,7 @@ class Squad
 	std::vector<UnitCluster> _clusters;
 
 	BWAPI::Unit		getRegroupUnit();
-	BWAPI::Unit		unitClosestToEnemy(const BWAPI::Unitset units) const;
+	BWAPI::Unit		unitClosestToEnemy(const BWAPI::Unitset & units) const;
 
 	void			updateUnits();
 	void			addUnitsToMicroManagers();

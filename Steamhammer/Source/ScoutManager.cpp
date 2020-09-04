@@ -2,6 +2,7 @@
 
 #include "Bases.h"
 #include "GameCommander.h"
+#include "MapGrid.h"
 #include "MapTools.h"
 #include "Micro.h"
 #include "OpponentModel.h"
@@ -14,8 +15,7 @@
 using namespace UAlbertaBot;
 
 ScoutManager::ScoutManager() 
-	: the(The::Root())
-	, _overlordScout(nullptr)
+	: _overlordScout(nullptr)
     , _workerScout(nullptr)
 	, _scoutStatus("None")
 	, _gasStealStatus("None")
@@ -104,7 +104,7 @@ void ScoutManager::setScoutTargets()
 bool ScoutManager::shouldScout()
 {
 	// If we're stealing gas, it doesn't matter what the scout command is: We need to send a worker.
-	if (_tryGasSteal)
+	if (wantGasSteal())
 	{
 		return true;
 	}
@@ -133,14 +133,14 @@ void ScoutManager::update()
 
 	// If a scout is gone, admit it.
 	if (_workerScout &&
-		(!_workerScout->exists() || _workerScout->getHitPoints() <= 0 ||   // it died (or became a zerg extractor)
-		_workerScout->getPlayer() != BWAPI::Broodwar->self()))             // it got mind controlled!
+		(!_workerScout->exists() || _workerScout->getHitPoints() <= 0 ||     // it died (or became a zerg extractor)
+		_workerScout->getPlayer() != the.self()))                            // it got mind controlled!
 	{
 		_workerScout = nullptr;
 	}
 	if (_overlordScout &&
-		(!_overlordScout->exists() || _overlordScout->getHitPoints() <= 0 ||   // it died
-		_overlordScout->getPlayer() != BWAPI::Broodwar->self()))               // it got mind controlled!
+		(!_overlordScout->exists() || _overlordScout->getHitPoints() <= 0 ||     // it died
+		_overlordScout->getPlayer() != the.self()))                              // it got mind controlled!
 	{
 		_overlordScout = nullptr;
 	}
@@ -151,14 +151,8 @@ void ScoutManager::update()
 		releaseOverlordScout();
 	}
 
-	// Find out if the opponent model wants us to steal gas.
-	if (_workerScout && OpponentModel::Instance().getRecommendGasSteal())
-	{
-		_tryGasSteal = true;
-	}
-
-	// If we only want to locate the enemy base and we have, release the scout worker.
-	if (_scoutCommand == MacroCommandType::ScoutLocation &&
+    // If we only want to locate the enemy base and we have, release the scout worker.
+    if (_scoutCommand == MacroCommandType::ScoutLocation &&
 		Bases::Instance().enemyStart() &&
 		!wantGasSteal())
 	{
@@ -208,7 +202,7 @@ void ScoutManager::update()
 	}
 	else if (_gasStealOver)
 	{
-		// We get here if we're stealing gas as zerg when the worker is turns into an extractor.
+		// We get here if we're stealing gas as zerg when the worker turns into an extractor.
 		_gasStealStatus = "Finished or failed";
 	}
 
@@ -229,7 +223,6 @@ void ScoutManager::setOverlordScout(BWAPI::Unit unit)
 // The worker scout is assigned only when it is time to go scout.
 void ScoutManager::setWorkerScout(BWAPI::Unit unit)
 {
-    // if we have a previous worker scout, release it back to the worker manager
 	releaseWorkerScout();
 
     _workerScout = unit;
@@ -241,7 +234,8 @@ void ScoutManager::releaseWorkerScout()
 {
 	if (_workerScout)
 	{
-		WorkerManager::Instance().finishedWithWorker(_workerScout);
+        WorkerManager::Instance().finishedWithWorker(_workerScout);
+        _gasStealOver = true;
 		_workerScout = nullptr;
 	}
 }
@@ -255,7 +249,6 @@ void ScoutManager::releaseOverlordScout()
 		_overlordScout = nullptr;
 	}
 }
-
 
 void ScoutManager::setScoutCommand(MacroCommandType cmd)
 {
@@ -283,7 +276,7 @@ void ScoutManager::drawScoutInformation(int x, int y)
 	{
 		more = "and stay";
 	}
-	else if (_scoutCommand == MacroCommandType::ScoutLocation)
+    else if (_scoutCommand == MacroCommandType::ScoutLocation)
 	{
 		more = "location";
 	}
@@ -325,7 +318,7 @@ void ScoutManager::moveGroundScout()
 
 		UAB_ASSERT(enemyBase, "no enemy base");
 
-		int scoutDistanceToEnemy = MapTools::Instance().getGroundTileDistance(_workerScout->getPosition(), enemyBase->getCenter());
+		int scoutDistanceToEnemy = the.map.getGroundTileDistance(_workerScout->getPosition(), enemyBase->getCenter());
 		bool scoutInRangeOfenemy = scoutDistanceToEnemy <= scoutDistanceThreshold;
 
 		int scoutHP = _workerScout->getHitPoints() + _workerScout->getShields();
@@ -376,12 +369,12 @@ void ScoutManager::moveGroundScout()
 		else
 		{
 			_scoutStatus = "Enemy located, going there";
-			followGroundPath();    // goes toward the first waypoint inside the enemy base
+			followGroundPath();
 		}
 	}
 }
 
-// Explore inside the enemy base.
+// Explore inside the enemy base. Or, if not there yet, move toward it.
 // NOTE This may release the worker scout if scouting is complete!
 void ScoutManager::followGroundPath()
 {
@@ -498,7 +491,7 @@ bool ScoutManager::gasSteal()
 	if (!_enemyGeyser)
 	{
 		// No need to set status. It will change on the next frame.
-		_gasStealOver = true;
+        _gasStealOver = true;
 		return false;
 	}
 
@@ -521,10 +514,9 @@ bool ScoutManager::gasSteal()
 		// Therefore _queuedGasSteal affects mainly the debug display for the UI.
 		if (!ProductionManager::Instance().isGasStealInQueue())
 		{
-			//BWAPI::Broodwar->printf("queueing gas steal");
 			// NOTE Queueing the gas steal orders the building constructed.
 			// Control of the worker passes to the BuildingManager until it releases the
-			// worker with a call to gasStealOver().
+			// worker with a call to setGasStealOver().
 			ProductionManager::Instance().queueGasSteal();
 			_queuedGasSteal = true;
 			// Regardless, make sure we are moving toward the geyser.
@@ -546,7 +538,7 @@ bool ScoutManager::gasSteal()
 BWAPI::Unit ScoutManager::enemyWorkerToHarass() const
 {
 	// First look for any enemy worker that is building.
-	for (const auto unit : BWAPI::Broodwar->enemy()->getUnits())
+	for (BWAPI::Unit unit : the.enemy()->getUnits())
 	{
 		if (unit->getType().isWorker() && unit->isConstructing())
 		{
@@ -561,7 +553,7 @@ BWAPI::Unit ScoutManager::enemyWorkerToHarass() const
 	BWAPI::Unit geyser = getAnyEnemyGeyser();
 	if (geyser)
 	{
-		for (const auto unit : BWAPI::Broodwar->enemy()->getUnits())
+		for (BWAPI::Unit unit : the.enemy()->getUnits())
 		{
 			if (unit->getType().isWorker())
 			{
@@ -594,7 +586,7 @@ BWAPI::Unit ScoutManager::getAnyEnemyGeyser() const
 	return nullptr;
 }
 
-// Used in stealing gas.
+// Used in stealing gas. Only called after the enemy base is found.
 // If there is exactly 1 geyser in the enemy base and it may be untaken, return it.
 // If 0 we can't steal it, and if >1 then it's no use to steal one.
 BWAPI::Unit ScoutManager::getTheEnemyGeyser() const
@@ -606,7 +598,7 @@ BWAPI::Unit ScoutManager::getTheEnemyGeyser() const
 	{
 		BWAPI::Unit geyser = *(geysers.begin());
 		// If the geyser is visible, we may be able to reject it as already taken.
-		// TODO get the type from InformationManager or Bases, which may remember
+		// TODO get the last known status from the.info.isGeyserTaken()
 		if (!geyser->isVisible() || geyser->getType() == BWAPI::UnitTypes::Resource_Vespene_Geyser)
 		{
 			// We see it is untaken, or we don't see the geyser. Assume the best.
@@ -619,9 +611,9 @@ BWAPI::Unit ScoutManager::getTheEnemyGeyser() const
 
 bool ScoutManager::enemyWorkerInRadius()
 {
-	for (const auto unit : BWAPI::Broodwar->enemy()->getUnits())
+	for (BWAPI::Unit unit : the.enemy()->getUnits())
 	{
-		if (unit->getType().isWorker() && (unit->getDistance(_workerScout) < 300))
+		if (unit->getType().isWorker() && unit->getDistance(_workerScout) < 300)
 		{
 			return true;
 		}

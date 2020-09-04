@@ -86,7 +86,7 @@ void MicroTanks::executeMicro(const BWAPI::Unitset & targets, const UnitCluster 
 				BWAPI::Unit target = getTarget(tank, tankTargets);
 				const int distanceToTarget = tank->getDistance(target);
 
-				if (target && Config::Debug::DrawUnitTargetInfo)
+				if (target && Config::Debug::DrawUnitTargets)
 				{
 					BWAPI::Broodwar->drawLineMap(tank->getPosition(), tank->getTargetPosition(), BWAPI::Colors::Purple);
 				}
@@ -170,7 +170,7 @@ void MicroTanks::executeMicro(const BWAPI::Unitset & targets, const UnitCluster 
 BWAPI::Unit MicroTanks::getTarget(BWAPI::Unit tank, const BWAPI::Unitset & targets)
 {
     int highPriority = 0;
-	int closestDist = 999999;
+    int closestDist = INT_MAX;
 	BWAPI::Unit closestTarget = nullptr;
 
     const int siegeTankRange = BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode.groundWeapon().maxRange();

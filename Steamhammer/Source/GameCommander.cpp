@@ -1,14 +1,24 @@
-#include "Bases.h"
 #include "GameCommander.h"
+
+#include "Bases.h"
+#include "BuildingPlacer.h"
 #include "MapTools.h"
 #include "OpponentModel.h"
 #include "UnitUtil.h"
 
+#include "BuildingManager.h"
+#include "InformationManager.h"
+#include "MapGrid.h"
+#include "OpponentModel.h"
+#include "ProductionManager.h"
+#include "ScoutManager.h"
+#include "StrategyManager.h"
+#include "WorkerManager.h"
+
 using namespace UAlbertaBot;
 
 GameCommander::GameCommander() 
-	: the(The::Root())
-	, _combatCommander(CombatCommander::Instance())
+	: _combatCommander(CombatCommander::Instance())
 	, _initialScoutTime(0)
 	, _surrenderTime(0)
     , _myHighWaterSupply(0)
@@ -52,6 +62,7 @@ void GameCommander::update()
 
 	_timerManager.startTimer(TimerManager::OpponentModel);
 	OpponentModel::Instance().update();
+    the.skillkit.update();
 	_timerManager.stopTimer(TimerManager::OpponentModel);
 
 	// -- Managers that act on information. --
@@ -104,14 +115,16 @@ void GameCommander::drawDebugInterface()
 {
 	InformationManager::Instance().drawExtendedInterface();
 	InformationManager::Instance().drawUnitInformation(425,30);
-	Bases::Instance().drawBaseInfo();
+    drawUnitCounts(345, 30);
+    Bases::Instance().drawBaseInfo();
 	Bases::Instance().drawBaseOwnership(575, 30);
-	BuildingManager::Instance().drawBuildingInformation(200, 50);
-	BuildingPlacer::Instance().drawReservedTiles();
+    InformationManager::Instance().drawResourceAmounts();
+    BuildingManager::Instance().drawBuildingInformation(200, 50);
+	the.placer.drawReservedTiles();
 	ProductionManager::Instance().drawProductionInformation(30, 60);
 	BOSSManager::Instance().drawSearchInformation(490, 100);
-    BOSSManager::Instance().drawStateInformation(250, 0);
-	MapTools::Instance().drawHomeDistances();
+	the.map.drawHomeDistances();
+    drawTerrainHeights();
     
 	_combatCommander.drawSquadInformation(170, 70);
 	_combatCommander.drawCombatSimInformation();
@@ -119,14 +132,6 @@ void GameCommander::drawDebugInterface()
     drawGameInformation(4, 1);
 
 	drawUnitOrders();
-	
-	// draw position of mouse cursor
-	if (Config::Debug::DrawMouseCursorInfo)
-	{
-		int mouseX = BWAPI::Broodwar->getMousePosition().x + BWAPI::Broodwar->getScreenPosition().x;
-		int mouseY = BWAPI::Broodwar->getMousePosition().y + BWAPI::Broodwar->getScreenPosition().y;
-		BWAPI::Broodwar->drawTextMap(mouseX + 20, mouseY, " %d %d", mouseX, mouseY);
-	}
 }
 
 void GameCommander::drawGameInformation(int x, int y)
@@ -137,18 +142,17 @@ void GameCommander::drawGameInformation(int x, int y)
 	}
 
 	const OpponentModel::OpponentSummary & summary = OpponentModel::Instance().getSummary();
-	BWAPI::Broodwar->drawTextScreen(x, y, "%c%s %cv %c%s %c%d-%d",
+	BWAPI::Broodwar->drawTextScreen(x, y, "%c%s %c%d-%d %c%s",
 		BWAPI::Broodwar->self()->getTextColor(), BWAPI::Broodwar->self()->getName().c_str(),
-		white,
-        BWAPI::Broodwar->enemy()->getTextColor(), BWAPI::Broodwar->enemy()->getName().c_str(),
-		white, summary.totalWins, summary.totalGames - summary.totalWins);
+        white, summary.totalWins, summary.totalGames - summary.totalWins,
+        BWAPI::Broodwar->enemy()->getTextColor(), BWAPI::Broodwar->enemy()->getName().c_str());
 	y += 12;
 	
 	const std::string & openingGroup = StrategyManager::Instance().getOpeningGroup();
 	const auto openingInfoIt = summary.openingInfo.find(Config::Strategy::StrategyName);
 	const int wins = openingInfoIt == summary.openingInfo.end() ? 0 : openingInfoIt->second.sameWins + openingInfoIt->second.otherWins;
 	const int games = openingInfoIt == summary.openingInfo.end() ? 0 : openingInfoIt->second.sameGames + openingInfoIt->second.otherGames;
-	bool gasSteal = OpponentModel::Instance().getRecommendGasSteal() || ScoutManager::Instance().wantGasSteal();
+	bool gasSteal = ScoutManager::Instance().wantGasSteal();
 	BWAPI::Broodwar->drawTextScreen(x, y, "\x03%s%s%s%s %c%d-%d",
 		Config::Strategy::StrategyName.c_str(),
 		openingGroup != "" ? (" (" + openingGroup + ")").c_str() : "",
@@ -163,7 +167,7 @@ void GameCommander::drawGameInformation(int x, int y)
 	if (OpponentModel::Instance().getEnemyPlan() == OpeningPlan::Unknown &&
 		OpponentModel::Instance().getExpectedEnemyPlan() != OpeningPlan::Unknown)
 	{
-		if (OpponentModel::Instance().getEnemySingleStrategy())
+		if (OpponentModel::Instance().isEnemySingleStrategy())
 		{
 			expect = "surely ";
 		}
@@ -213,7 +217,7 @@ void GameCommander::drawUnitOrders()
 		return;
 	}
 
-	for (const auto unit : BWAPI::Broodwar->getAllUnits())
+	for (BWAPI::Unit unit : BWAPI::Broodwar->getAllUnits())
 	{
 		if (!unit->getPosition().isValid())
 		{
@@ -225,16 +229,16 @@ void GameCommander::drawUnitOrders()
 			unit->getType() == BWAPI::UnitTypes::Zerg_Cocoon ||
 			unit->getType().isBuilding() && !unit->isCompleted())
 		{
-			extra = unit->getBuildType().getName();
+            extra = UnitTypeName(unit->getBuildType());
 		}
 		else if (unit->isTraining() && !unit->getTrainingQueue().empty())
 		{
-			extra = unit->getTrainingQueue()[0].getName();
+			extra = UnitTypeName(unit->getTrainingQueue()[0]);
 		}
 		else if (unit->getType() == BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode ||
 			unit->getType() == BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode)
 		{
-			extra = unit->getType().getName();
+            extra = UnitTypeName(unit);
 		}
 		else if (unit->isResearching())
 		{
@@ -256,6 +260,71 @@ void GameCommander::drawUnitOrders()
 			BWAPI::Broodwar->drawTextMap(x, y + 10, "%c%d %c%s", white, unit->getID(), cyan, unit->getOrder().getName().c_str());
 		}
 	}
+}
+
+void GameCommander::drawUnitCounts(int x, int y) const
+{
+    if (!Config::Debug::DrawUnitCounts)
+    {
+        return;
+    }
+
+    const int c1 = 17;
+    const int c2 = 38;
+    const int e0 = 160;
+    int dy = 0;
+    for (BWAPI::UnitType t : BWAPI::UnitTypes::allUnitTypes())
+    {
+        if (the.my.all.count(t) > 0)
+        {
+            BWAPI::Broodwar->drawTextScreen    (x     , y + dy, "%c%3d" , white , the.my.completed.count(t));
+            if (the.my.all.count(t) - the.my.completed.count(t) > 0)
+            {
+                BWAPI::Broodwar->drawTextScreen(x + c1, y + dy, "%c%+2d", yellow, the.my.all.count(t) - the.my.completed.count(t));
+            }
+            BWAPI::Broodwar->drawTextScreen    (x + c2, y + dy, "%c%s" , green , UnitTypeName(t).c_str());
+            dy += 12;
+        }
+    }
+
+    dy = 0;
+    for (BWAPI::UnitType t : BWAPI::UnitTypes::allUnitTypes())
+    {
+        if (the.your.seen.count(t) + the.your.inferred.count(t) > 0)
+        {
+            char color = red;
+            int n = the.your.inferred.count(t);
+            if (the.your.seen.count(t))
+            {
+                color = white;
+                n = the.your.seen.count(t);
+            }
+
+            BWAPI::Broodwar->drawTextScreen    (x + e0          , y + dy, "%c%3d", color , n);
+            BWAPI::Broodwar->drawTextScreen    (x + e0 + c2 - 13, y + dy, "%c%s" , orange, UnitTypeName(t).c_str());
+            dy += 12;
+        }
+    }
+}
+
+void GameCommander::drawTerrainHeights() const
+{
+    if (!Config::Debug::DrawTerrainHeights)
+    {
+        return;
+    }
+
+    for (int x = 0; x < BWAPI::Broodwar->mapWidth(); ++x)
+    {
+        for (int y = 0; y < BWAPI::Broodwar->mapHeight(); ++y)
+        {
+            int h = BWAPI::Broodwar->getGroundHeight(x, y);
+            char color = h % 2 ? purple : gray;
+
+            BWAPI::Position pos(BWAPI::TilePosition(x, y));
+            BWAPI::Broodwar->drawTextMap(pos + BWAPI::Position(12, 12), "%c%d", color, h);
+        }
+    }
 }
 
 // assigns units to various managers
@@ -346,7 +415,7 @@ void GameCommander::setScoutUnits()
 	if (BWAPI::Broodwar->getFrameCount() == 0 &&
 		BWAPI::Broodwar->self()->getRace() == BWAPI::Races::Zerg)
 	{
-		for (const auto unit : BWAPI::Broodwar->self()->getUnits())
+		for (BWAPI::Unit unit : BWAPI::Broodwar->self()->getUnits())
 		{
 			if (unit->getType() == BWAPI::UnitTypes::Zerg_Overlord)
 			{
@@ -369,7 +438,7 @@ void GameCommander::setScoutUnits()
 			{
 				ScoutManager::Instance().setWorkerScout(workerScout);
 				assignUnit(workerScout, _scoutUnits);
-                _initialScoutTime = BWAPI::Broodwar->getFrameCount();
+                _initialScoutTime = the.now();
 			}
 		}
     }
@@ -435,7 +504,7 @@ void GameCommander::onUnitMorph(BWAPI::Unit unit)
 // Used only to choose a worker to scout.
 BWAPI::Unit GameCommander::getAnyFreeWorker()
 {
-	for (const auto unit : _validUnits)
+	for (BWAPI::Unit unit : _validUnits)
 	{
 		if (unit->getType().isWorker() &&
 			!isAssigned(unit) &&

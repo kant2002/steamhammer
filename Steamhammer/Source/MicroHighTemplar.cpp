@@ -27,7 +27,7 @@ void MicroHighTemplar::update()
 
 	// No base should be tight against an edge, so this position should always be reachable.
 	const BWAPI::Position gatherPoint =
-		Bases::Instance().myMainBase()->getPosition() - BWAPI::Position(32, 32);
+		the.bases.myMain()->getPosition() - BWAPI::Position(32, 32);
 	UAB_ASSERT(gatherPoint.isValid(), "bad gather point");
 
 	BWAPI::Unitset mergeGroup;
@@ -69,7 +69,7 @@ void MicroHighTemplar::update()
 	}
 
 	// We will merge 1 pair per call, the pair closest together.
-	int closestDist = 999999;
+    int closestDist = INT_MAX;
 	BWAPI::Unit closest1 = nullptr;
 	BWAPI::Unit closest2 = nullptr;
 

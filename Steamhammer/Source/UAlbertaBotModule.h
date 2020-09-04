@@ -1,21 +1,11 @@
 #pragma once
 
 #include <BWAPI.h>
-#include <iostream>
-#include <fstream>
-#include "rapidjson\document.h"
-
-#include "Config.h"
-#include "GameCommander.h"
-#include "Logger.h"
-#include "MapTools.h"
-//#include "The.h"
 
 namespace UAlbertaBot
 {
 class UAlbertaBotModule : public BWAPI::AIModule
 {
-	The & the;
 public:
 	UAlbertaBotModule();
 	void	onStart();

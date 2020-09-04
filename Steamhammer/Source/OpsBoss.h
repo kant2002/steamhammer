@@ -1,13 +1,13 @@
 #pragma once
 
 // Operations boss.
+// NOTE Unfinished. Intended to replace CombatCommander.
 
 #include <BWAPI.h>
 #include "UnitData.h"
 
 namespace UAlbertaBot
 {
-	class The;
 	struct UnitInfo;
 
 	enum class ClusterStatus
@@ -46,8 +46,6 @@ namespace UAlbertaBot
 
 	class OpsBoss
 	{
-		The & the;
-
 		const int clusterStart = 5 * 32;
 		const int clusterRange = 3 * 32;
 

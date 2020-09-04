@@ -31,7 +31,7 @@ void CasterState::update(BWAPI::Unit caster)
 		// We either cast the spell, or we were hit by EMP or feedback.
 		// Whatever the case, we're not going to cast now.
 		spell = CasterSpell::None;
-		lastCastFrame = BWAPI::Broodwar->getFrameCount();
+		lastCastFrame = the.now();
 		// BWAPI::Broodwar->printf("... spell complete");
 	}
 	lastEnergy = caster->getEnergy();
@@ -40,13 +40,12 @@ void CasterState::update(BWAPI::Unit caster)
 // Not enough time since the last spell.
 bool CasterState::waitToCast() const
 {
-	return BWAPI::Broodwar->getFrameCount() - lastCastFrame < framesBetweenCasts;
+	return the.now() - lastCastFrame < framesBetweenCasts;
 }
 
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
 MicroManager::MicroManager() 
-	: the(The::Root())
 {
 }
 
@@ -211,7 +210,7 @@ void MicroManager::destroyNeutralTargets(const BWAPI::Unitset & targets)
 		}
 	}
 
-	for (const auto unit : _units)
+	for (BWAPI::Unit unit : _units)
 	{
         if (visibleTarget)
 		{
@@ -244,7 +243,7 @@ const BWAPI::Unitset & MicroManager::getUnits() const
 // Unused but potentially useful.
 bool MicroManager::containsType(BWAPI::UnitType type) const
 {
-	for (const auto unit : _units)
+	for (BWAPI::Unit unit : _units)
 	{
 		if (unit->getType() == type)
 		{
@@ -261,7 +260,7 @@ void MicroManager::regroup(const BWAPI::Position & regroupPosition, const UnitCl
 
 	BWAPI::Unitset units = Intersection(getUnits(), cluster.units);
 
-	for (const auto unit : units)
+	for (BWAPI::Unit unit : units)
 	{
 		// 0. A ground unit next to an undetected dark templar should try to flee the DT.
 		// 1. A broodling should never retreat, but attack as long as it lives (not long).
@@ -363,7 +362,7 @@ bool MicroManager::checkPositionWalkable(BWAPI::Position pos)
 	}
 
 	// for each of those units, if it's a building or an attacking enemy unit we don't want to go there
-	for (const auto unit : BWAPI::Broodwar->getUnitsOnTile(x/32, y/32)) 
+	for (BWAPI::Unit unit : BWAPI::Broodwar->getUnitsOnTile(x/32, y/32)) 
 	{
 		if	(unit->getType().isBuilding() ||
 			unit->getType().isResourceContainer() || 
@@ -395,7 +394,7 @@ bool MicroManager::dodgeMine(BWAPI::Unit u) const
 
 	// Find the closest kaboom. We react to that one and ignore any others.
 	BWAPI::Unit closestMine = nullptr;
-	int closestDist = 99999;
+    int closestDist = INT_MAX;
 	for (BWAPI::Unit attacker: attackers)
 	{
 		if (attacker->getType() == BWAPI::UnitTypes::Terran_Vulture_Spider_Mine)
@@ -414,7 +413,7 @@ bool MicroManager::dodgeMine(BWAPI::Unit u) const
 		// First, try to drag the mine into an enemy.
 		BWAPI::Unitset enemies = u->getUnitsInRadius(5 * 32, BWAPI::Filter::IsEnemy);
 		BWAPI::Unit bestEnemy = nullptr;
-		int bestEnemyScore = -999999;
+        int bestEnemyScore = INT_MIN;
 		for (BWAPI::Unit enemy : enemies)
 		{
 			int score = -u->getDistance(enemy);
@@ -542,6 +541,12 @@ void MicroManager::setReadyToCast(BWAPI::Unit caster, CasterSpell spell)
     _casterState.at(caster).setSpell(spell);
 }
 
+// A spell caster declares that it is ready to cast.
+void MicroManager::clearReadyToCast(BWAPI::Unit caster)
+{
+    _casterState.at(caster).setSpell(CasterSpell::None);
+}
+
 // Is it ready to cast? If so, don't interrupt it with another action.
 bool MicroManager::isReadyToCast(BWAPI::Unit caster)
 {
@@ -601,15 +606,15 @@ bool MicroManager::infestable(BWAPI::Unit target) const
         BWAPI::Broodwar->getClosestUnit(
             target->getPosition(),
             BWAPI::Filter::GetType == BWAPI::UnitTypes::Zerg_Queen && BWAPI::Filter::GetPlayer == BWAPI::Broodwar->self(),
-            8 * 32
+            10 * 32
         );
 }
 
 void MicroManager::drawOrderText()
 {
-	if (Config::Debug::DrawUnitTargetInfo)
+	if (Config::Debug::DrawUnitTargets)
     {
-		for (const auto unit : _units)
+		for (BWAPI::Unit unit : _units)
 		{
 			BWAPI::Broodwar->drawTextMap(unit->getPosition().x, unit->getPosition().y, "%s", order.getStatus().c_str());
 		}

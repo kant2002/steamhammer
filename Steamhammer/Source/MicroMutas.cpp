@@ -20,7 +20,7 @@ int MicroMutas::hitsToKill(BWAPI::Unit target) const
 // In this version, the location of the muta closest to the goal.
 BWAPI::Position MicroMutas::getCenter() const
 {
-	int bestDist = 99999;
+    int bestDist = INT_MAX;
 	BWAPI::Unit bestMuta = nullptr;
 
 	for (BWAPI::Unit muta : getUnits())
@@ -42,7 +42,7 @@ BWAPI::Position MicroMutas::getCenter() const
 BWAPI::Position MicroMutas::getFleePosition(BWAPI::Unit muta, const BWAPI::Position & center, const BWAPI::Unitset & targets) const
 {
 	BWAPI::Unit bestTarget = nullptr;
-	int bestScore = -99999;
+    int bestScore = INT_MIN;
 
 	for (BWAPI::Unit target : targets)
 	{
@@ -393,7 +393,7 @@ int MicroMutas::getAttackPriority(BWAPI::Unit target)
 	}
 
 	// if the target is building something near our base something is fishy
-	BWAPI::Position ourBasePosition = BWAPI::Position(Bases::Instance().myMainBase()->getPosition());
+	BWAPI::Position ourBasePosition = BWAPI::Position(Bases::Instance().myMain()->getPosition());
 	if (target->getDistance(ourBasePosition) < 1000) {
 		if (target->getType().isWorker() && (target->isConstructing() || target->isRepairing()))
 		{

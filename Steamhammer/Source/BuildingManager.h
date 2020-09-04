@@ -1,17 +1,14 @@
 #pragma once
 
-#include "WorkerManager.h"
-#include "BuildingPlacer.h"
-#include "InformationManager.h"
+#include <BWAPI.h>
+#include "BuildingData.h"
 
 namespace UAlbertaBot
 {
-class The;
+class Base;
 
 class BuildingManager
 {
-	The & the;
-
 	std::vector<Building> _buildings;
 
     BuildingManager();
@@ -44,7 +41,6 @@ public:
     static BuildingManager &	Instance();
 
     void                update();
-    BWAPI::TilePosition getStandardDesiredPosition(MacroLocation loc) const;
 	Building &		    addTrackedBuildingTask(const MacroAct & act, BWAPI::TilePosition desiredLocation, BWAPI::Unit builder, bool isGasSteal);
 	void                addBuildingTask(const MacroAct & act, BWAPI::TilePosition desiredLocation, BWAPI::Unit builder, bool isGasSteal);
     void                drawBuildingInformation(int x,int y);

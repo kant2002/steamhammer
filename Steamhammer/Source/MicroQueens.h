@@ -19,6 +19,8 @@ class MicroQueens : public MicroManager
 
     BWAPI::Position getQueenDestination(BWAPI::Unit queen, const BWAPI::Position & target) const;
 
+    int totalEnergy() const;
+
     // The different updates are done on different frames to spread out the work.
 	void updateMovement(BWAPI::Unit vanguard);
     void updateAction();

@@ -6,14 +6,12 @@
 using namespace UAlbertaBot;
 
 GridSafeAirPath::GridSafeAirPath()
-    : the(The::Root())
-	, Grid()
+    : Grid()
 {
 }
 
 GridSafeAirPath::GridSafeAirPath(const BWAPI::TilePosition & start)
-    : the(The::Root())
-    , Grid(BWAPI::Broodwar->mapWidth(), BWAPI::Broodwar->mapHeight(), -1)
+    : Grid(BWAPI::Broodwar->mapWidth(), BWAPI::Broodwar->mapHeight(), -1)
 {
     computeAir(start, 256 * 256 + 1);
 }
@@ -21,8 +19,7 @@ GridSafeAirPath::GridSafeAirPath(const BWAPI::TilePosition & start)
 // Compute the map only up to the given distance limit.
 // Tiles beyond the limit are "unreachable".
 GridSafeAirPath::GridSafeAirPath(const BWAPI::TilePosition & start, int limit)
-    : the(The::Root())
-    , Grid(BWAPI::Broodwar->mapWidth(), BWAPI::Broodwar->mapHeight(), -1)
+    : Grid(BWAPI::Broodwar->mapWidth(), BWAPI::Broodwar->mapHeight(), -1)
 {
     computeAir(start, limit);
 }

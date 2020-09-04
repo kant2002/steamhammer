@@ -6,8 +6,7 @@ namespace UAlbertaBot
 {
 struct UnitInfo
 {
-    // we need to store all of this data because if the unit is not visible, we
-    // can't reference it from the unit pointer
+    // Keep track of units which are out of sight.
 
     int             unitID;
 	int				updateFrame;
@@ -20,25 +19,33 @@ struct UnitInfo
 	bool			burrowed;               // believed to be burrowed (or burrowing) at this position
     bool            lifted;                 // lifted terran building when last seen
     BWAPI::UnitType type;
-	int				completeBy;				// past frame known or future frame predicted
-	bool            completed;
+
+    // NOTE completeBy controls isCompleted(), which predicts whether a unit is complete
+    //      by now. It's usually what you want to use instead of completed. When the code
+    //      can't estimate completeBy accurately, it deliberately uses an overestimate.
+    //      So when isCompleted() returns true, it's almost always right.
+    int				completeBy;				// past frame known or future frame predicted
+	bool            completed;              // actually seen in a completed state
 
 	UnitInfo();
 	UnitInfo(BWAPI::Unit unit);
 
-	const int predictCompletion(BWAPI::Unit building) const;
-
-	const bool operator == (BWAPI::Unit unit) const;
-    const bool operator == (const UnitInfo & rhs) const;
-	const bool operator < (const UnitInfo & rhs) const;
+	bool operator == (BWAPI::Unit u) const;
+    bool operator == (const UnitInfo & rhs) const;
+	bool operator < (const UnitInfo & rhs) const;
 
 	int estimateHP() const;
 	int estimateShields() const;
 	int estimateHealth() const;
+
+    // Predicted to be completed by now. Prefer this over .completed for most purposes.
+    bool isCompleted() const { return completeBy <= BWAPI::Broodwar->getFrameCount(); };
+
+    int predictCompletion() const;
 };
 
 typedef std::vector<UnitInfo> UnitInfoVector;
-typedef std::map<BWAPI::Unit,UnitInfo> UIMap;
+typedef std::map<BWAPI::Unit, UnitInfo> UIMap;
 
 class UnitData
 {

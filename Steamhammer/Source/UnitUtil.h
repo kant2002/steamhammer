@@ -8,11 +8,13 @@ namespace UAlbertaBot
 struct UnitInfo;
 
 namespace UnitUtil
-{      
-	bool IsMorphedBuildingType(BWAPI::UnitType type);
-	bool IsMorphedUnitType(BWAPI::UnitType type);
+{
+    bool IsMorphedBuildingType(BWAPI::UnitType type);
+    bool IsMorphedUnitType(BWAPI::UnitType type);
+    bool BuildingIsMorphedFrom(BWAPI::UnitType t2, BWAPI::UnitType t1);
 	bool IsCompletedResourceDepot(BWAPI::Unit unit);
     bool IsNearlyCompletedResourceDepot(BWAPI::Unit unit, int framesLeft);
+    int ExtraBuildingLatency(BWAPI::Race race);
 
 	bool IsStaticDefense(BWAPI::UnitType type);
 	bool IsComingStaticDefense(BWAPI::UnitType type);
@@ -24,6 +26,7 @@ namespace UnitUtil
 	bool IsCombatUnit(BWAPI::Unit unit);
     bool IsSuicideUnit(BWAPI::UnitType type);
     bool IsSuicideUnit(BWAPI::Unit unit);
+
     bool IsValidUnit(BWAPI::Unit unit);
 
 	// Damage per frame (formerly CalculateLDT()).
@@ -59,12 +62,13 @@ namespace UnitUtil
     bool HitsUnderSwarm(BWAPI::Unit unit);
 
 	bool AttackOrder(BWAPI::Unit unit);
+    bool MineralOrder(BWAPI::Unit unit);
+    bool GasOrder(BWAPI::Unit unit);
 
 	int GetDetectionRange(BWAPI::UnitType type);
     bool EnemyDetectorInRange(BWAPI::Position pos);
+    bool EnemyDetectorInRange(BWAPI::Unit unit);
 
-	int GetAllUnitCount(BWAPI::UnitType type);
-	int GetCompletedUnitCount(BWAPI::UnitType type);
 	int GetUncompletedUnitCount(BWAPI::UnitType type);
 
 	bool MobilizeUnit(BWAPI::Unit unit);      // unsiege or unburrow

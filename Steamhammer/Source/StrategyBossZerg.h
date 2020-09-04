@@ -134,12 +134,13 @@ class StrategyBossZerg
 	int defilerScore;
 
     bool _enemySeemsToBeDead;
-    bool _wantDefensiveSpire;
 
+    bool _recommendDefensiveSpire;
 	int _lastQueenAliveFrame;	// last frame we had a living queen (now if one is still alive)
-	bool _recommendParasite;
-    bool _recommendEnsnare;
-    bool _recommendBroodling;
+    int _recommendParasite;     // how many queens to make for different queen skills
+    int _recommendEnsnare;
+    int _recommendBroodling;
+    int _recommendQueens;       // max of the above 3
 
 	// For choosing the tech target and the unit mix.
 	std::array<int, int(TechUnit::Size)> techScores;
@@ -151,9 +152,10 @@ class StrategyBossZerg
 	bool enoughArmy() const;
 	bool enoughGroundArmy() const;
     bool enemyIsAllAir() const;
-    bool enemySeemsToBeDead(const PlayerSnapshot & snap) const;
+    bool enemySeemsToBeDead() const;
     bool canSafelyMineGas() const;
     int nFreeEvo() const;
+    int devourerLimit() const;
 
     int getOurSpireTiming() const;
 
@@ -195,7 +197,7 @@ class StrategyBossZerg
 	void resetTechScores();
 	void setAvailableTechUnits(std::array<bool, int(TechUnit::Size)> & available);
 
-	void recommendResearch(const PlayerSnapshot & snap);
+	void recommendTech();
 	void vProtossTechScores(const PlayerSnapshot & snap);
 	void vTerranTechScores(const PlayerSnapshot & snap);
 	void vZergTechScores(const PlayerSnapshot & snap);

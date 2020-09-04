@@ -6,13 +6,8 @@
 
 namespace UAlbertaBot
 {
-class The;
-
 class GridRoom : public GridWalk
 {
-private:
-	The & the;
-
 public:
 	GridRoom();
 

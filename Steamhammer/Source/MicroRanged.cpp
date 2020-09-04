@@ -68,13 +68,9 @@ void MicroRanged::assignTargets(const BWAPI::Unitset & rangedUnits, const BWAPI:
 	}
 	
     // Are any enemies in range to shoot at the ranged units?
-    bool underThreat = false;
-    if (order.isCombatOrder())
-    {
-        underThreat = anyUnderThreat(rangedUnits);
-    }
+    bool underThreat = order.isCombatOrder() && anyUnderThreat(rangedUnits);
 
-    for (const auto rangedUnit : rangedUnits)
+    for (BWAPI::Unit rangedUnit : rangedUnits)
 	{
 		if (rangedUnit->isBurrowed())
 		{
@@ -90,7 +86,7 @@ void MicroRanged::assignTargets(const BWAPI::Unitset & rangedUnits, const BWAPI:
 		}
 
 		// Special case for irradiated zerg units.
-		if (rangedUnit->isIrradiated() && rangedUnit->getType().isOrganic())
+		if (rangedUnit->isIrradiated() && the.selfRace() == BWAPI::Races::Zerg)
 		{
 			if (rangedUnit->isFlying())
 			{
@@ -118,18 +114,17 @@ void MicroRanged::assignTargets(const BWAPI::Unitset & rangedUnits, const BWAPI:
 		// NOTE Regrouping can cause the carriers to move away from home.
 		if (stayHomeUntilReady(rangedUnit))
 		{
-			BWAPI::Position fleeTo(Bases::Instance().myMainBase()->getPosition());
+			BWAPI::Position fleeTo(the.bases.myMain()->getPosition());
 			the.micro.AttackMove(rangedUnit, fleeTo);
 			continue;
 		}
 
 		if (order.isCombatOrder())
         {
-			// If a target is found,
 			BWAPI::Unit target = getTarget(rangedUnit, rangedUnitTargets, underThreat);
 			if (target)
 			{
-				if (Config::Debug::DrawUnitTargetInfo)
+				if (Config::Debug::DrawUnitTargets)
 				{
 					BWAPI::Broodwar->drawLineMap(rangedUnit->getPosition(), rangedUnit->getTargetPosition(), BWAPI::Colors::Purple);
 				}
@@ -160,7 +155,7 @@ void MicroRanged::assignTargets(const BWAPI::Unitset & rangedUnits, const BWAPI:
 // underThreat is true if any of the melee units is under immediate threat of attack.
 BWAPI::Unit MicroRanged::getTarget(BWAPI::Unit rangedUnit, const BWAPI::Unitset & targets, bool underThreat)
 {
-	int bestScore = -999999;
+    int bestScore = INT_MIN;
 	BWAPI::Unit bestTarget = nullptr;
 
 	for (const auto target : targets)
@@ -340,7 +335,7 @@ int MicroRanged::getAttackPriority(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 	}
 
 	// if the target is building something near our base, something is fishy
-    BWAPI::Position ourBasePosition = BWAPI::Position(Bases::Instance().myMainBase()->getPosition());
+    BWAPI::Position ourBasePosition = BWAPI::Position(the.bases.myMain()->getPosition());
 	if (target->getDistance(ourBasePosition) < 1000) {
 		if (target->getType().isWorker() && (target->isConstructing() || target->isRepairing()))
 		{

@@ -19,7 +19,7 @@ bool MicroQueens::aboutToDie(const BWAPI::Unit queen) const
 // Scores >= 100 are worth parasiting now. Scores < 100 are worth it if the queen is about to die.
 int MicroQueens::parasiteScore(BWAPI::Unit u) const
 {
-	if (u->getPlayer() == BWAPI::Broodwar->neutral())
+	if (u->getPlayer() == the.neutral())
 	{
 		if (u->isFlying())
 		{
@@ -78,7 +78,7 @@ int MicroQueens::parasiteScore(BWAPI::Unit u) const
 bool MicroQueens::maybeParasite(BWAPI::Unit queen)
 {
 	// Parasite has range 12. We look for targets within the limit range.
-	const int limit = 12 + 1;
+	const int limit = 12 + 2;
 
 	BWAPI::Unitset targets = BWAPI::Broodwar->getUnitsInRadius(queen->getPosition(), limit * 32,
 		!BWAPI::Filter::IsBuilding && (BWAPI::Filter::IsEnemy || BWAPI::Filter::IsCritter) &&
@@ -108,8 +108,8 @@ bool MicroQueens::maybeParasite(BWAPI::Unit queen)
 		// Or, if the queen is at full energy, parasite something reasonable.
 		// Or, if the queen is about to die, parasite anything.
 		if (bestScore >= 100 ||
-            bestScore >= 50 && queen->getEnergy() >= 200 && !BWAPI::Broodwar->self()->hasResearched(BWAPI::TechTypes::Spawn_Broodlings) ||
-            bestScore >= 50 && queen->getEnergy() >= 225 && BWAPI::Broodwar->self()->hasResearched(BWAPI::TechTypes::Spawn_Broodlings) ||
+            bestScore >= 50 && queen->getEnergy() >= 200 && !the.self()->hasResearched(BWAPI::TechTypes::Spawn_Broodlings) ||
+            bestScore >= 50 && queen->getEnergy() >= 225 && the.self()->hasResearched(BWAPI::TechTypes::Spawn_Broodlings) ||
 			aboutToDie(queen))
 		{
 			//BWAPI::Broodwar->printf("parasite score %d on %s @ %d,%d",
@@ -201,7 +201,7 @@ int MicroQueens::ensnareScore(BWAPI::Unit u) const
 bool MicroQueens::maybeEnsnare(BWAPI::Unit queen)
 {
     // Ensnare has range 9 and affects a 4x4 box. We look a little beyond that range for targets.
-    const int limit = 9 + 2;
+    const int limit = 9 + 3;
 
     const bool dying = aboutToDie(queen);
 
@@ -228,11 +228,11 @@ bool MicroQueens::maybeEnsnare(BWAPI::Unit queen)
             BWAPI::Unitset affected = BWAPI::Broodwar->getUnitsInRectangle(place - offset, place + offset);
             for (BWAPI::Unit u : affected)
             {
-                if (u->getPlayer() == BWAPI::Broodwar->self())
+                if (u->getPlayer() == the.self())
                 {
                     score -= ensnareScore(u);
                 }
-                else if (u->getPlayer() == BWAPI::Broodwar->enemy())
+                else if (u->getPlayer() == the.enemy())
                 {
                     score += ensnareScore(u);
                 }
@@ -269,9 +269,15 @@ int MicroQueens::broodlingScore(BWAPI::Unit queen, BWAPI::Unit u) const
     // Fewer points if the unit is already damaged. Shield damage counts.
     // More points if the unit is in range, so that the queen does not have to move.
     const int bonus =
-        (u->isDefenseMatrixed() ? 20 : 0) +
-        int(std::round(30.0 * double(u->getHitPoints() + u->getShields()) / (u->getType().maxHitPoints() + u->getType().maxShields()))) - 30 +
+        (u->isDefenseMatrixed() ? 25 : 0) +
+        int(40.0 * double(u->getHitPoints() + u->getShields()) / (u->getType().maxHitPoints() + u->getType().maxShields())) - 40 +
         ((queen->getDistance(u) <= 288) ? 25 : 0);
+
+    if (u->getType() == BWAPI::UnitTypes::Terran_Ghost &&
+        (u->getOrder() == BWAPI::Orders::NukePaint || u->getOrder() == BWAPI::Orders::NukeTrack))
+    {
+        return 200 + bonus;
+    }
 
     if (u->getType() == BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode ||
         u->getType() == BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode ||
@@ -286,6 +292,26 @@ int MicroQueens::broodlingScore(BWAPI::Unit queen, BWAPI::Unit u) const
         return 100 + bonus;
     }
 
+    // If no high-value enemies exist, accept a lower-value enemy.
+    if (0 ==
+        the.your.seen.count(BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode) +
+        the.your.seen.count(BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode) +
+        the.your.seen.count(BWAPI::UnitTypes::Protoss_High_Templar) +
+        the.your.seen.count(BWAPI::UnitTypes::Zerg_Defiler) +
+        the.your.seen.count(BWAPI::UnitTypes::Zerg_Ultralisk))
+    {
+        if (u->getType() == BWAPI::UnitTypes::Terran_Goliath ||
+            u->getType() == BWAPI::UnitTypes::Terran_Ghost ||
+            u->getType() == BWAPI::UnitTypes::Protoss_Dark_Templar ||
+            u->getType() == BWAPI::UnitTypes::Protoss_Dragoon ||
+            u->getType() == BWAPI::UnitTypes::Zerg_Lurker ||
+            u->getType() == BWAPI::UnitTypes::Zerg_Lurker_Egg ||
+            u->getType() == BWAPI::UnitTypes::Zerg_Infested_Terran)
+        {
+            return 100 + bonus;
+        }
+    }
+
     if (u->getType().gasPrice() > 0)
     {
         return 50 + u->getType().gasPrice() / 10 + bonus;
@@ -298,7 +324,7 @@ int MicroQueens::broodlingScore(BWAPI::Unit queen, BWAPI::Unit u) const
 bool MicroQueens::maybeBroodling(BWAPI::Unit queen)
 {
     // Spawn broodlings has range 9. We look for targets within the limit range.
-    const int limit = 9 + 3;
+    const int limit = 9 + 4;
 
     // Ignore the possibility that you may want to broodling a non-enemy unit.
     // E.g., a neutral critter, so the broodlings can scout or tear down an unattended building.
@@ -352,19 +378,37 @@ bool MicroQueens::maybeBroodling(BWAPI::Unit queen)
 // while moving to the general area of the target position.
 BWAPI::Position MicroQueens::getQueenDestination(BWAPI::Unit queen, const BWAPI::Position & target) const
 {
-    BWAPI::Race enemyRace = BWAPI::Broodwar->enemy()->getRace();
-    const int dangerRadius = enemyRace == BWAPI::Races::Terran ? 9 : (enemyRace == BWAPI::Races::Protoss ? 7 : 6);
-    const int keepAwayRadius = 4;
-
-    BWAPI::Unit danger = BWAPI::Broodwar->getClosestUnit(queen->getPosition(),
-        BWAPI::Filter::IsEnemy && BWAPI::Filter::AirWeapon != BWAPI::WeaponTypes::None,
-        32 * dangerRadius);
-
-    if (danger)
+    if (!queen->isIrradiated())
     {
-        return DistanceAndDirection(queen->getPosition(), danger->getPosition(), -dangerRadius * 32);
+        BWAPI::Race enemyRace = the.enemyRace();
+        const int terranRange = the.your.seen.count(BWAPI::UnitTypes::Terran_Goliath) > 0 ? 10 : 7;
+        int dangerRadius = enemyRace == BWAPI::Races::Terran ? terranRange : (enemyRace == BWAPI::Races::Protoss ? 8 : 7);
+        if (queen->getHitPoints() < 65)
+        {
+            if (queen->getHitPoints() < 40)
+            {
+                dangerRadius += 2;
+            }
+            else
+            {
+                dangerRadius += 1;
+            }
+        }
+
+        BWAPI::Unit danger = BWAPI::Broodwar->getClosestUnit(queen->getPosition(),
+            BWAPI::Filter::IsEnemy &&
+            (BWAPI::Filter::AirWeapon != BWAPI::WeaponTypes::None ||
+            BWAPI::Filter::GetType == BWAPI::UnitTypes::Terran_Science_Vessel ||
+            BWAPI::Filter::GetType == BWAPI::UnitTypes::Protoss_Dark_Archon),
+            32 * dangerRadius);
+
+        if (danger)
+        {
+            return DistanceAndDirection(queen->getPosition(), danger->getPosition(), -dangerRadius * 32);
+        }
     }
 
+    const int keepAwayRadius = 4;
     int closestDist = 32 * keepAwayRadius;
     BWAPI::Unit sister = nullptr;
     for (BWAPI::Unit q : getUnits())
@@ -384,6 +428,17 @@ BWAPI::Position MicroQueens::getQueenDestination(BWAPI::Unit queen, const BWAPI:
     return target;
 }
 
+int MicroQueens::totalEnergy() const
+{
+    int total = 0;
+    for (BWAPI::Unit queen : getUnits())
+    {
+        total += queen->getEnergy();
+    }
+    return total;
+}
+
+// Move the queen. This includes moving to infest a command center.
 void MicroQueens::updateMovement(BWAPI::Unit vanguard)
 {
     for (BWAPI::Unit queen : getUnits())
@@ -395,12 +450,12 @@ void MicroQueens::updateMovement(BWAPI::Unit vanguard)
         }
 
         // Default destination if all else fails: The main base.
-        BWAPI::Position destination = Bases::Instance().myMainBase()->getPosition();
+        BWAPI::Position destination = the.bases.myMain()->getPosition();
 
         // If we can see an infestable command center, move toward it.
-        int nearestRange = 999999;
+        int nearestRange = INT_MAX;
         BWAPI::Unit nearestCC = nullptr;
-        for (BWAPI::Unit enemy : BWAPI::Broodwar->enemy()->getUnits())
+        for (BWAPI::Unit enemy : the.enemy()->getUnits())
         {
             if (enemy->getType() == BWAPI::UnitTypes::Terran_Command_Center &&
                 enemy->getHitPoints() < 750 &&
@@ -411,22 +466,29 @@ void MicroQueens::updateMovement(BWAPI::Unit vanguard)
                 nearestCC = enemy;
             }
         }
+
         if (nearestCC)
         {
             destination = nearestCC->getPosition();
+            if (nearestRange < 4 * 32)
+            {
+                // We're close to an infestable CC, just go there. Accept the risk.
+                the.micro.Move(queen, destination);
+                return;
+            }
+            // Otherwise continue, and avoid danger as usual.
         }
-
         // Broodling costs 150 energy. Ensnare and parasite each cost 75.
         else if (vanguard &&
-            queen->getEnergy() >= (BWAPI::Broodwar->self()->hasResearched(BWAPI::TechTypes::Spawn_Broodlings) ? 135 : 65))
+            queen->getEnergy() >= (the.self()->hasResearched(BWAPI::TechTypes::Spawn_Broodlings) ? 135 : 65))
         {
             destination = vanguard->getPosition();
         }
-        else if (queen->getEnergy() >= (BWAPI::Broodwar->self()->hasResearched(BWAPI::TechTypes::Spawn_Broodlings) ? 150 : 75))
+        else if (queen->getEnergy() >= (the.self()->hasResearched(BWAPI::TechTypes::Spawn_Broodlings) ? 150 : 75))
         {
-            // No vanguard, but we have energy. Retreat to the front defense line and try to be useful.
+            // No vanguard, but we have energy. Move to the front defense line and try to be useful.
             // This can happen when all units are assigned to defense squads.
-            destination = BWAPI::Position(Bases::Instance().frontPoint());
+            destination = BWAPI::Position(the.bases.frontPoint());
         }
 
         if (destination.isValid())
@@ -436,53 +498,68 @@ void MicroQueens::updateMovement(BWAPI::Unit vanguard)
     }
 }
 
-// Cast broodling or parasite if possible and useful.
+// Cast a spell if possible and useful.
 void MicroQueens::updateAction()
 {
 	for (BWAPI::Unit queen : getUnits())
 	{
         bool dying = aboutToDie(queen);
+        bool foundTarget = false;
 
-        if (BWAPI::Broodwar->self()->hasResearched(BWAPI::TechTypes::Spawn_Broodlings))
+        if (the.self()->hasResearched(BWAPI::TechTypes::Spawn_Broodlings))
         {
             // If we have broodling, then broodling is the highest priority.
             if (queen->getEnergy() >= 150 && maybeBroodling(queen))
             {
-                // Broodling is set to be cast. No more to do.
+                // Broodling is set to be cast.
+                foundTarget = true;
             }
             else if (queen->getEnergy() >= 225 ||               // enough that broodling can happen after another spell
-                dying && queen->getEnergy() >= 75)
+                dying && queen->getEnergy() >= 75 ||
+                getUnits().size() >= 4 && totalEnergy() >= 600)
             {
                 // We have energy for either ensnare or parasite.
-                if (!BWAPI::Broodwar->self()->hasResearched(BWAPI::TechTypes::Ensnare) || !maybeEnsnare(queen))
+                if (the.self()->hasResearched(BWAPI::TechTypes::Ensnare) && maybeEnsnare(queen))
+                {
+                    foundTarget = true;
+                }
+                else
                 {
                     // Ensnare is not researched, or was not cast on this attempt. Consider parasite.
                     if (queen->getEnergy() == 250 || dying)
                     {
-                        (void) maybeParasite(queen);
+                        foundTarget = maybeParasite(queen);
                     }
                 }
             }
         }
-        else if (BWAPI::Broodwar->self()->hasResearched(BWAPI::TechTypes::Ensnare))
+        else if (the.self()->hasResearched(BWAPI::TechTypes::Ensnare))
         {
             // Ensnare but not broodling is available. Ensnare is higher priority than parasite.
             if (queen->getEnergy() >= 75 && maybeEnsnare(queen))
             {
-                // Ensnare is set to be cast. No more to do.
+                // Ensnare is set to be cast.
+                foundTarget = true;
             }
             else if (queen->getEnergy() >= 150 ||               // enough that ensnare can happen after parasite
-                dying && queen->getEnergy() >= 75)
+                dying && queen->getEnergy() >= 75 ||
+                getUnits().size() >= 4 && totalEnergy() >= 400)
             {
-                (void) maybeParasite(queen);
+                foundTarget = maybeParasite(queen);
             }
         }
 		else if (queen->getEnergy() >= 75)
 		{
             // Parasite is the only possibility.
-			(void) maybeParasite(queen);
+            foundTarget = maybeParasite(queen);
 		}
-	}
+
+        // We used to have a target in mind, but lost it.
+        if (!foundTarget)
+        {
+            clearReadyToCast(queen);
+        }
+    }
 }
 
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
@@ -507,7 +584,7 @@ void MicroQueens::update(BWAPI::Unit vanguard)
 
 	updateCasters(getUnits());
 
-	const int phase = BWAPI::Broodwar->getFrameCount() % 12;
+	const int phase = the.now() % 12;
 
 	if (phase == 0)
 	{

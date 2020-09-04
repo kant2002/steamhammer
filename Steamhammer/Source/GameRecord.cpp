@@ -1,7 +1,9 @@
 #include "GameRecord.h"
 
+#include "Bases.h"
 #include "Logger.h"
 #include "OpponentModel.h"
+#include "The.h"
 
 using namespace UAlbertaBot;
 
@@ -175,58 +177,165 @@ void GameRecord::skipToEnd(std::istream & input)
 	}
 }
 
+// Read a 3.0 game record.
+
+// 3.0
+// matchup (e.g. ZvP, ZvRP)
+// map
+// our starting position (base ID number >= 1)
+// enemy starting position (base ID or 0 if unknown)
+// opening
+// expected enemy opening plan
+// actual enemy opening plan
+// result (1 or 0)
+// frame our first combat unit was complete
+// frame we first gathered gas
+// frame enemy first scouts our base
+// frame enemy first gets combat units
+// frame enemy was first observed to have used gas (not mined it)
+// frame enemy first gets air units
+// frame enemy first gets static anti-air
+// frame enemy first gets mobile anti-air
+// frame enemy first gets cloaked units
+// frame enemy first gets static detection
+// frame enemy first gets mobile detection
+// game duration in frames, 0 if the game is not over yet
+// + skill kit records
+// END GAME
+void GameRecord::read_v3_0(std::istream & input)
+{
+    std::string matchupStr;
+    if (std::getline(input, matchupStr))
+    {
+        parseMatchup(matchupStr);
+    }
+    else
+    {
+        throw game_record_read_error();
+    }
+    if (!std::getline(input, mapName))     { throw game_record_read_error(); }
+    myStartingBaseID = readNumber(input);
+    enemyStartingBaseID = readNumber(input);
+    if (!std::getline(input, openingName)) { throw game_record_read_error(); }
+    expectedEnemyPlan = readOpeningPlan(input);
+    enemyPlan = readOpeningPlan(input);
+    win = readNumber(input) != 0;
+
+    frameWeMadeFirstCombatUnit = readNumber(input);
+    frameWeGatheredGas = readNumber(input);
+
+    frameEnemyScoutsOurBase = readNumber(input);
+    frameEnemyGetsCombatUnits = readNumber(input);
+    frameEnemyUsesGas = readNumber(input);
+    frameEnemyGetsAirUnits = readNumber(input);
+    frameEnemyGetsStaticAntiAir = readNumber(input);
+    frameEnemyGetsMobileAntiAir = readNumber(input);
+    frameEnemyGetsCloakedUnits = readNumber(input);
+    frameEnemyGetsStaticDetection = readNumber(input);
+    frameEnemyGetsMobileDetection = readNumber(input);
+    frameGameEnds = readNumber(input);
+
+    std::string skillLine;
+    while (getline(input, skillLine))
+    {
+        if (skillLine == gameEndMark)
+        {
+            break;
+        }
+        skillKitText.push_back(skillLine);
+        the.skillkit.read(*this, skillLine);
+    }
+}
+
+// Read a 1.4 game record (the origial format).
+
+// 1.4
+// matchup (e.g. ZvP, ZvRP)
+// map
+// opening
+// expected enemy opening plan
+// actual enemy opening plan
+// result (1 or 0)
+// frame we dispatched a scout to steal gas (0 if no attempt)
+// gas steal happened (1 or 0)
+// frame enemy first scouts our base
+// frame enemy first gets combat units
+// frame enemy first gets air units
+// frame enemy first gets static anti-air
+// frame enemy first gets mobile anti-air
+// frame enemy first gets cloaked units
+// frame enemy first gets static detection
+// frame enemy first gets mobile detection
+// game duration in frames (0 if the game is not over yet)
+// snapshots
+// END GAME
+void GameRecord::read_v1_4(std::istream & input)
+{
+    std::string matchupStr;
+    if (std::getline(input, matchupStr))
+    {
+        parseMatchup(matchupStr);
+    }
+    else
+    {
+        throw game_record_read_error();
+    }
+
+    if (!std::getline(input, mapName))     { throw game_record_read_error(); }
+    if (!std::getline(input, openingName)) { throw game_record_read_error(); }
+    expectedEnemyPlan = readOpeningPlan(input);
+    enemyPlan = readOpeningPlan(input);
+    win = readNumber(input) != 0;
+    frameScoutSentForGasSteal = readNumber(input);
+    gasStealHappened = readNumber(input) != 0;
+    frameEnemyScoutsOurBase = readNumber(input);
+    frameEnemyGetsCombatUnits = readNumber(input);
+    frameEnemyGetsAirUnits = readNumber(input);
+    frameEnemyGetsStaticAntiAir = readNumber(input);
+    frameEnemyGetsMobileAntiAir = readNumber(input);
+    frameEnemyGetsCloakedUnits = readNumber(input);
+    frameEnemyGetsStaticDetection = readNumber(input);
+    frameEnemyGetsMobileDetection = readNumber(input);
+    frameGameEnds = readNumber(input);
+
+    GameSnapshot * snap;
+    while (snap = readGameSnapshot(input))
+    {
+        snapshots.push_back(snap);
+    }
+}
+
 // Read the game record from the given stream.
 // NOTE Reading is line-oriented. We read each line with getline() before parsing it.
 // In case of error, we try to read ahead to the end-of-game mark so that the next record
 // will be read correctly. But there is not much error checking.
 void GameRecord::read(std::istream & input)
 {
-	try
-	{
-		std::string formatStr;
-		if (!std::getline(input, formatStr) || formatStr != fileFormatVersion)
-		{
-			throw game_record_read_error();
-		}
+    try
+    {
+        if (!std::getline(input, recordFormat))
+        {
+            throw game_record_read_error();
+        }
 
-		std::string matchupStr;
-		if (std::getline(input, matchupStr))
-		{
-			parseMatchup(matchupStr);
-		}
-		else
-		{
-			throw game_record_read_error();
-		}
-		
-		if (!std::getline(input, mapName))     { throw game_record_read_error(); }
-		if (!std::getline(input, openingName)) { throw game_record_read_error(); }
-		expectedEnemyPlan = readOpeningPlan(input);
-		enemyPlan = readOpeningPlan(input);
-		win = readNumber(input) != 0;
-		frameScoutSentForGasSteal = readNumber(input);
-		gasStealHappened = readNumber(input) != 0;
-		frameEnemyScoutsOurBase = readNumber(input);
-		frameEnemyGetsCombatUnits = readNumber(input);
-		frameEnemyGetsAirUnits = readNumber(input);
-		frameEnemyGetsStaticAntiAir = readNumber(input);
-		frameEnemyGetsMobileAntiAir = readNumber(input);
-		frameEnemyGetsCloakedUnits = readNumber(input);
-		frameEnemyGetsStaticDetection = readNumber(input);
-		frameEnemyGetsMobileDetection = readNumber(input);
-		frameGameEnds = readNumber(input);
-
-		GameSnapshot * snap;
-		while (snap = readGameSnapshot(input))
-		{
-			snapshots.push_back(snap);
-		}
-	}
-	catch (const game_record_read_error &)
-	{
-		skipToEnd(input);      // end of the game record
-		valid = false;
-	}
+        if (recordFormat == "3.0")
+        {
+            read_v3_0(input);
+        }
+        else if (recordFormat == "1.4")
+        {
+            read_v1_4(input);
+        }
+        else
+        {
+            throw game_record_read_error();
+        }
+    }
+    catch (const game_record_read_error &)
+    {
+        skipToEnd(input);      // end of the game record
+        valid = false;
+    }
 }
 
 void GameRecord::writePlayerSnapshot(std::ostream & output, const PlayerSnapshot & snap)
@@ -244,6 +353,16 @@ void GameRecord::writeGameSnapshot(std::ostream & output, const GameSnapshot * s
     output << snap->frame << '\n';
     writePlayerSnapshot(output, snap->us);
     writePlayerSnapshot(output, snap->them);
+}
+
+// Write the recorded skill kit data for a past game.
+// GameRecordNow overrides this to write data for the current game.
+void GameRecord::writeSkills(std::ostream & output) const
+{
+    for (const std::string & line : skillKitText)
+    {
+        output << line << '\n';
+    }
 }
 
 // Calculate a similarity distance between 2 snapshots.
@@ -292,13 +411,18 @@ GameRecord::GameRecord()
     , enemyRace(BWAPI::Broodwar->enemy()->getRace())
     , enemyIsRandom(BWAPI::Broodwar->enemy()->getRace() == BWAPI::Races::Unknown)
     , mapName(BWAPI::Broodwar->mapFileName())
+    , myStartingBaseID(the.bases.myStart()->getID())
+    , enemyStartingBaseID(the.bases.enemyStart() ? the.bases.enemyStart()->getID() : 0)
     , expectedEnemyPlan(OpeningPlan::Unknown)
     , enemyPlan(OpeningPlan::Unknown)
     , win(false)                   // until proven otherwise
     , frameScoutSentForGasSteal(0)
     , gasStealHappened(false)
+    , frameWeMadeFirstCombatUnit(0)
+    , frameWeGatheredGas(0)
     , frameEnemyScoutsOurBase(0)
     , frameEnemyGetsCombatUnits(0)
+    , frameEnemyUsesGas(0)
     , frameEnemyGetsAirUnits(0)
     , frameEnemyGetsStaticAntiAir(0)
     , frameEnemyGetsMobileAntiAir(0)
@@ -316,14 +440,19 @@ GameRecord::GameRecord(std::istream & input)
 	, ourRace(BWAPI::Races::Unknown)
 	, enemyRace(BWAPI::Races::Unknown)
 	, enemyIsRandom(false)
-	, expectedEnemyPlan(OpeningPlan::Unknown)
+    , myStartingBaseID(0)
+    , enemyStartingBaseID(0)
+    , expectedEnemyPlan(OpeningPlan::Unknown)
 	, enemyPlan(OpeningPlan::Unknown)
 	, win(false)                   // until proven otherwise
 	, frameScoutSentForGasSteal(0)
 	, gasStealHappened(false)
-	, frameEnemyScoutsOurBase(0)
+    , frameWeMadeFirstCombatUnit(0)
+    , frameWeGatheredGas(0)
+    , frameEnemyScoutsOurBase(0)
 	, frameEnemyGetsCombatUnits(0)
-	, frameEnemyGetsAirUnits(0)
+    , frameEnemyUsesGas(0)
+    , frameEnemyGetsAirUnits(0)
 	, frameEnemyGetsStaticAntiAir(0)
 	, frameEnemyGetsMobileAntiAir(0)
 	, frameEnemyGetsCloakedUnits(0)
@@ -335,28 +464,6 @@ GameRecord::GameRecord(std::istream & input)
 }
 
 // Write the game record to the given stream. File format:
-
-// 1.4 = file format version number
-// matchup (e.g. ZvP, ZvRP)
-// map
-// opening
-// expected enemy opening plan
-// actual enemy opening plan
-// result (1 or 0)
-// frame we dispatched a scout to steal gas (0 if no attempt)
-// gas steal happened (1 or 0)
-// frame enemy first scouts our base
-// frame enemy first gets combat units
-// frame enemy first gets air units
-// frame enemy first gets static anti-air
-// frame enemy first gets mobile anti-air
-// frame enemy first gets cloaked units
-// frame enemy first gets static detection
-// frame enemy first gets mobile detection
-// game duration in frames (0 if the game is not over yet)
-// snapshots
-// END GAME
-
 void GameRecord::write(std::ostream & output)
 {
     // We only now notice that there was an expected enemy opening plan.
@@ -366,20 +473,25 @@ void GameRecord::write(std::ostream & output)
         expectedEnemyPlan = OpponentModel::Instance().getInitialExpectedEnemyPlan();
     }
 
-    output << fileFormatVersion << '\n';
+    output << latestRecordFormat << '\n';
     output <<
         RaceChar(ourRace) <<
         'v' <<
         (enemyIsRandom ? "R" : "") << RaceChar(enemyRace) << '\n';
     output << mapName << '\n';
+    output << myStartingBaseID << '\n';
+    output << enemyStartingBaseID << '\n';
     output << openingName << '\n';
     output << OpeningPlanString(expectedEnemyPlan) << '\n';
     output << OpeningPlanString(enemyPlan) << '\n';
     output << (win ? '1' : '0') << '\n';
-    output << frameScoutSentForGasSteal << '\n';
-    output << (gasStealHappened ? '1' : '0') << '\n';
+
+    output << frameWeMadeFirstCombatUnit << '\n';
+    output << frameWeGatheredGas << '\n';
+
     output << frameEnemyScoutsOurBase << '\n';
     output << frameEnemyGetsCombatUnits << '\n';
+    output << frameEnemyUsesGas << '\n';
     output << frameEnemyGetsAirUnits << '\n';
     output << frameEnemyGetsStaticAntiAir << '\n';
     output << frameEnemyGetsMobileAntiAir << '\n';
@@ -388,11 +500,13 @@ void GameRecord::write(std::ostream & output)
     output << frameEnemyGetsMobileDetection << '\n';
     output << frameGameEnds << '\n';
 
-    // TODO skip the snapshots for now
+    // TODO skip the snapshots for v3.0
     // for (const auto & snap : snapshots)
     // {
     // 	writeGameSnapshot(output, snap);
     // }
+
+    writeSkills(output);
 
     output << gameEndMark << '\n';
 }
@@ -465,6 +579,38 @@ bool GameRecord::findClosestSnapshot(int t, PlayerSnapshot & snap) const
 	return false;
 }
 
+// The game records have the same matchup, as best we can tell so far.
+// For checks at the start of the game, when the enemy's race may be unknown, allow
+// a special case for random enemies.
+bool GameRecord::sameMatchup(const GameRecord & record) const
+{
+    return ourRace == record.ourRace &&
+        (enemyRace == record.enemyRace ||
+        enemyIsRandom && record.enemyIsRandom &&
+        (enemyRace == BWAPI::Races::Unknown || record.enemyRace == BWAPI::Races::Unknown)
+        );
+}
+
+const std::vector<int> * GameRecord::getSkillInfo(Skill * skill, int i) const
+{
+    auto it1 = skillData.find(skill);
+    if (it1 != skillData.end())
+    {
+        auto it2 = (*it1).second.find(i);
+        if (it2 != (*it1).second.end())
+        {
+            return &(*it2).second;
+        }
+    }
+
+    return nullptr;
+}
+
+void GameRecord::setSkillInfo(Skill * skill, int i, const std::vector<int> & info)
+{
+    skillData[skill][i] = info;
+}
+
 void GameRecord::debugLog()
 {
 	BWAPI::Broodwar->printf("best %s %s", mapName, openingName);
@@ -492,16 +638,4 @@ void GameRecord::debugLog()
 	msg  << '\n';
 
 	Logger::LogAppendToFile(Config::IO::ErrorLogFilename, msg.str());
-}
-
-// The game records have the same matchup, as best we can tell so far.
-// For checks at the start of the game, when the enemy's race may be unknown, allow
-// a special case for random enemies.
-bool GameRecord::sameMatchup(const GameRecord & record) const
-{
-	return ourRace == record.ourRace &&
-		(enemyRace == record.enemyRace ||
-			enemyIsRandom && record.enemyIsRandom &&
-			(enemyRace == BWAPI::Races::Unknown || record.enemyRace == BWAPI::Races::Unknown)
-		);
 }

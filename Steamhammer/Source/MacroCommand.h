@@ -23,7 +23,10 @@ enum class MacroCommandType
 	, PullWorkers
 	, PullWorkersLeaving
 	, ReleaseWorkers
-	, Nonadaptive
+    , PostWorker
+    , UnpostWorkers
+    , Nonadaptive
+    , Attack
 	, QueueBarrier
 	};
 
@@ -53,7 +56,10 @@ public:
 			, MacroCommandType::PullWorkers
 			, MacroCommandType::PullWorkersLeaving
 			, MacroCommandType::ReleaseWorkers
-			, MacroCommandType::Nonadaptive
+            , MacroCommandType::PostWorker
+            , MacroCommandType::UnpostWorkers
+            , MacroCommandType::Nonadaptive
+            , MacroCommandType::Attack
 			, MacroCommandType::QueueBarrier
 		};
 	}
@@ -164,14 +170,26 @@ public:
 		{
 			return "go release workers";
 		}
-		if (t == MacroCommandType::Nonadaptive)
+        if (t == MacroCommandType::PostWorker)
+        {
+            return "go post worker";
+        }
+        if (t == MacroCommandType::UnpostWorkers)
+        {
+            return "go unpost workers";
+        }
+        if (t == MacroCommandType::Nonadaptive)
 		{
 			return "go nonadaptive";
 		}
-		if (t == MacroCommandType::QueueBarrier)
+        if (t == MacroCommandType::Attack)
 		{
-			return "go queue barrier";
+			return "go attack";
 		}
+        if (t == MacroCommandType::QueueBarrier)
+        {
+            return "go queue barrier";
+        }
 
 		UAB_ASSERT(t == MacroCommandType::None, "unrecognized MacroCommandType");
 		return "go none";

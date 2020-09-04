@@ -236,6 +236,12 @@ int MicroDefilers::plagueScore(BWAPI::Unit u) const
 	if (u->isVisible() && !u->isDetected())
 	{
 		score += 100;
+        if (u->getType() == BWAPI::UnitTypes::Terran_Ghost)
+        {
+            // Help defend against nukes by revealing the ghost.
+            // (Nukes are the only good reason to make a ghost versus zerg.)
+            score += 100;
+        }
 	}
 	else if (u->isCloaked())
 	{
@@ -443,7 +449,7 @@ void MicroDefilers::updateMovement(const UnitCluster & cluster, BWAPI::Unit vang
 	{
 		// Find the nearest defiler with low energy and move toward it.
 		BWAPI::Unit bestDefiler = nullptr;
-		int bestDist = 999999;
+        int bestDist = INT_MAX;
 		for (BWAPI::Unit defiler : defilers)
 		{
 			if (defiler->getType() == BWAPI::UnitTypes::Zerg_Defiler &&
@@ -484,7 +490,10 @@ void MicroDefilers::updateSwarm(const UnitCluster & cluster)
 			defiler->canUseTech(BWAPI::TechTypes::Dark_Swarm, defiler->getPosition()) &&
 			!isReadyToCastOtherThan(defiler, CasterSpell::DarkSwarm))
 		{
-			(void) maybeSwarm(defiler);
+            if (!maybeSwarm(defiler) && isReadyToCast(defiler))
+            {
+                clearReadyToCast(defiler);
+            }
 		}
 	}
 }
@@ -507,7 +516,10 @@ void MicroDefilers::updatePlague(const UnitCluster & cluster)
 			defiler->canUseTech(BWAPI::TechTypes::Plague, defiler->getPosition()) &&
 			!isReadyToCastOtherThan(defiler, CasterSpell::Plague))
 		{
-            (void) maybePlague(defiler);
+            if (!maybePlague(defiler) && isReadyToCast(defiler))
+            {
+                clearReadyToCast(defiler);
+            }
 		}
 	}
 }

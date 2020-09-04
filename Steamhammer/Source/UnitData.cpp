@@ -1,5 +1,5 @@
-#include "Common.h"
 #include "UnitData.h"
+#include "UnitUtil.h"
 
 using namespace UAlbertaBot;
 
@@ -17,61 +17,39 @@ UnitInfo::UnitInfo()
 	, burrowed(false)
     , lifted(false)
 	, type(BWAPI::UnitTypes::None)
-	, completeBy(0)
+	, completeBy(INT_MAX)
 	, completed(false)
 {
 }
 
-UnitInfo::UnitInfo(BWAPI::Unit unit)
-	: unitID(unit->getID())
+UnitInfo::UnitInfo(BWAPI::Unit u)
+    : unitID(u->getID())
 	, updateFrame(BWAPI::Broodwar->getFrameCount())
-	, lastHP(unit->getHitPoints())
-	, lastShields(unit->getShields())
-	, player(unit->getPlayer())
-	, unit(unit)
-	, lastPosition(unit->getPosition())
+    , lastHP(u->getHitPoints())
+    , lastShields(u->getShields())
+    , player(u->getPlayer())
+	, unit(u)
+    , lastPosition(u->getPosition())
 	, goneFromLastPosition(false)
-    , burrowed(unit->isBurrowed() || unit->getOrder() == BWAPI::Orders::Burrowing)
-    , lifted(unit->isLifted() || unit->getOrder() == BWAPI::Orders::LiftingOff)
-    , type(unit->getType())
-	, completeBy(predictCompletion(unit))
-	, completed(unit->isCompleted())
+    , burrowed(u->isBurrowed() || u->getOrder() == BWAPI::Orders::Burrowing)
+    , lifted(u->isLifted() || u->getOrder() == BWAPI::Orders::LiftingOff)
+    , type(u->getType())
+	, completeBy(predictCompletion())
+	, completed(u->isCompleted())
 {
 }
 
-const int UnitInfo::predictCompletion(BWAPI::Unit building) const
-{
-	if (unit->isCompleted())
-	{
-		return BWAPI::Broodwar->getFrameCount();
-	}
-
-	if (unit->getType().isBuilding())
-	{
-		// Interpolate the HP to predict the completion time.
-		// This only works for buildings.
-        // NOTE It's not right. Buildings generally finish later than predicted.
-        //      The prediction approaches the truth as construction progresses.
-        // NOTE If the building was damaged by attack, the prediction will be even worse.
-		double hpRatio = unit->getHitPoints() / double(unit->getType().maxHitPoints());
-		return BWAPI::Broodwar->getFrameCount() + int((1.0 - hpRatio) * unit->getType().buildTime());
-	}
-
-	// Assume the unit is only now starting. This will often be wrong.
-	return BWAPI::Broodwar->getFrameCount() + unit->getType().buildTime();
-}
-
-const bool UnitInfo::operator == (BWAPI::Unit unit) const
+bool UnitInfo::operator == (BWAPI::Unit unit) const
 {
 	return unitID == unit->getID();
 }
 
-const bool UnitInfo::operator == (const UnitInfo & rhs) const
+bool UnitInfo::operator == (const UnitInfo & rhs) const
 {
 	return unitID == rhs.unitID;
 }
 
-const bool UnitInfo::operator < (const UnitInfo & rhs) const
+bool UnitInfo::operator < (const UnitInfo & rhs) const
 {
 	return unitID < rhs.unitID;
 }
@@ -129,6 +107,53 @@ int UnitInfo::estimateHealth() const
 	return estimateHP() + estimateShields();
 }
 
+// Predict when an unfinished enemy unit will be completed.
+// For most buildings the prediction is good, in other cases it is a crude upper bound.
+// We do this at three times:
+// - When the unit is first seen (the prediction will not improve with time and may get worse).
+// - When a unit's type has changed--a zerg morph, a refinery building, a protoss merge started.
+// - When an SCV is restored to a terran building that had lost its SCV.
+int UnitInfo::predictCompletion() const
+{
+    if (unit->isCompleted())
+    {
+        return BWAPI::Broodwar->getFrameCount();
+    }
+
+    if (!unit->isBeingConstructed())
+    {
+        // isBeingConstructed() is false for non-buildings.
+        if (type.isBuilding())
+        {
+            // The terran building has no SCV building it. At this rate, it will never finish.
+            return INT_MAX;
+        }
+        // Otherwise fall through.
+    }
+    else if (!UnitUtil::IsMorphedBuildingType(type))
+    {
+        // Building under construction. Interpolate the HP to predict the completion time.
+        // This works for buildings, except that zerg morphed building types have constant HP.
+        // The prediction is usually accurate to within a few frames.
+        // Known cases where the prediction is wrong:
+        // * The building was damaged.
+        // * The prediction is made during the extra latency period (see next).
+
+        // Buildings have extra latency for their completion animations.
+        int extra = UnitUtil::ExtraBuildingLatency(type.getRace());
+
+        // A building begins with 10% of its final HP.
+        double finalHP = double(type.maxHitPoints());
+        double hpRatio = (unit->getHitPoints() - 0.1 * finalHP) / (0.9 * finalHP);
+
+        return extra + BWAPI::Broodwar->getFrameCount() + int((1.0 - hpRatio) * type.buildTime());
+    }
+
+    // A morphed zerg building, or not a building at all. Same answer for both.
+    // Assume the unit is just starting. It gives an upper bound.
+    return BWAPI::Broodwar->getFrameCount() + type.buildTime();
+}
+
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
 UnitData::UnitData() 
@@ -136,7 +161,7 @@ UnitData::UnitData()
 	, gasLost(0)
 {
 	int maxTypeID(0);
-	for (const BWAPI::UnitType & t : BWAPI::UnitTypes::allUnitTypes())
+	for (BWAPI::UnitType t : BWAPI::UnitTypes::allUnitTypes())
 	{
 		maxTypeID = maxTypeID > t.getID() ? maxTypeID : t.getID();
 	}
@@ -187,7 +212,7 @@ void UnitData::updateGoneFromLastPosition()
 
 void UnitData::updateUnit(BWAPI::Unit unit)
 {
-	if (!unit || !unit->isVisible()) { return; }
+	if (!unit->isVisible()) { return; }
 
 	if (unitMap.find(unit) == unitMap.end())
     {
@@ -208,26 +233,37 @@ void UnitData::updateUnit(BWAPI::Unit unit)
 		ui.goneFromLastPosition	= false;
 		ui.burrowed				= unit->isBurrowed() || unit->getOrder() == BWAPI::Orders::Burrowing;
         ui.lifted               = unit->isLifted() || unit->getOrder() == BWAPI::Orders::LiftingOff;
-		ui.type					= unit->getType();
+		ui.completed            = unit->isCompleted();
 
-        // Update ui.completeBy before ui.completed.
-		if (!ui.completed && ui.type.isBuilding())  // other units keep their earliest predictions
-		{
-            if (unit->isCompleted())
+        if (ui.type != unit->getType())
+        {
+            ui.type = unit->getType();
+            // This could be a refinery building, a protoss merge, or a zerg morph.
+            ui.completeBy = ui.predictCompletion();
+        }
+        else if (unit->isCompleted())
+        {
+            if (BWAPI::Broodwar->getFrameCount() < ui.completeBy)
             {
-                if (ui.completeBy + 100 > BWAPI::Broodwar->getFrameCount())
-                {
-                    // This is the true completion time, or not far off.
-                    ui.completeBy = BWAPI::Broodwar->getFrameCount();
-                }
-                // Otherwise it has been a long time, so keep the older predicted completion time.
+                // Oops, it got finished before we thought.
+                ui.completeBy = BWAPI::Broodwar->getFrameCount();
             }
-            else
+        }
+        // Handle a terran building gaining or losing its constructing SCV.
+        // In other cases, do not update the prediction. It is already as good as it can be.
+        else if (ui.completeBy == INT_MAX)
+        {
+            if (ui.unit->isBeingConstructed())
             {
-                ui.completeBy = ui.predictCompletion(unit);
+                // SCV at work.
+                ui.completeBy = ui.predictCompletion();
             }
-		}
-		ui.completed = unit->isCompleted();
+        }
+        else if (!ui.unit->isBeingConstructed())
+        {
+            // The constructing SCV has left to play pinochle. Predict no completion ever.
+            ui.completeBy = INT_MAX;
+        }
 	}
 }
 
@@ -235,8 +271,10 @@ void UnitData::removeUnit(BWAPI::Unit unit)
 {
 	if (!unit) { return; }
 
+    // NOTE Doesn't take into account full cost of all units, e.g. morphed zerg units.
 	mineralsLost += unit->getType().mineralPrice();
 	gasLost += unit->getType().gasPrice();
+
 	--numUnits[unit->getType().getID()];
 	++numDeadUnits[unit->getType().getID()];
 	
@@ -248,7 +286,7 @@ void UnitData::removeUnit(BWAPI::Unit unit)
 
 void UnitData::removeBadUnits()
 {
-	for (auto iter(unitMap.begin()); iter != unitMap.end();)
+	for (auto iter(unitMap.begin()); iter != unitMap.end(); )
 	{
 		if (badUnitInfo(iter->second))
 		{
@@ -285,7 +323,7 @@ const bool UnitData::badUnitInfo(const UnitInfo & ui) const
         ui.type.isBuilding() &&
         BWAPI::Broodwar->isVisible(BWAPI::TilePosition(ui.lastPosition)) &&
         !ui.unit->isVisible() &&
-        !ui.lifted;         // if we saw it lifted, assume it flaoted away
+        !ui.lifted;         // if we saw it lifted, assume it floated away
 }
 
 int UnitData::getGasLost() const 

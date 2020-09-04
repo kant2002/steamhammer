@@ -9,7 +9,6 @@ class The;
 
 class ScoutManager 
 {
-	The &							the;
 	BWAPI::Unit						_overlordScout;
 	BWAPI::Unit						_workerScout;
     std::string                     _scoutStatus;
@@ -60,7 +59,8 @@ public:
 	bool tryGasSteal() const { return _tryGasSteal; };
 	bool wantGasSteal() const { return _tryGasSteal && !_gasStealOver; };
 	bool gasStealQueued() const { return _queuedGasSteal; };
-	void gasStealOver() { _gasStealOver = true; };    // called by BuildingManager when releasing the worker
+    bool gasStealOver() const { return _gasStealOver; };
+	void setGasStealOver() { _gasStealOver = true; };    // called by BuildingManager when releasing the worker
 
 	void setScoutCommand(MacroCommandType cmd);
 };

@@ -28,7 +28,7 @@ void MapPartitions::findUnwalkability()
 	}
 
 	// Then count neutral units.
-	for (const auto unit : BWAPI::Broodwar->getStaticNeutralUnits())
+	for (BWAPI::Unit unit : BWAPI::Broodwar->getStaticNeutralUnits())
 	{
 		// The neutral units may include moving critters which do not permanently block tiles.
 		// Something immobile blocks tiles it occupies until it is destroyed. (Are there exceptions?)
@@ -173,7 +173,7 @@ void MapPartitions::drawWalkable() const
 			if (walkable(x, y))
 			{
 				BWAPI::Position pos = BWAPI::Position(BWAPI::WalkPosition(x, y));
-				BWAPI::Broodwar->drawCircleMap(pos.x + 4, pos.y + 4, 1, BWAPI::Colors::Purple);
+				BWAPI::Broodwar->drawCircleMap(pos.x + 4, pos.y + 4, 1, BWAPI::Colors::Blue);
 			}
 		}
 	}

@@ -41,8 +41,7 @@ namespace Config
         extern bool SurrenderWhenHopeIsLost;
 
         extern bool ScoutHarassEnemy;
-        extern bool AutoGasSteal;
-        extern double RandomGasStealRate;
+        extern bool GasSteal;
 
         extern bool Burrow;
         extern int MaxQueens;
@@ -79,25 +78,25 @@ namespace Config
 		extern bool DrawQueueFixInfo;
 		extern bool DrawScoutInfo;
 		extern bool DrawEnemyUnitInfo;
+        extern bool DrawUnitCounts;
 		extern bool DrawHiddenEnemies;
 		extern bool DrawModuleTimers;
-		extern bool DrawResourceInfo;
 		extern bool DrawCombatSimulationInfo;
-		extern bool DrawUnitTargetInfo;
+		extern bool DrawUnitTargets;
 		extern bool DrawUnitOrders;
 		extern bool DrawMicroState;
 		extern bool DrawMapInfo;
 		extern bool DrawMapGrid;
 		extern bool DrawMapDistances;
+        extern bool DrawTerrainHeights;
 		extern bool DrawBaseInfo;
 		extern bool DrawStrategyBossInfo;
 		extern bool DrawSquadInfo;
 		extern bool DrawClusters;
 		extern bool DrawWorkerInfo;
-		extern bool DrawMouseCursorInfo;
         extern bool DrawBuildingInfo;
 		extern bool DrawReservedBuildingTiles;
-		extern bool DrawBOSSStateInfo;
+        extern bool DrawResourceAmounts;
 
         extern BWAPI::Color ColorLineTarget;
         extern BWAPI::Color ColorLineMineral;

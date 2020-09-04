@@ -1,32 +1,21 @@
 #include "BuildingPlacer.h"
 
 #include "Bases.h"
-#include "Common.h"
-#include "InformationManager.h"
 #include "MapTools.h"
-#include "UnitUtil.h"
 #include "The.h"
 
 using namespace UAlbertaBot;
 
-BuildingPlacer::BuildingPlacer()
-	: the(The::Root())
-{
-    _reserveMap = std::vector< std::vector<bool> >(BWAPI::Broodwar->mapWidth(),std::vector<bool>(BWAPI::Broodwar->mapHeight(),false));
-
-	reserveSpaceNearResources();
-}
-
 // Don't build in a position that blocks mining. Part of initialization.
 void BuildingPlacer::reserveSpaceNearResources()
 {
-	for (Base * base : Bases::Instance().getBases())
+    for (Base * base : the.bases.getAll())
 	{
 		// A tile close to the center of the resource depot building (which is 4x3 tiles).
 		BWAPI::TilePosition baseTile = base->getTilePosition() + BWAPI::TilePosition(2, 1);
 
 		// NOTE This still allows the bot to block mineral mining of some patches, but it's relatively rare.
-		for (const auto mineral : base->getMinerals())
+		for (BWAPI::Unit mineral : base->getMinerals())
 		{
 			BWAPI::TilePosition minTile = mineral->getTilePosition();
 			if (minTile.x < baseTile.x)
@@ -47,7 +36,7 @@ void BuildingPlacer::reserveSpaceNearResources()
 			}
 		}
 
-		for (const auto gas : base->getGeysers())
+        for (BWAPI::Unit gas : base->getGeysers())
 		{
 			// Don't build on the right edge or a right corner of a geyser.
 			// It causes workers to take a long path around. Other locations are OK.
@@ -75,7 +64,7 @@ void BuildingPlacer::reserveSpaceNearResources()
 
 // Reserve or unreserve tiles.
 // Tilepositions off the map are silently ignored; initialization code depends on it.
-void BuildingPlacer::setReserve(BWAPI::TilePosition position, int width, int height, bool flag)
+void BuildingPlacer::setReserve(const BWAPI::TilePosition & position, int width, int height, bool flag)
 {
 	int rwidth = _reserveMap.size();
 	int rheight = _reserveMap[0].size();
@@ -89,10 +78,47 @@ void BuildingPlacer::setReserve(BWAPI::TilePosition position, int width, int hei
 	}
 }
 
+// We want to build near the given tile, but it may not be walkable, which makes it awkward
+// to find nearby buildable tiles. Find a nearby buildable tile to start with.
+// NOTE This can fail in theory, but it should not happen on any reasonable map.
+BWAPI::TilePosition BuildingPlacer::connectedWalkableTileNear(const BWAPI::TilePosition & start) const
+{
+    BWAPI::TilePosition closestTile = BWAPI::TilePositions::None;
+    int closestDist = INT_MAX;
+
+    // We can step by twos because every building is at least 2x2 in size.
+    for (int x = 0; x < BWAPI::Broodwar->mapWidth(); x += 2)
+    {
+        for (int y = 0; y < BWAPI::Broodwar->mapHeight(); y += 2)
+        {
+            if (_buildable.at(x,y) > 0 && the.bases.connectedToStart(BWAPI::TilePosition(x, y)))
+            {
+                int dist = abs(x - start.x) + abs(y - start.y);
+                if (dist < closestDist)
+                {
+                    closestTile = BWAPI::TilePosition(x, y);
+                    closestDist = dist;
+                }
+            }
+        }
+    }
+
+    return closestTile;
+}
+
+// If we're building at the enemy base, we don't care if our building overlaps a base location.
+bool BuildingPlacer::enemyMacroLocation(MacroLocation loc) const
+{
+    return
+        loc == MacroLocation::Proxy ||
+        loc == MacroLocation::EnemyMain ||
+        loc == MacroLocation::EnemyNatural;
+}
+
 // The rectangle in tile coordinates overlaps with a resource depot location.
 bool BuildingPlacer::boxOverlapsBase(int x1, int y1, int x2, int y2) const
 {
-	for (Base * base : Bases::Instance().getBases())
+	for (Base * base : the.bases.getAll())
 	{
 		// The base location. It's the same size for all races.
 		int bx1 = base->getTilePosition().x;
@@ -110,7 +136,7 @@ bool BuildingPlacer::boxOverlapsBase(int x1, int y1, int x2, int y2) const
 	return false;
 }
 
-bool BuildingPlacer::tileBlocksAddon(BWAPI::TilePosition position) const
+bool BuildingPlacer::tileBlocksAddon(const BWAPI::TilePosition & position) const
 {
 	for (int i = 0; i <= 2; ++i)
 	{
@@ -126,6 +152,20 @@ bool BuildingPlacer::tileBlocksAddon(BWAPI::TilePosition position) const
 	return false;
 }
 
+// Does this rectangle consist entirely of buildable terrain?
+// The test is very fast and can be done before other buildability checks.
+bool BuildingPlacer::buildableTerrain(int x0, int y0, int width, int height) const
+{
+    for (int y = y0; y < y0 + height; ++y)
+    {
+        if (_buildable.at(x0, y) < width)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 // The tile is free of permanent obstacles, including future ones from planned buildings.
 // There might be a unit passing through, though.
 // The caller must ensure that x and y are in range!
@@ -137,7 +177,7 @@ bool BuildingPlacer::freeTile(int x, int y) const
 	{
 		return false;
 	}
-	if (BWAPI::Broodwar->self()->getRace() == BWAPI::Races::Terran && tileBlocksAddon(BWAPI::TilePosition(x, y)))
+	if (the.self()->getRace() == BWAPI::Races::Terran && tileBlocksAddon(BWAPI::TilePosition(x, y)))
 	{
 		return false;
 	}
@@ -257,7 +297,7 @@ bool BuildingPlacer::freeOnAllSides(BWAPI::Unit building) const
 // Can a building can be built here?
 // This does not check all conditions! Other code must check for possible overlaps
 // with planned or future buildings.
-bool BuildingPlacer::canBuildHere(BWAPI::TilePosition position, const Building & b) const
+bool BuildingPlacer::canBuildHere(const BWAPI::TilePosition & position, const Building & b) const
 {
 	return
 		// BWAPI thinks the space is buildable.
@@ -266,7 +306,7 @@ bool BuildingPlacer::canBuildHere(BWAPI::TilePosition position, const Building &
 
 		// A worker can reach the place.
 		// NOTE This simplified check disallows building on islands!
-		Bases::Instance().connectedToStart(position) &&
+		the.bases.connectedToStart(position) &&
 		
 		// Enemy static defense cannot fire on the building location.
 		// This is part of the response to e.g. cannon rushes.
@@ -274,7 +314,7 @@ bool BuildingPlacer::canBuildHere(BWAPI::TilePosition position, const Building &
 }
 
 // Can we build this building here with the specified amount of space around it?
-bool BuildingPlacer::canBuildWithSpace(BWAPI::TilePosition position, const Building & b, int extraSpace) const
+bool BuildingPlacer::canBuildWithSpace(const BWAPI::TilePosition & position, const Building & b, int extraSpace) const
 {
 	// Can the building go here? This does not check the extra space or worry about future
 	// buildings, but does all necessary checks for current obstructions of the building area itself.
@@ -307,12 +347,12 @@ bool BuildingPlacer::canBuildWithSpace(BWAPI::TilePosition position, const Build
 	if (x1 < 0 || x2 >= BWAPI::Broodwar->mapWidth() ||
 		y1 < 0 || y2 >= BWAPI::Broodwar->mapHeight())
 	{
-		return false;
+        return false;
 	}
 	
-	if (boxOverlapsBase(x1, y1, x2, y2))
+	if (!enemyMacroLocation(b.macroLocation) && boxOverlapsBase(x1, y1, x2, y2))
 	{
-		return false;
+        return false;
 	}
 
 	// Every tile must be buildable and unreserved.
@@ -350,11 +390,11 @@ BWAPI::TilePosition BuildingPlacer::findEdgeLocation(const Building & b) const
 	int rightEdge = BWAPI::Broodwar->mapWidth() - b.type.tileWidth();
 	int bottomEdge = BWAPI::Broodwar->mapHeight() - b.type.tileHeight();
 
-	for (const BWAPI::TilePosition & tile : MapTools::Instance().getClosestTilesTo(Bases::Instance().myMainBase()->getTilePosition()))
+	for (const BWAPI::TilePosition & tile : the.map.getClosestTilesTo(the.bases.myMain()->getTilePosition()))
 	{
 		// If the position is too far away, skip it.
-		if (the.zone.at(tile) != the.zone.at(Bases::Instance().myMainBase()->getTilePosition()) ||
-			tile.getApproxDistance(Bases::Instance().myMainBase()->getTilePosition()) > 18 * 32)
+		if (the.zone.at(tile) != the.zone.at(the.bases.myMain()->getTilePosition()) ||
+			tile.getApproxDistance(the.bases.myMain()->getTilePosition()) > 18 * 32)
 		{
 			continue;
 		}
@@ -410,11 +450,11 @@ BWAPI::TilePosition BuildingPlacer::findPylonlessBaseLocation(const Building & b
 		return BWAPI::TilePositions::None;
 	}
 
-	for (Base * base : Bases::Instance().getBases())
+	for (Base * base : the.bases.getAll())
 	{
 		// NOTE We won't notice a pylon that is in the building manager but not started yet.
 		//      It's not a problem.
-		if (base->getOwner() == BWAPI::Broodwar->self() && !base->getPylon())
+		if (base->getOwner() == the.self() && !base->getPylon())
 		{
 			Building pylon = b;
 			pylon.desiredPosition = BWAPI::TilePosition(base->getFrontPoint());
@@ -443,7 +483,7 @@ BWAPI::TilePosition BuildingPlacer::findGroupedLocation(const Building & b) cons
 	const bool sameType = groupTogether(b.type);
 
 	BWAPI::Unitset choices;
-	for (BWAPI::Unit building : BWAPI::Broodwar->self()->getUnits())
+	for (BWAPI::Unit building : the.self()->getUnits())
 	{
 		if (building->getType().isBuilding() &&
 			building->getType() != BWAPI::UnitTypes::Protoss_Pylon &&
@@ -555,9 +595,9 @@ BWAPI::TilePosition BuildingPlacer::findSpecialLocation(const Building & b) cons
 BWAPI::TilePosition BuildingPlacer::findAnyLocation(const Building & b, int extraSpace) const
 {
 	// Tiles sorted in order of closeness to the location.
-	const std::vector<BWAPI::TilePosition> & closest = MapTools::Instance().getClosestTilesTo(b.desiredPosition);
+	const std::vector<BWAPI::TilePosition> & closest = the.map.getClosestTilesTo(b.desiredPosition);
 
-	for (const BWAPI::TilePosition & tile : closest)
+    for (const BWAPI::TilePosition & tile : closest)
 	{
 		if (canBuildWithSpace(tile, b, extraSpace))
 		{
@@ -568,12 +608,32 @@ BWAPI::TilePosition BuildingPlacer::findAnyLocation(const Building & b, int extr
 	return BWAPI::TilePositions::None;
 }
 
+// Mineral patches in range of the position. Calculations in pixels.
+int BuildingPlacer::countInRange(const BWAPI::Unitset & patches, BWAPI::Position xy, int range) const
+{
+    int count = 0;
+    for (BWAPI::Unit patch : patches)
+    {
+        if (xy.getApproxDistance(patch->getInitialPosition()) <= range)
+        {
+            ++count;
+        }
+    }
+    return count;
+}
+
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
-BuildingPlacer & BuildingPlacer::Instance()
+BuildingPlacer::BuildingPlacer()
 {
-    static BuildingPlacer instance;
-    return instance;
+}
+
+void BuildingPlacer::initialize()
+{
+    _reserveMap = std::vector< std::vector<bool> >(BWAPI::Broodwar->mapWidth(), std::vector<bool>(BWAPI::Broodwar->mapHeight(), false));
+
+    reserveSpaceNearResources();
+    _buildable.compute();
 }
 
 // The minimum distance between buildings is extraSpace, the extra space we check
@@ -592,26 +652,26 @@ BWAPI::TilePosition BuildingPlacer::getBuildLocationNear(const Building & b, int
 	}
 
 	// Let Bases decide whether to change which base is the main base.
-	Bases::Instance().checkBuildingPosition(b.desiredPosition, tile);
+	the.bases.checkBuildingPosition(b.desiredPosition, tile);
 
 	return tile;		// may be None
 }
 
-bool BuildingPlacer::isReserved(int x, int y) const
-{
-	UAB_ASSERT(BWAPI::TilePosition(x,y).isValid(), "bad tile");
-
-	return _reserveMap[x][y];
-}
-
-void BuildingPlacer::reserveTiles(BWAPI::TilePosition position, int width, int height)
+void BuildingPlacer::reserveTiles(const BWAPI::TilePosition & position, int width, int height)
 {
 	setReserve(position, width, height, true);
 }
 
-void BuildingPlacer::freeTiles(BWAPI::TilePosition position, int width, int height)
+void BuildingPlacer::freeTiles(const BWAPI::TilePosition & position, int width, int height)
 {
 	setReserve(position, width, height, false);
+}
+
+bool BuildingPlacer::isReserved(int x, int y) const
+{
+    UAB_ASSERT(BWAPI::TilePosition(x, y).isValid(), "bad tile");
+
+    return _reserveMap[x][y];
 }
 
 void BuildingPlacer::drawReservedTiles()
@@ -620,6 +680,8 @@ void BuildingPlacer::drawReservedTiles()
     {
         return;
     }
+
+    // _buildable.draw();
 
     int rwidth = _reserveMap.size();
     int rheight = _reserveMap[0].size();
@@ -641,19 +703,151 @@ void BuildingPlacer::drawReservedTiles()
     }
 }
 
+// Find the desired location for a command center, nexus, or hatchery from its macro location.
+// It's usually the same as usual, but the "Anywhere" default is different.
+BWAPI::TilePosition BuildingPlacer::getExpoLocationTile(MacroLocation loc) const
+{
+    if (loc == MacroLocation::Anywhere)
+    {
+        if (the.bases.myNatural() && the.bases.myNatural()->owner == the.neutral())
+        {
+            loc = MacroLocation::Natural;
+        }
+        else
+        {
+            loc = MacroLocation::Expo;
+        }
+    }
+
+    return getMacroLocationTile(loc);
+}
+
+// Generic macro locations on the map.
+// If used to place a building, the expectation in most cases is that the returned tile
+// will be a starting point; we'll look for an open area nearby to build.
+// NOTE Some cases must be treated as special cases, e.g. refinery building locations.
+//      See BuildingManager::getBuildingLocation().
+BWAPI::TilePosition BuildingPlacer::getMacroLocationTile(MacroLocation loc) const
+{
+    if (loc == MacroLocation::Main)
+    {
+        // A main base building, including macro hatchery.
+        // The main base is always set, even if we don't have any building there at the moment.
+        return the.bases.myMain()->getTilePosition();
+    }
+    else if (loc == MacroLocation::Natural)
+    {
+        Base * natural = the.bases.myNatural();
+        if (natural)
+        {
+            return natural->getTilePosition();
+        }
+    }
+    else if (loc == MacroLocation::Front)
+    {
+        BWAPI::TilePosition front = the.bases.frontPoint();
+        if (front.isValid())
+        {
+            return front;
+        }
+    }
+    else if (loc == MacroLocation::Expo)
+    {
+        // Mineral and gas base.
+        BWAPI::TilePosition pos = the.map.getNextExpansion(false, true, true);
+        if (pos.isValid())
+        {
+            return pos;
+        }
+    }
+    else if (loc == MacroLocation::MinOnly)
+    {
+        // Mineral base with or without gas geyser.
+        BWAPI::TilePosition pos = the.map.getNextExpansion(false, true, false);
+        if (pos.isValid())
+        {
+            return pos;
+        }
+    }
+    else if (loc == MacroLocation::GasOnly)
+    {
+        // Gas base with or without minerals.
+        BWAPI::TilePosition pos = the.map.getNextExpansion(false, false, true);
+        if (pos.isValid())
+        {
+            return pos;
+        }
+    }
+    else if (loc == MacroLocation::Hidden)
+    {
+        // "Hidden" mineral and gas base.
+        BWAPI::TilePosition pos = the.map.getNextExpansion(true, true, true);
+        if (pos.isValid())
+        {
+            return pos;
+        }
+    }
+    else if (loc == MacroLocation::Center)
+    {
+        // Near the center of the map. Find a walkable tile connected to the start.
+        return connectedWalkableTileNear(BWAPI::TilePosition(BWAPI::Broodwar->mapWidth() / 2, BWAPI::Broodwar->mapHeight() / 2));
+    }
+    else if (loc == MacroLocation::Proxy)
+    {
+        if (the.bases.enemyStart())
+        {
+            // We know where the enemy is. We can proxy in or close to the enemy base.
+            // Other code should try to find the enemy base first!
+            BWAPI::TilePosition proxy = getProxyPosition(the.bases.enemyStart());
+            if (proxy.isValid())
+            {
+                return proxy;
+            }
+        }
+        // We don't know where the enemy is, or can't find a close proxy position,
+        // but we can at least proxy to the center of the map.
+        return getMacroLocationTile(MacroLocation::Center);
+    }
+    else if (loc == MacroLocation::EnemyMain)
+    {
+        if (the.bases.enemyStart())
+        {
+            return the.bases.enemyStart()->getTilePosition();
+        }
+        return getMacroLocationTile(MacroLocation::Center);
+    }
+    else if (loc == MacroLocation::EnemyNatural)
+    {
+        if (the.bases.enemyStart() && the.bases.enemyStart()->getNatural())
+        {
+            return the.bases.enemyStart()->getNatural()->getTilePosition();
+        }
+        return getMacroLocationTile(MacroLocation::Center);
+    }
+
+    // Default: Build in the current main base, which is guaranteed to exist (though it may be empty or in enemy hands).
+    // MacroLocation::Anywhere falls through to here.
+    return the.bases.myMain()->getTilePosition();
+}
+
+BWAPI::Position BuildingPlacer::getMacroLocationPos(MacroLocation loc) const
+{
+    return TileCenter(getMacroLocationTile(loc));
+}
+
 // NOTE This allows building only on visible geysers.
-BWAPI::TilePosition BuildingPlacer::getRefineryPosition()
+BWAPI::TilePosition BuildingPlacer::getRefineryPosition() const
 {
     BWAPI::TilePosition closestGeyser = BWAPI::TilePositions::None;
     int minGeyserDistanceFromHome = 100000;
-	BWAPI::Position homePosition = Bases::Instance().myStartingBase()->getPosition();
+	BWAPI::Position homePosition = the.bases.myMain()->getPosition();
 
 	// NOTE In BWAPI 4.1.2 getStaticGeysers() has a bug affecting geysers whose refineries
 	// have been canceled or destroyed: They become inaccessible. https://github.com/bwapi/bwapi/issues/697
 	for (const auto geyser : BWAPI::Broodwar->getGeysers())
 	{
 		// Check to see if the geyser is near one of our depots.
-		for (const auto unit : BWAPI::Broodwar->self()->getUnits())
+		for (BWAPI::Unit unit : the.self()->getUnits())
 		{
 			if (unit->getType().isResourceDepot() && unit->getDistance(geyser) < 300)
 			{
@@ -679,40 +873,123 @@ BWAPI::TilePosition BuildingPlacer::getRefineryPosition()
     return closestGeyser;
 }
 
-// TODO UNFINISHED This is not ready to use.
-// Figure out where to place proxy buildings near this enemy base.
-BWAPI::TilePosition BuildingPlacer::getProxyPosition(const Base * base) const
+// Near the given base, protected by terrain, in range of the minerals.
+// Only possible on a few maps, but a potential game-winner when possible.
+// Return an invalid tile on failure.
+// TODO in progress
+BWAPI::TilePosition BuildingPlacer::getTerrainProxyPosition(const Base * base) const
 {
-    // 1. Near the enemy natural, concealed by terrain. Only possible on a few maps.
-    // TODO unimplemented
-
-    // 2. In the enemy main base, as far away as possible from the enemy's position.
-
-    // Tiles sorted in order of closeness to the enemy resource depot.
-    const BWAPI::TilePosition enemyCenter = BWAPI::TilePosition(base->getCenter());
-    const std::vector<BWAPI::TilePosition> & closest = MapTools::Instance().getClosestTilesTo(enemyCenter);
+    const int range = 9;
 
     // A fictitious large building to place.
-    Building b(BWAPI::UnitTypes::Zerg_Hatchery, BWAPI::TilePositions::None);
+    Building b(BWAPI::UnitTypes::Protoss_Nexus, BWAPI::TilePositions::None);
 
-    int bestDist = 8;
+    // Compute the bounding box of the minerals, in tiles.
+    int left = INT_MAX;
+    int right = -1;
+    int top = INT_MAX;
+    int bottom = -1;
+    for (BWAPI::Unit patch : base->getMinerals())
+    {
+        left   = std::min(left,   patch->getInitialTilePosition().x);
+        right  = std::max(right,  patch->getInitialTilePosition().x + 1);    // patch size is 2x1
+        top    = std::min(top,    patch->getInitialTilePosition().y);
+        bottom = std::max(bottom, patch->getInitialTilePosition().y);
+    }
+
+    // Find the position which is in range and hits the most mineral patches,
+    // with greater ground distance as the tiebreaker.
+    BWAPI::TilePosition bestTile = BWAPI::TilePositions::Invalid;
+    int bestHits = 2;
+    int bestDist = 0;
+    for (int x = left - range; x <= right + range; ++x)
+    {
+        for (int y = top - range; y <= bottom + range; ++y)
+        {
+            BWAPI::TilePosition xy(x, y);
+            if (xy.isValid())
+            {
+                int groundDist = base->getTileDistance(xy);
+                if (groundDist > 20 && canBuildHere(xy, b))
+                {
+                    int hits = countInRange(base->getMinerals(), TileCenter(xy), 32 * range);
+                    if (hits > bestHits || hits == bestHits && groundDist > bestDist)
+                    {
+                        bestTile = xy;
+                        bestHits = hits;
+                        bestDist = groundDist;
+                        /*
+                        BWAPI::Broodwar->printf("xy %d,%d ground dist %d hits %d",
+                            xy.x, xy.y, groundDist, hits);
+                        BWAPI::Broodwar->printf("   best %d,%d, ground dist %d hits %d",
+                            bestTile.x, bestTile.y, bestDist, bestHits);
+                        */
+                    }
+                }
+            }
+        }
+    }
+
+    return bestTile;
+}
+
+// In the given base, as far away as possible from the enemy's position
+// and from the closest entrance.
+// Return an invalid tile on failure.
+BWAPI::TilePosition BuildingPlacer::getInBaseProxyPosition(const Base * base) const
+{
+    // Tiles sorted in order of closeness to the enemy main resource depot.
+    const BWAPI::TilePosition enemyCenter = base->getCenterTile();
+    const std::vector<BWAPI::TilePosition> & closest = the.map.getClosestTilesTo(enemyCenter);
+
+    // A fictitious large building to place.
+    Building b(BWAPI::UnitTypes::Protoss_Nexus, BWAPI::TilePositions::None);
+
+    const int myMinDist = the.bases.myMain()->getTileDistance(base->getTilePosition());
+    int bestScore = 16;
     BWAPI::TilePosition bestTile = BWAPI::TilePositions::None;
     for (const BWAPI::TilePosition & tile : closest)
     {
-        const int dist = std::max(abs(tile.x - enemyCenter.x), abs(tile.y - enemyCenter.y));
-        if (dist > bestDist)
+        const int enemyDistX = abs(tile.x - enemyCenter.x);
+        const int enemyDistY = abs(tile.y - enemyCenter.y);
+        const int myDist = the.bases.myMain()->getTileDistance(tile) - myMinDist;
+        const int score = enemyDistX + enemyDistY + myDist;
+        if (myDist >= 0 && enemyDistX > 8 && enemyDistY > 8 && score > bestScore)
         {
             if (the.zone.at(tile) == the.zone.at(enemyCenter) && canBuildHere(tile, b))
             {
-                bestDist = dist;
+                bestScore = score;
                 bestTile = tile;
             }
         }
-        else if (dist > 25)
+        else if (enemyDistX > 24)
         {
             // Too far away. Stop looking.
             break;
         }
     }
     return bestTile;
+}
+
+// Return an invalid tile on failure.
+BWAPI::TilePosition BuildingPlacer::getProxyPosition(const Base * base) const
+{
+    UAB_ASSERT(base, "bad base");
+
+    BWAPI::TilePosition tile = BWAPI::TilePositions::Invalid;
+
+    Base * natural = base->getNatural();
+    if (natural)
+    {
+        // In the enemy natural, hidden by terrain. Only possible on a few maps.
+        // TODO disabled for now, needs improved building placement skills + pathing
+        // tile = getTerrainProxyPosition(natural);
+    }
+    if (!tile.isValid())
+    {
+        // In a far corner of the enemy main.
+        tile = getInBaseProxyPosition(base);
+    }
+
+    return tile;
 }

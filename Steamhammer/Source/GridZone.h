@@ -6,9 +6,6 @@
 
 namespace UAlbertaBot
 {
-class The;
-
-
 enum class ZoneState { Choke, Normal, Invalid };
 
 class Zone
@@ -50,8 +47,6 @@ public:
 class GridZone : public Grid
 {
 private:
-	The & the;
-
 	std::vector<Zone *> zones;
 
 	void newZoneID(const Zone * zone, int id);

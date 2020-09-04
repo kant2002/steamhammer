@@ -19,7 +19,6 @@ public:
 
 	int getStaticUnitDistance(const BWAPI::Unit unit) const;
 
-    // given a position, get the position we should move to to minimize distance
     const std::vector<BWAPI::TilePosition> & getSortedTiles() const;
 };
 }

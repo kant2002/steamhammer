@@ -134,6 +134,8 @@
     <ClCompile Include="..\Source\GameRecordNow.cpp" />
     <ClCompile Include="..\Source\Grid.cpp" />
     <ClCompile Include="..\Source\GridAttacks.cpp" />
+    <ClCompile Include="..\Source\GridBuildable.cpp" />
+    <ClCompile Include="..\Source\GridCreep.cpp" />
     <ClCompile Include="..\Source\GridDistances.cpp" />
     <ClCompile Include="..\Source\GridInset.cpp" />
     <ClCompile Include="..\Source\GridRoom.cpp" />
@@ -173,7 +175,13 @@
     <ClCompile Include="..\Source\ProductionGoal.cpp" />
     <ClCompile Include="..\source\ProductionManager.cpp" />
     <ClCompile Include="..\Source\Random.cpp" />
+    <ClCompile Include="..\Source\ResourceInfo.cpp" />
+    <ClCompile Include="..\Source\ScoutBoss.cpp" />
     <ClCompile Include="..\source\ScoutManager.cpp" />
+    <ClCompile Include="..\Source\Skill.cpp" />
+    <ClCompile Include="..\Source\SkillGasSteal.cpp" />
+    <ClCompile Include="..\Source\SkillKit.cpp" />
+    <ClCompile Include="..\Source\SkillUnitTimings.cpp" />
     <ClCompile Include="..\Source\Squad.cpp" />
     <ClCompile Include="..\Source\SquadData.cpp" />
     <ClCompile Include="..\Source\StrategyBossZerg.cpp" />
@@ -206,6 +214,8 @@
     <ClInclude Include="..\Source\GameRecordNow.h" />
     <ClInclude Include="..\Source\Grid.h" />
     <ClInclude Include="..\Source\GridAttacks.h" />
+    <ClInclude Include="..\Source\GridBuildable.h" />
+    <ClInclude Include="..\Source\GridCreep.h" />
     <ClInclude Include="..\Source\GridDistances.h" />
     <ClInclude Include="..\Source\GridInset.h" />
     <ClInclude Include="..\Source\GridRoom.h" />
@@ -246,7 +256,13 @@
     <ClInclude Include="..\Source\ProductionGoal.h" />
     <ClInclude Include="..\source\ProductionManager.h" />
     <ClInclude Include="..\Source\Random.h" />
+    <ClInclude Include="..\Source\ResourceInfo.h" />
+    <ClInclude Include="..\Source\ScoutBoss.h" />
     <ClInclude Include="..\source\ScoutManager.h" />
+    <ClInclude Include="..\Source\Skill.h" />
+    <ClInclude Include="..\Source\SkillGasSteal.h" />
+    <ClInclude Include="..\Source\SkillKit.h" />
+    <ClInclude Include="..\Source\SkillUnitTimings.h" />
     <ClInclude Include="..\Source\Squad.h" />
     <ClInclude Include="..\Source\SquadData.h" />
     <ClInclude Include="..\Source\SquadOrder.h" />

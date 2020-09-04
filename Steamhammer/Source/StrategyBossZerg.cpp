@@ -7,6 +7,7 @@
 #include "ProductionManager.h"
 #include "Random.h"
 #include "ScoutManager.h"
+#include "The.h"
 #include "UnitUtil.h"
 
 using namespace UAlbertaBot;
@@ -37,15 +38,16 @@ StrategyBossZerg::StrategyBossZerg()
 	, enemyAntigroundArmySize(0)	// game starts with no army
 	, defilerScore(0)
     , _enemySeemsToBeDead(false)    // "I'm not dead yet!"
-    , _wantDefensiveSpire(false)
+    , _recommendDefensiveSpire(false)
 	, _lastQueenAliveFrame(0)		// 0 means no queen ever
-	, _recommendParasite(false)
-    , _recommendEnsnare(false)
-    , _recommendBroodling(false)
+	, _recommendParasite(0)
+    , _recommendEnsnare(0)
+    , _recommendBroodling(0)
+    , _recommendQueens(0)
 {
 	resetTechScores();
 	setUnitMix(BWAPI::UnitTypes::Zerg_Drone, BWAPI::UnitTypes::None);
-	chooseAuxUnit();          // it chooses None initially
+	chooseAuxUnit();                // it chooses None initially
 	chooseEconomyRatio();
 }
 
@@ -62,7 +64,7 @@ void StrategyBossZerg::updateSupply()
 	int pendingSupply = 0;
 	int supplyUsed = 0;
 
-	for (const auto unit : _self->getUnits())
+	for (BWAPI::Unit unit : _self->getUnits())
 	{
 		if (unit->getType() == BWAPI::UnitTypes::Zerg_Overlord)
 		{
@@ -112,7 +114,7 @@ void StrategyBossZerg::updateSupply()
 			supplyUsed += unit->getType().supplyRequired();
 		}
 	}
-
+    
 	_existingSupply = std::min(existingSupply, absoluteMaxSupply);
 	_pendingSupply = pendingSupply;
 	_supplyUsed = supplyUsed;
@@ -126,12 +128,12 @@ void StrategyBossZerg::updateSupply()
 // Includes screen drawing calls.
 void StrategyBossZerg::updateGameState()
 {
-	if (_lastUpdateFrame == BWAPI::Broodwar->getFrameCount())
+	if (_lastUpdateFrame == the.now())
 	{
 		// No need to update more than once per frame.
 		return;
 	}
-	_lastUpdateFrame = BWAPI::Broodwar->getFrameCount();
+	_lastUpdateFrame = the.now();
 
 	if (_emergencyGroundDefense && _lastUpdateFrame >= _emergencyStartFrame + (15 * 24))
 	{
@@ -143,78 +145,78 @@ void StrategyBossZerg::updateGameState()
 	gas = std::max(0, _self->gas() - BuildingManager::Instance().getReservedGas());
 
 	// Unit stuff, including uncompleted units.
-	nLairs = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Lair);
-	nHives = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Hive);
-	nHatches = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Hatchery)
+	nLairs = the.my.all.count(BWAPI::UnitTypes::Zerg_Lair);
+	nHives = the.my.all.count(BWAPI::UnitTypes::Zerg_Hive);
+	nHatches = the.my.all.count(BWAPI::UnitTypes::Zerg_Hatchery)
 		+ nLairs + nHives;
-	nCompletedHatches = UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Zerg_Hatchery)
+	nCompletedHatches = the.my.completed.count(BWAPI::UnitTypes::Zerg_Hatchery)
 		+ nLairs + nHives;
-	nSpores = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Spore_Colony);
+	nSpores = the.my.all.count(BWAPI::UnitTypes::Zerg_Spore_Colony);
 
 	// nGas = number of geysers ready to mine (extractor must be complete)
 	// nFreeGas = number of geysers free to be taken (no extractor, even uncompleted)
-	Bases::Instance().gasCounts(nGas, nFreeGas);
+	the.bases.gasCounts(nGas, nFreeGas);
 
-	nDrones = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Drone);
+	nDrones = the.my.all.count(BWAPI::UnitTypes::Zerg_Drone);
 	nMineralDrones = WorkerManager::Instance().getNumMineralWorkers();
 	nGasDrones = WorkerManager::Instance().getNumGasWorkers();
-	nLarvas = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Larva);
+	nLarvas = the.my.all.count(BWAPI::UnitTypes::Zerg_Larva);
 
-	nLings = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Zergling);
-	nHydras = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Hydralisk);
-	nLurkers = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Lurker);
-	nMutas = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Mutalisk);
-	nQueens = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Queen);
-	nGuardians = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Guardian);
-	nDevourers = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Devourer);
-	nDefilers = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Defiler);
+	nLings = the.my.all.count(BWAPI::UnitTypes::Zerg_Zergling);
+	nHydras = the.my.all.count(BWAPI::UnitTypes::Zerg_Hydralisk);
+	nLurkers = the.my.all.count(BWAPI::UnitTypes::Zerg_Lurker);
+	nMutas = the.my.all.count(BWAPI::UnitTypes::Zerg_Mutalisk);
+	nQueens = the.my.all.count(BWAPI::UnitTypes::Zerg_Queen);
+	nGuardians = the.my.all.count(BWAPI::UnitTypes::Zerg_Guardian);
+	nDevourers = the.my.all.count(BWAPI::UnitTypes::Zerg_Devourer);
+	nDefilers = the.my.all.count(BWAPI::UnitTypes::Zerg_Defiler);
 
-    nInfestedCC = UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Zerg_Infested_Command_Center);
-    nInfestedTerrans = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Infested_Terran);
+    nInfestedCC = the.my.completed.count(BWAPI::UnitTypes::Zerg_Infested_Command_Center);
+    nInfestedTerrans = the.my.all.count(BWAPI::UnitTypes::Zerg_Infested_Terran);
 
 	if (nQueens > 0)
 	{
-		_lastQueenAliveFrame = BWAPI::Broodwar->getFrameCount();
+		_lastQueenAliveFrame = the.now();
 	}
 
 	// Tech stuff. It has to be completed for the tech to be available.
-	nEvo = UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Zerg_Evolution_Chamber);
-	hasPool = UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Zerg_Spawning_Pool) > 0;
-	hasDen = UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Zerg_Hydralisk_Den) > 0;
+	nEvo = the.my.completed.count(BWAPI::UnitTypes::Zerg_Evolution_Chamber);
+	hasPool = the.my.completed.count(BWAPI::UnitTypes::Zerg_Spawning_Pool) > 0;
+	hasDen = the.my.completed.count(BWAPI::UnitTypes::Zerg_Hydralisk_Den) > 0;
 	hasSpire =
-        UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Zerg_Spire) > 0 ||
-		UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Greater_Spire) > 0;
-	hasGreaterSpire = UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Zerg_Greater_Spire) > 0;
+        the.my.completed.count(BWAPI::UnitTypes::Zerg_Spire) > 0 ||
+		the.my.all.count(BWAPI::UnitTypes::Zerg_Greater_Spire) > 0;
+	hasGreaterSpire = the.my.completed.count(BWAPI::UnitTypes::Zerg_Greater_Spire) > 0;
 	// We have lurkers if we have lurker aspect and we have a den to make the hydras.
 	hasLurkers = hasDen && _self->hasResearched(BWAPI::TechTypes::Lurker_Aspect);
-	hasQueensNest = UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Zerg_Queens_Nest) > 0;
-	hasUltra = UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Zerg_Ultralisk_Cavern) > 0;
+	hasQueensNest = the.my.completed.count(BWAPI::UnitTypes::Zerg_Queens_Nest) > 0;
+	hasUltra = the.my.completed.count(BWAPI::UnitTypes::Zerg_Ultralisk_Cavern) > 0;
 	// Enough upgrades that it is worth making ultras: Speed done, armor underway.
 	hasUltraUps =
 		_self->getUpgradeLevel(BWAPI::UpgradeTypes::Anabolic_Synthesis) != 0 &&
 		(_self->getUpgradeLevel(BWAPI::UpgradeTypes::Chitinous_Plating) != 0 ||
 		_self->isUpgrading(BWAPI::UpgradeTypes::Chitinous_Plating));
 	hasDefilerUps =
-		UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Zerg_Defiler_Mound) > 0 &&
+		the.my.completed.count(BWAPI::UnitTypes::Zerg_Defiler_Mound) > 0 &&
 		(_self->hasResearched(BWAPI::TechTypes::Consume) || _self->isResearching(BWAPI::TechTypes::Consume));
-	hasNydus = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Nydus_Canal) > 0;
+	hasNydus = the.my.all.count(BWAPI::UnitTypes::Zerg_Nydus_Canal) > 0;
 
 	// hasLair means "can research stuff in the lair", like overlord speed.
 	// hasLairTech means "can do stuff that needs lair", like research lurker aspect.
 	// NOTE The two are different in game, but even more different in the bot because
 	//      of a BWAPI 4.1.2 bug: You can't do lair research in a hive.
 	//      This code reflects the bug so we can work around it as much as possible.
-	hasHiveTech = UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Zerg_Hive) > 0;
-	hasLair = UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Zerg_Lair) > 0;
+	hasHiveTech = the.my.completed.count(BWAPI::UnitTypes::Zerg_Hive) > 0;
+	hasLair = the.my.completed.count(BWAPI::UnitTypes::Zerg_Lair) > 0;
 	hasLairTech = hasLair || nHives > 0;
 	
 	// If we start on an island, we go air until we have nydus canals.
-	goingIslandAir = Bases::Instance().isIslandStart() && !hasNydus;
+	goingIslandAir = the.bases.isIslandStart() && !hasNydus;
 	
 	outOfBook = ProductionManager::Instance().isOutOfBook();
-	nBases = Bases::Instance().baseCount(_self);
-	nFreeBases = Bases::Instance().freeLandBaseCount();
-	nMineralPatches = Bases::Instance().mineralPatchCount();
+	nBases = the.bases.baseCount(_self);
+	nFreeBases = the.bases.freeLandBaseCount();
+	nMineralPatches = the.bases.mineralPatchCount();
 	maxDrones = WorkerManager::Instance().getMaxWorkers();
 	// We may have lost all bases but still have macro hatcheries that can mine.
 	if (maxDrones < 3 && nBases == 0 && nHatches > 0)
@@ -233,7 +235,7 @@ void StrategyBossZerg::updateGameState()
 
 	// Army sizes don't need to be updated as often.
 	// -1 means it has not yet been updated for the first time.
-	if (BWAPI::Broodwar->getFrameCount() % 12 == 9)
+	if (the.now() % 12 == 9)
 	{
 		updateArmySizes();
 	}
@@ -267,7 +269,7 @@ void StrategyBossZerg::updateArmySizes()
 
 	enemyAntigroundArmySize = 0;
 	enemyGroundArmySize = 0;
-	for (const std::pair<BWAPI::UnitType, int> & unitCount : you.getCounts())
+    for (const std::pair<BWAPI::UnitType, int> & unitCount : you.getCounts())
 	{
 		BWAPI::UnitType type = unitCount.first;
 		int n = unitCount.second;
@@ -334,13 +336,13 @@ bool StrategyBossZerg::enoughGroundArmy() const
 // Result is cached in _enemyIsAllAir.
 bool StrategyBossZerg::enemyIsAllAir() const
 {
-    if (Bases::Instance().baseCount(_enemy) > 0)
+    if (the.bases.baseCount(_enemy) > 0)
     {
         // NOTE A floating command center does not establish a base.
         return false;
     }
 
-    for (const auto & kv : InformationManager::Instance().getUnitData(_enemy).getUnits())
+    for (const auto & kv : the.info.getUnitData(_enemy).getUnits())
     {
         const UnitInfo & ui(kv.second);
 
@@ -368,15 +370,15 @@ bool StrategyBossZerg::enemyIsAllAir() const
 // gears then.
 // When this is true, we prefer to make mutas because they can find terran floating buildings
 // and buildings on islands. Also they scout faster.
-bool StrategyBossZerg::enemySeemsToBeDead(const PlayerSnapshot & snap) const
+bool StrategyBossZerg::enemySeemsToBeDead() const
 {
-	if (!Bases::Instance().enemyStart())
+	if (!the.bases.enemyStart())
 	{
 		// The enemy starting position has not been found.
 		return false;
 	}
 
-	if (Bases::Instance().baseCount(_enemy) > 0)
+	if (the.bases.baseCount(_enemy) > 0)
 	{
 		// The enemy still owns a base.
 		return false;
@@ -388,7 +390,7 @@ bool StrategyBossZerg::enemySeemsToBeDead(const PlayerSnapshot & snap) const
         return false;
     }
 
-	for (const std::pair<BWAPI::UnitType, int> & unitCount : snap.getCounts())
+	for (const std::pair<BWAPI::UnitType, int> & unitCount : the.your.seen.getCounts())
 	{
         if (UnitUtil::TypeCanAttackAir(unitCount.first))
 		{
@@ -425,6 +427,22 @@ int StrategyBossZerg::nFreeEvo() const
     return count;
 }
 
+// Do not make more than this many devourers.
+int StrategyBossZerg::devourerLimit() const
+{
+    int enemyAir =
+        the.your.seen.count(BWAPI::UnitTypes::Terran_Wraith) +
+        the.your.seen.count(BWAPI::UnitTypes::Terran_Valkyrie) +
+        2 * the.your.seen.count(BWAPI::UnitTypes::Terran_Battlecruiser) +
+        the.your.seen.count(BWAPI::UnitTypes::Protoss_Corsair) +
+        the.your.seen.count(BWAPI::UnitTypes::Protoss_Scout) +
+        the.your.seen.count(BWAPI::UnitTypes::Protoss_Carrier) +
+        the.your.seen.count(BWAPI::UnitTypes::Zerg_Mutalisk) +
+        the.your.seen.count(BWAPI::UnitTypes::Zerg_Devourer);
+    return
+        std::min(maxDevourers, std::min(nMutas / 2, enemyAir / 2));
+}
+
 // When will our spire finish?
 // We compare with enemy spire timing to decide whether we need spores.
 int StrategyBossZerg::getOurSpireTiming() const
@@ -441,12 +459,12 @@ int StrategyBossZerg::getOurSpireTiming() const
         // If it is a greater spire, then we have spire tech and it's handled above.
         if (unit->getType() == BWAPI::UnitTypes::Zerg_Spire)
         {
-            return BWAPI::Broodwar->getFrameCount() + unit->getRemainingBuildTime();
+            return the.now() + unit->getRemainingBuildTime();
         }
     }
 
     // We haven't started one. Return a distant future time.
-    return 999999;
+    return INT_MAX;
 }
 
 // How many of our eggs will hatch into the given unit type?
@@ -455,7 +473,7 @@ int StrategyBossZerg::numInEgg(BWAPI::UnitType type) const
 {
 	int count = 0;
 
-	for (const auto unit : _self->getUnits())
+	for (BWAPI::Unit unit : _self->getUnits())
 	{
 		if (unit->getType() == BWAPI::UnitTypes::Zerg_Egg && unit->getBuildType() == type)
 		{
@@ -476,7 +494,7 @@ bool StrategyBossZerg::isBeingBuilt(const BWAPI::UnitType unitType) const
 // When you cancel a building, you get back 75% of its mineral cost, rounded down.
 int StrategyBossZerg::mineralsBackOnCancel(BWAPI::UnitType type) const
 {
-	return int(std::floor(0.75 * type.mineralPrice()));
+	return 3 * type.mineralPrice() / 4;     // C++ integer arithmetic does the right thing
 }
 
 // Extreme emergency: We are out of drones and/or hatcheries.
@@ -537,7 +555,7 @@ void StrategyBossZerg::cancelStuff(int mineralsNeeded)
             u->getType() != BWAPI::UnitTypes::Zerg_Hatchery && u->getType().isBuilding() && !u->isCompleted())
 		{
 			// Canceling a building (including a morphed building like a lair)
-			// returns 3/4 of the original cost.
+			// returns 3/4 of the original cost in both minerals and gas (but we only count minerals).
             // BWAPI::Broodwar->printf("emergency cancel %s", UnitTypeName(u).c_str());
             mineralsSoFar += mineralsBackOnCancel(u->getType());
 			u->cancelMorph();
@@ -662,7 +680,7 @@ bool StrategyBossZerg::nextInQueueIsUseless(BuildOrderQueue & queue) const
 	// It costs gas that we don't have and won't get.
 	if (nGas == 0 && act.gasPrice() > gas &&
 		!isBeingBuilt(BWAPI::UnitTypes::Zerg_Extractor) &&
-		UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Extractor) == 0)
+		the.my.all.count(BWAPI::UnitTypes::Zerg_Extractor) == 0)
 	{
 		return true;
 	}
@@ -706,7 +724,7 @@ bool StrategyBossZerg::nextInQueueIsUseless(BuildOrderQueue & queue) const
 			upInQueue == BWAPI::UpgradeTypes::Grooved_Spines)
 		{
 			return
-				!hasDen && UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Hydralisk_Den) == 0 && !isBeingBuilt(BWAPI::UnitTypes::Zerg_Hydralisk_Den) ||
+				!hasDen && the.my.all.count(BWAPI::UnitTypes::Zerg_Hydralisk_Den) == 0 && !isBeingBuilt(BWAPI::UnitTypes::Zerg_Hydralisk_Den) ||
 				_self->isUpgrading(BWAPI::UpgradeTypes::Muscular_Augments) ||
 				_self->isUpgrading(BWAPI::UpgradeTypes::Grooved_Spines) ||
 				_self->isResearching(BWAPI::TechTypes::Lurker_Aspect);
@@ -715,7 +733,7 @@ bool StrategyBossZerg::nextInQueueIsUseless(BuildOrderQueue & queue) const
 		if (upInQueue == BWAPI::UpgradeTypes::Metabolic_Boost)
 		{
 			return
-				!hasPool && UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Spawning_Pool) == 0 ||
+				!hasPool && the.my.all.count(BWAPI::UnitTypes::Zerg_Spawning_Pool) == 0 ||
                 _self->isUpgrading(BWAPI::UpgradeTypes::Adrenal_Glands);
 		}
 
@@ -740,7 +758,7 @@ bool StrategyBossZerg::nextInQueueIsUseless(BuildOrderQueue & queue) const
 
 			return
 				_self->getUpgradeLevel(upInQueue) >= maxUpgrade ||
-				upCount >= UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Evolution_Chamber);
+				upCount >= the.my.all.count(BWAPI::UnitTypes::Zerg_Evolution_Chamber);
 		}
 
         // Allow air upgrades in any order, in one or two spires.
@@ -756,8 +774,8 @@ bool StrategyBossZerg::nextInQueueIsUseless(BuildOrderQueue & queue) const
 
             return
                 _self->getUpgradeLevel(upInQueue) >= maxUpgrade ||
-                upCount >= UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Zerg_Spire);
-                          // + UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Zerg_Greater_Spire);
+                upCount >= the.my.completed.count(BWAPI::UnitTypes::Zerg_Spire);
+                          // + the.my.completed.count(BWAPI::UnitTypes::Zerg_Greater_Spire);
         }
 
         if (upInQueue == BWAPI::UpgradeTypes::Gamete_Meiosis)
@@ -771,7 +789,7 @@ bool StrategyBossZerg::nextInQueueIsUseless(BuildOrderQueue & queue) const
 		if (upInQueue == BWAPI::UpgradeTypes::Metasynaptic_Node)
 		{
 			return
-				UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Zerg_Defiler_Mound) == 0 ||
+				the.my.completed.count(BWAPI::UnitTypes::Zerg_Defiler_Mound) == 0 ||
 				_self->isResearching(BWAPI::TechTypes::Consume) ||
 				_self->isResearching(BWAPI::TechTypes::Plague);
 		}
@@ -802,7 +820,7 @@ bool StrategyBossZerg::nextInQueueIsUseless(BuildOrderQueue & queue) const
         if (techInQueue == BWAPI::TechTypes::Lurker_Aspect)
 		{
 			return !hasLairTech && nLairs == 0 ||
-				!hasDen && UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Hydralisk_Den) == 0 && !isBeingBuilt(BWAPI::UnitTypes::Zerg_Hydralisk_Den) ||
+				!hasDen && the.my.all.count(BWAPI::UnitTypes::Zerg_Hydralisk_Den) == 0 && !isBeingBuilt(BWAPI::UnitTypes::Zerg_Hydralisk_Den) ||
 				_self->isUpgrading(BWAPI::UpgradeTypes::Muscular_Augments) ||
 				_self->isUpgrading(BWAPI::UpgradeTypes::Grooved_Spines);
 		}
@@ -821,7 +839,7 @@ bool StrategyBossZerg::nextInQueueIsUseless(BuildOrderQueue & queue) const
 			techInQueue == BWAPI::TechTypes::Plague)
 		{
 			return
-				UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Zerg_Defiler_Mound) == 0 ||
+				the.my.completed.count(BWAPI::UnitTypes::Zerg_Defiler_Mound) == 0 ||
 				_self->isResearching(BWAPI::TechTypes::Consume) ||
 				_self->isResearching(BWAPI::TechTypes::Plague) ||
 				_self->isUpgrading(BWAPI::UpgradeTypes::Metasynaptic_Node);
@@ -856,7 +874,13 @@ bool StrategyBossZerg::nextInQueueIsUseless(BuildOrderQueue & queue) const
 			// 3 drones/hatchery is the minimum: It can support ling or drone production.
 			// Also, it may still be OK if we have lots of minerals to spend.
 
-			// TODO A bug can affect building 2 hatcheries in a row:
+            // Trust the opening book.
+            if (!outOfBook && _self->deadUnitCount(BWAPI::UnitTypes::Zerg_Drone) == 0)
+            {
+                return false;
+            }
+
+            // TODO A bug can affect building 2 hatcheries in a row:
 			//      getNumUnstarted() can return a number 1 too high for a frame immediately after
 			//      one hatchery is built, causing the next hatchery to be dropped incorrectly.
 			//      The error is in BuildingManager.
@@ -871,25 +895,26 @@ bool StrategyBossZerg::nextInQueueIsUseless(BuildOrderQueue & queue) const
 		}
 		if (nextInQueue == BWAPI::UnitTypes::Zerg_Lair)
 		{
-			return !hasPool && UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Spawning_Pool) == 0 ||
-				UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Hatchery) == 0;
+			return !hasPool && the.my.all.count(BWAPI::UnitTypes::Zerg_Spawning_Pool) == 0 ||
+				the.my.all.count(BWAPI::UnitTypes::Zerg_Hatchery) == 0;
 		}
 		if (nextInQueue == BWAPI::UnitTypes::Zerg_Hive)
 		{
 			return nLairs == 0 ||
-				UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Queens_Nest) == 0 ||
+				the.my.all.count(BWAPI::UnitTypes::Zerg_Queens_Nest) == 0 ||
 				_self->isUpgrading(BWAPI::UpgradeTypes::Pneumatized_Carapace) ||
-				_self->isUpgrading(BWAPI::UpgradeTypes::Ventral_Sacs);
+				_self->isUpgrading(BWAPI::UpgradeTypes::Ventral_Sacs) ||
+                _self->isUpgrading(BWAPI::UpgradeTypes::Antennae);
 		}
 		if (nextInQueue == BWAPI::UnitTypes::Zerg_Sunken_Colony)
 		{
-			return !hasPool && UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Spawning_Pool) == 0 ||
-				UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Creep_Colony) == 0 && !isBeingBuilt(BWAPI::UnitTypes::Zerg_Creep_Colony);
+			return !hasPool && the.my.all.count(BWAPI::UnitTypes::Zerg_Spawning_Pool) == 0 ||
+				the.my.all.count(BWAPI::UnitTypes::Zerg_Creep_Colony) == 0 && !isBeingBuilt(BWAPI::UnitTypes::Zerg_Creep_Colony);
 		}
 		if (nextInQueue == BWAPI::UnitTypes::Zerg_Spore_Colony)
 		{
-			return nEvo == 0 && UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Evolution_Chamber) == 0 && !isBeingBuilt(BWAPI::UnitTypes::Zerg_Evolution_Chamber) ||
-				UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Creep_Colony) == 0 && !isBeingBuilt(BWAPI::UnitTypes::Zerg_Creep_Colony);
+			return nEvo == 0 && the.my.all.count(BWAPI::UnitTypes::Zerg_Evolution_Chamber) == 0 && !isBeingBuilt(BWAPI::UnitTypes::Zerg_Evolution_Chamber) ||
+				the.my.all.count(BWAPI::UnitTypes::Zerg_Creep_Colony) == 0 && !isBeingBuilt(BWAPI::UnitTypes::Zerg_Creep_Colony);
 		}
 		if (nextInQueue == BWAPI::UnitTypes::Zerg_Extractor)
 		{
@@ -899,13 +924,13 @@ bool StrategyBossZerg::nextInQueueIsUseless(BuildOrderQueue & queue) const
 		if (nextInQueue == BWAPI::UnitTypes::Zerg_Spawning_Pool)
 		{
 			return
-                UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Spawning_Pool) > 0 ||
+                the.my.all.count(BWAPI::UnitTypes::Zerg_Spawning_Pool) > 0 ||
                 isBeingBuilt(BWAPI::UnitTypes::Zerg_Spawning_Pool) ||
 				nHatches == 0;
 		}
 		if (nextInQueue == BWAPI::UnitTypes::Zerg_Hydralisk_Den)
 		{
-			return !hasPool && UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Spawning_Pool) == 0;
+			return !hasPool && the.my.all.count(BWAPI::UnitTypes::Zerg_Spawning_Pool) == 0;
 		}
 		if (nextInQueue == BWAPI::UnitTypes::Zerg_Spire)
 		{
@@ -914,14 +939,14 @@ bool StrategyBossZerg::nextInQueueIsUseless(BuildOrderQueue & queue) const
 		if (nextInQueue == BWAPI::UnitTypes::Zerg_Greater_Spire)
 		{
 			return nHives == 0 ||
-				UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Zerg_Spire) == 0;
+				the.my.completed.count(BWAPI::UnitTypes::Zerg_Spire) == 0;
 		}
 		if (nextInQueue == BWAPI::UnitTypes::Zerg_Defiler_Mound)
 		{
 			return nHives == 0 ||
 				nGas == 0 && gas < 350 ||
 				nDrones < 10 ||
-				UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Defiler_Mound) > 0 ||
+				the.my.all.count(BWAPI::UnitTypes::Zerg_Defiler_Mound) > 0 ||
 				isBeingBuilt(BWAPI::UnitTypes::Zerg_Defiler_Mound);
 		}
 
@@ -957,13 +982,13 @@ bool StrategyBossZerg::nextInQueueIsUseless(BuildOrderQueue & queue) const
 	{
 		// We lost the tech.
 		return !hasPool &&
-			UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Spawning_Pool) == 0 &&
+			the.my.all.count(BWAPI::UnitTypes::Zerg_Spawning_Pool) == 0 &&
 			!isBeingBuilt(BWAPI::UnitTypes::Zerg_Spawning_Pool);		// needed for 4 pool to work
 	}
 	if (nextInQueue == BWAPI::UnitTypes::Zerg_Hydralisk)
 	{
 		// We lost the tech.
-		return !hasDen && UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Hydralisk_Den) == 0 && !isBeingBuilt(BWAPI::UnitTypes::Zerg_Hydralisk_Den);
+		return !hasDen && the.my.all.count(BWAPI::UnitTypes::Zerg_Hydralisk_Den) == 0 && !isBeingBuilt(BWAPI::UnitTypes::Zerg_Hydralisk_Den);
 	}
 	if (nextInQueue == BWAPI::UnitTypes::Zerg_Lurker)
 	{
@@ -975,31 +1000,37 @@ bool StrategyBossZerg::nextInQueueIsUseless(BuildOrderQueue & queue) const
 	{
 		// We lost the tech.
 		return !hasSpire &&
-			UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Spire) == 0 &&
-			UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Greater_Spire) == 0;
+			the.my.all.count(BWAPI::UnitTypes::Zerg_Spire) == 0 &&
+			the.my.all.count(BWAPI::UnitTypes::Zerg_Greater_Spire) == 0;
 	}
     if (nextInQueue == BWAPI::UnitTypes::Zerg_Queen)
     {
-        // We lost the tech, or we'll go over the limit.
+        // We lost the tech. It's OK to go over the limit.
         return
-            UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Queens_Nest) == 0 ||
-            nQueens >= Config::Skills::MaxQueens;
+            the.my.all.count(BWAPI::UnitTypes::Zerg_Queens_Nest) == 0;
     }
     if (nextInQueue == BWAPI::UnitTypes::Zerg_Ultralisk)
 	{
 		// We lost the tech.
-		return !hasUltra && UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Ultralisk_Cavern) == 0;
+		return !hasUltra && the.my.all.count(BWAPI::UnitTypes::Zerg_Ultralisk_Cavern) == 0;
 	}
-	if (nextInQueue == BWAPI::UnitTypes::Zerg_Guardian || nextInQueue == BWAPI::UnitTypes::Zerg_Devourer)
+	if (nextInQueue == BWAPI::UnitTypes::Zerg_Guardian)
 	{
 		// We lost the tech, or we don't have a mutalisk to morph.
 		return nMutas == 0 ||
-			!hasGreaterSpire && UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Greater_Spire) == 0;
+			!hasGreaterSpire && the.my.all.count(BWAPI::UnitTypes::Zerg_Greater_Spire) == 0;
 	}
+    if (nextInQueue == BWAPI::UnitTypes::Zerg_Devourer)
+    {
+        // We lost the tech, or we don't have a mutalisk to morph, or we're over the devourer limit.
+        return nMutas == 0 ||
+            !hasGreaterSpire && the.my.all.count(BWAPI::UnitTypes::Zerg_Greater_Spire) == 0 ||
+            nDevourers >= devourerLimit();
+    }
     if (nextInQueue == BWAPI::UnitTypes::Zerg_Defiler)
     {
         // We lost the tech.
-        return UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Defiler_Mound) == 0;
+        return the.my.all.count(BWAPI::UnitTypes::Zerg_Defiler_Mound) == 0;
     }
     if (nextInQueue == BWAPI::UnitTypes::Zerg_Infested_Terran)
     {
@@ -1213,21 +1244,21 @@ bool StrategyBossZerg::takeUrgentAction(BuildOrderQueue & queue)
 		if (outOfBook &&
 			!hasPool &&
 			(minerals < 150 || minerals < 200 && nDrones <= 6) &&
-			UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Spawning_Pool) == 0 &&
+			the.my.all.count(BWAPI::UnitTypes::Zerg_Spawning_Pool) == 0 &&
 			BuildingManager::Instance().getNumUnstarted(BWAPI::UnitTypes::Zerg_Spawning_Pool) == 0)
 		{
 			cancelForSpawningPool();
 		}
 		// Action: Start a sunken as soon as possible.
 		if (outOfBook &&
-			(hasPool || UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Spawning_Pool) > 0) &&
+			(hasPool || the.my.all.count(BWAPI::UnitTypes::Zerg_Spawning_Pool) > 0) &&
 			nDrones >= 4)
 		{
 			if (plan != OpeningPlan::Proxy &&		// sunken is usually an overreaction to a proxy
 				nextInQueue != BWAPI::UnitTypes::Zerg_Creep_Colony &&
-				UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Creep_Colony) == 0 &&
+				the.my.all.count(BWAPI::UnitTypes::Zerg_Creep_Colony) == 0 &&
 				!isBeingBuilt(BWAPI::UnitTypes::Zerg_Creep_Colony) &&
-				UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Sunken_Colony) == 0)
+				the.my.all.count(BWAPI::UnitTypes::Zerg_Sunken_Colony) == 0)
 			{
 				// BWAPI::Broodwar->printf("anti rush/proxy sunken");
 				queue.queueAsHighestPriority(MacroAct(BWAPI::UnitTypes::Zerg_Creep_Colony, MacroLocation::Front));
@@ -1260,18 +1291,18 @@ bool StrategyBossZerg::takeUrgentAction(BuildOrderQueue & queue)
 				!hasPool &&
 				nextInQueue != BWAPI::UnitTypes::Zerg_Spawning_Pool &&
 				!isBeingBuilt(BWAPI::UnitTypes::Zerg_Spawning_Pool) &&
-				UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Spawning_Pool) == 0)
+				the.my.all.count(BWAPI::UnitTypes::Zerg_Spawning_Pool) == 0)
 			{
 				breakOut = true;
 			}
 			else if (nDronesEver >= 9 &&
-				(hasPool || UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Spawning_Pool) > 0) &&
+				(hasPool || the.my.all.count(BWAPI::UnitTypes::Zerg_Spawning_Pool) > 0) &&
 				nextInQueue != BWAPI::UnitTypes::Zerg_Creep_Colony &&
 				nextInQueue != BWAPI::UnitTypes::Zerg_Sunken_Colony &&
 				!isBeingBuilt(BWAPI::UnitTypes::Zerg_Creep_Colony) &&
 				!isBeingBuilt(BWAPI::UnitTypes::Zerg_Sunken_Colony) &&
-				UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Creep_Colony) == 0 &&
-				UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Sunken_Colony) == 0)
+				the.my.all.count(BWAPI::UnitTypes::Zerg_Creep_Colony) == 0 &&
+				the.my.all.count(BWAPI::UnitTypes::Zerg_Sunken_Colony) == 0)
 			{
 				breakOut = true;
 			}
@@ -1393,18 +1424,18 @@ void StrategyBossZerg::makeUrgentReaction(BuildOrderQueue & queue)
 
 	// Enemy has air. Make scourge if possible. Keep the numbers limited, esp. in ZvZ.
 	const int totalScourge =
-		UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Scourge) +
+		the.my.all.count(BWAPI::UnitTypes::Zerg_Scourge) +
 		2 * numInEgg(BWAPI::UnitTypes::Zerg_Scourge) +
 		2 * queue.numInQueue(BWAPI::UnitTypes::Zerg_Scourge);
 	if (hasSpire && nGas > 0 &&
-		InformationManager::Instance().enemyHasAirTech() &&
+		the.info.enemyHasAirTech() &&
 		nextInQueue != BWAPI::UnitTypes::Zerg_Scourge &&
 		totalScourge < 12 &&
 		(_enemyRace != BWAPI::Races::Zerg || totalScourge < nMutas) &&
 		(!outOfBook || queue.size() < 5))		// don't loop beyond this
 	{
 		// Not too much, and not too much at once. They cost a lot of gas.
-		int nScourgeNeeded = std::min(12, InformationManager::Instance().nScourgeNeeded());
+		int nScourgeNeeded = std::min(12, the.info.nScourgeNeeded());
 		int nToMake = 0;
 		if (nScourgeNeeded > totalScourge && nLarvas > 0)
 		{
@@ -1539,12 +1570,12 @@ void StrategyBossZerg::makeUrgentReaction(BuildOrderQueue & queue)
 	const int hatcheriesUnstarted = BuildingManager::Instance().getNumUnstarted(BWAPI::UnitTypes::Zerg_Hatchery);
 	const int hatcheriesUnderConstruction =
 		hatcheriesUnstarted
-		+ UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Hatchery)
-		- UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Zerg_Hatchery);
+		+ the.my.all.count(BWAPI::UnitTypes::Zerg_Hatchery)
+		- the.my.completed.count(BWAPI::UnitTypes::Zerg_Hatchery);
 	const int newHatcheryLimit = nDrones > 30 ? 4 : (nDrones > 20 ? 3 : 2);
 	const bool enoughLairTechUnits =
 		(_gasUnit == BWAPI::UnitTypes::Zerg_Lurker || _gasUnit == BWAPI::UnitTypes::Zerg_Mutalisk)
-			? UnitUtil::GetAllUnitCount(_gasUnit) >= 4
+			? the.my.all.count(_gasUnit) >= 4
 			: true;
 	// A liberal ceiling on the hatchery count, assuming production of drones + zerglings only.
 	// It mainly prevents 3 hatcheries + gas with 9 drones in ZvZ.
@@ -1561,7 +1592,7 @@ void StrategyBossZerg::makeUrgentReaction(BuildOrderQueue & queue)
 		!queue.anyInNextN(BWAPI::TechTypes::Lurker_Aspect, 3) &&
 		(hasSpire || findRemainingBuildTime(BWAPI::UnitTypes::Zerg_Spire) >= 20 * 24))	// spire not about to finish
 	{
-		MacroLocation loc = MacroLocation::Macro;
+		MacroLocation loc = MacroLocation::Main;
         if (nBases <= 1 && nHatches >= 2 && nFreeBases > 0 ||
             nBases <= 2 && nHatches >= 3 && nFreeBases > 0 ||
 			nHatches % 2 != 0 && nFreeBases > 2 && Random::Instance().flag(0.5))
@@ -1590,7 +1621,7 @@ void StrategyBossZerg::makeUrgentReaction(BuildOrderQueue & queue)
 			(minerals > 900 || _extraDronesWanted - 2 >= 3 * _extraOpeningExtractors + 5 * _extraOpeningHatcheries) &&
 			!queue.anyInNextN(BWAPI::UnitTypes::Zerg_Hatchery, 3))
 		{
-			MacroLocation loc = MacroLocation::Macro;
+			MacroLocation loc = MacroLocation::Main;
 			if (_extraOpeningHatcheries == 2 ||
 				OpponentModel::Instance().getDarnLikelyEnemyPlan() == OpeningPlan::SafeExpand ||
 				OpponentModel::Instance().getDarnLikelyEnemyPlan() == OpeningPlan::Turtle)
@@ -1604,7 +1635,7 @@ void StrategyBossZerg::makeUrgentReaction(BuildOrderQueue & queue)
 	}
 
 	// If the enemy has cloaked stuff, consider overlord speed.
-	if (InformationManager::Instance().enemyHasCloakTech())
+	if (the.info.enemyHasCloakTech())
 	{
 		if (hasLair &&
 			minerals >= 150 && gas >= 150 &&
@@ -1619,21 +1650,37 @@ void StrategyBossZerg::makeUrgentReaction(BuildOrderQueue & queue)
 	}
 
 	// If the enemy has overlord hunters such as corsairs, prepare appropriately.
-	if (InformationManager::Instance().enemyHasOverlordHunters())
+	if (the.info.enemyHasOverlordHunters())
 	{
 		// Do we want spores, and if so, how many and where?
 		int sporesWanted = 0;
-		bool hasNatural =
-			Bases::Instance().myNaturalBase() && Bases::Instance().myNaturalBase()->getOwner() == _self;
-		// First spore in main for ZvT and ZvZ.
-		MacroLocation spore1 = MacroLocation::Macro;
-		MacroLocation spore2 = hasNatural ? MacroLocation::Natural : MacroLocation::Macro;
+		// For ZvT and ZvZ.
+        MacroLocation spore1 = MacroLocation::Main;
+		MacroLocation spore2 = MacroLocation::Main;
+        const bool hasNatural = the.bases.myNatural() && the.bases.myNatural()->getOwner() == _self;
+        if (hasNatural)
+        {
+            spore2 = MacroLocation::Natural;
+
+            Base * enemyStart = the.bases.enemyStart();
+            if (enemyStart)
+            {
+                // We know where the enemy is. Put the first spore in the natural if it is significantly closer.
+                int mainDist = the.bases.myMain()->getPosition().getApproxDistance(enemyStart->getPosition());
+                int natDist = the.bases.myNatural()->getPosition().getApproxDistance(enemyStart->getPosition());
+                if (natDist + 8 * 32 < mainDist)
+                {
+                    spore1 = MacroLocation::Natural;
+                    spore2 = MacroLocation::Main;
+                }
+            }
+        }
 		if (_enemyRace == BWAPI::Races::Terran)
 		{
 			// Don't count battlecruisers. A spore is not strong defense against them.
 			int enemyAir =
-				InformationManager::Instance().getNumUnits(BWAPI::UnitTypes::Terran_Wraith, BWAPI::Broodwar->enemy()) +
-				InformationManager::Instance().getNumUnits(BWAPI::UnitTypes::Terran_Valkyrie, BWAPI::Broodwar->enemy());
+                the.your.seen.count(BWAPI::UnitTypes::Terran_Wraith) +
+                the.your.seen.count(BWAPI::UnitTypes::Terran_Valkyrie);
 			if (nBases > 1 && (enemyAir >= 3 && !hasGreaterSpire || enemyAir >= 6))
 			{
 				sporesWanted = 2;
@@ -1645,12 +1692,12 @@ void StrategyBossZerg::makeUrgentReaction(BuildOrderQueue & queue)
 		}
 		else if (_enemyRace == BWAPI::Races::Protoss)
 		{
-			// Opposite arrangement for ZvP, to help defend against dark templar.
-			spore1 = hasNatural ? MacroLocation::Natural : MacroLocation::Macro;
-			spore2 = MacroLocation::Macro;
+			// Natural first for ZvP, to help defend against dark templar.
+			spore1 = hasNatural ? MacroLocation::Natural : MacroLocation::Main;
+			spore2 = MacroLocation::Main;
 			int enemyAir =
-				InformationManager::Instance().getNumUnits(BWAPI::UnitTypes::Protoss_Corsair, _enemy) +
-				3 * InformationManager::Instance().getNumUnits(BWAPI::UnitTypes::Protoss_Scout, _enemy);
+				the.your.seen.count(BWAPI::UnitTypes::Protoss_Corsair) +
+                3 * the.your.seen.count(BWAPI::UnitTypes::Protoss_Scout);
             if (nBases > 1 && (enemyAir >= 3 && !hasGreaterSpire || enemyAir >= 6))
 			{
 				sporesWanted = 2;
@@ -1664,15 +1711,13 @@ void StrategyBossZerg::makeUrgentReaction(BuildOrderQueue & queue)
 		{
 			// ZvZ
 			const int enemyMutas =
-				InformationManager::Instance().getNumUnits(BWAPI::UnitTypes::Zerg_Mutalisk, _enemy);
+                the.your.seen.count(BWAPI::UnitTypes::Zerg_Mutalisk);
             // When did, or will, the enemy spire finish? If before now, pretend it is now.
-            const int enemySpireTime = std::max(
-                BWAPI::Broodwar->getFrameCount(),
-                InformationManager::Instance().getEnemyBuildingTiming(BWAPI::UnitTypes::Zerg_Spire)
-            );
+            const int enemySpireTime = std::max(the.now(), the.info.getEnemyBuildingTiming(BWAPI::UnitTypes::Zerg_Spire));
             if (enemyMutas > nMutas || getOurSpireTiming() > enemySpireTime + 30 * 24)
 			{
-				sporesWanted = nBases > 1 ? 2 : 1;
+                //BWAPI::Broodwar->printf("our spire %d versus theirs %d", getOurSpireTiming(), enemySpireTime);
+                sporesWanted = nBases > 1 ? 2 : 1;
 			}
             //BWAPI::Broodwar->printf("%d vs %d : sporesWanted %d -> %d", nMutas, enemyMutas, sporesWanted, nSpores);
         }
@@ -1709,9 +1754,9 @@ void StrategyBossZerg::makeUrgentReaction(BuildOrderQueue & queue)
 		// Prepare the evo as soon as the enemy has the tech, so the spores can go up ASAP.
         // In ZvZ, don't make an evo unless we expect to need it.
 		if (nEvo == 0 && nDrones >= 9 && hasPool &&
-            (_enemyRace != BWAPI::Races::Zerg || sporesWanted >= nSpores) &&
+            (_enemyRace != BWAPI::Races::Zerg || sporesWanted >= nSpores && sporesWanted > 0) &&
 			!queue.anyInQueue(BWAPI::UnitTypes::Zerg_Evolution_Chamber) &&
-			UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Evolution_Chamber) == 0 &&
+			the.my.all.count(BWAPI::UnitTypes::Zerg_Evolution_Chamber) == 0 &&
 			!isBeingBuilt(BWAPI::UnitTypes::Zerg_Evolution_Chamber))
 		{
 			queue.queueAsHighestPriority(BWAPI::UnitTypes::Zerg_Evolution_Chamber);
@@ -1722,9 +1767,10 @@ void StrategyBossZerg::makeUrgentReaction(BuildOrderQueue & queue)
 		{
 			// Also put up a spire if possible.
 			if (!hasSpire && hasLairTech && outOfBook &&
-				nGas > 0 && nDrones > 9 &&
+				nGas > 0 &&
+                (nDrones > 15 || the.enemyRace() == BWAPI::Races::Zerg && nDrones > 9) &&
 				!queue.anyInQueue(BWAPI::UnitTypes::Zerg_Spire) &&
-				UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Spire) == 0 &&
+				the.my.all.count(BWAPI::UnitTypes::Zerg_Spire) == 0 &&
 				!isBeingBuilt(BWAPI::UnitTypes::Zerg_Spire))
 			{
 				queue.queueAsHighestPriority(BWAPI::UnitTypes::Zerg_Spire);
@@ -1792,7 +1838,7 @@ bool StrategyBossZerg::adaptToEnemyOpeningPlan()
 
 		const bool poolStarted =
 			isBeingBuilt(BWAPI::UnitTypes::Zerg_Spawning_Pool) ||
-			UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Spawning_Pool) > 0;
+			the.my.all.count(BWAPI::UnitTypes::Zerg_Spawning_Pool) > 0;
 
 		if (!hasPool &&
 			nDrones >= 5 &&
@@ -1847,7 +1893,7 @@ bool StrategyBossZerg::rebuildCriticalLosses()
 	// 2. If there is no spawning pool, we always need that.
 	if (!hasPool &&
 		!isBeingBuilt(BWAPI::UnitTypes::Zerg_Spawning_Pool) &&
-		UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Spawning_Pool) == 0)
+		the.my.all.count(BWAPI::UnitTypes::Zerg_Spawning_Pool) == 0)
 	{
 		produce(BWAPI::UnitTypes::Zerg_Spawning_Pool);
 		// If we're low on drones, replace the drone.
@@ -1875,7 +1921,7 @@ void StrategyBossZerg::checkGroundDefenses(BuildOrderQueue & queue)
 	}
 
 	// 1. Figure out where our front defense line is.
-	Base * frontBase = Bases::Instance().frontBase();
+	Base * frontBase = the.bases.myFront();
 	if (!frontBase)
 	{
 		// We don't have a place to put static defense. It's that bad.
@@ -1893,9 +1939,7 @@ void StrategyBossZerg::checkGroundDefenses(BuildOrderQueue & queue)
 	int enemyVultures = 0;
 	bool enemyHasDrop = false;
 
-    _wantDefensiveSpire = false;    // also update this global
-    
-    for (const auto & kv : InformationManager::Instance().getUnitData(_enemy).getUnits())
+    for (const auto & kv : the.info.getUnitData(_enemy).getUnits())
 	{
 		const UnitInfo & ui(kv.second);
 
@@ -1941,18 +1985,6 @@ void StrategyBossZerg::checkGroundDefenses(BuildOrderQueue & queue)
 			{
 				++enemyVultures;
 			}
-			else if (ui.type == BWAPI::UnitTypes::Terran_Dropship || ui.type == BWAPI::UnitTypes::Protoss_Shuttle)
-			{
-				enemyHasDrop = true;
-                _wantDefensiveSpire = true;
-			}
-            else if (ui.type == BWAPI::UnitTypes::Terran_Science_Vessel ||
-                ui.type == BWAPI::UnitTypes::Protoss_Arbiter ||
-                ui.type == BWAPI::UnitTypes::Protoss_Carrier)
-            {
-                // NOTE Other cases are taken care of by the reaction to overlord hunters.
-                _wantDefensiveSpire = true;
-            }
 		}
 	}
 	if (enemyDragoons >= 4)
@@ -2005,7 +2037,7 @@ void StrategyBossZerg::checkGroundDefenses(BuildOrderQueue & queue)
 	if (OpponentModel::Instance().getEnemyPlan() == OpeningPlan::HeavyRush &&
 		_enemyRace == BWAPI::Races::Terran &&		// vs protoss too early, vs zerg usually unnecessary
 		totalSunkens == 0 &&
-		Bases::Instance().baseCount(_self) > 1)		// if we're playing a 1-base strategy, we may be OK
+		the.bases.baseCount(_self) > 1)		// if we're playing a 1-base strategy, we may be OK
 	{
 		// BBS can create 2 marines before frame 3400, but we probably won't see them right away.
 		makeSunken = true;
@@ -2041,7 +2073,7 @@ void StrategyBossZerg::checkGroundDefenses(BuildOrderQueue & queue)
 		
 		const bool inProgress =
 			BuildingManager::Instance().getNumUnstarted(BWAPI::UnitTypes::Zerg_Creep_Colony) > 0 ||
-			UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Creep_Colony) > 0 ||
+			the.my.all.count(BWAPI::UnitTypes::Zerg_Creep_Colony) > 0 ||
 			UnitUtil::GetUncompletedUnitCount(BWAPI::UnitTypes::Zerg_Sunken_Colony) > 0;
 
 		if (makeOne && !inProgress)
@@ -2087,7 +2119,7 @@ void StrategyBossZerg::analyzeExtraDrones()
 
 	// Enemy bases beyond the main.
 	int nBases = 0;
-	for (const Base * base : Bases::Instance().getBases())
+	for (const Base * base : the.bases.getAll())
 	{
 		if (base->getOwner() == _enemy)
 		{
@@ -2101,16 +2133,17 @@ void StrategyBossZerg::analyzeExtraDrones()
 
 	// Enemy static defenses.
 	// We don't care whether they are completed or not.
-	for (const auto & kv : InformationManager::Instance().getUnitData(_enemy).getUnits())
+	for (const auto & kv : the.info.getUnitData(_enemy).getUnits())
 	{
 		const UnitInfo & ui(kv.second);
 
 		// A proxy near our starting base is not static defense, it is offense.
+        // We don't care whether the building is lifted.
 		// The starting base is guaranteed non-null.
 		if (ui.type.isBuilding() &&
-			!ui.goneFromLastPosition &&		// terran building might float away
+			!ui.goneFromLastPosition &&		// terran building might float out of sight
 			ui.lastPosition.isValid() &&
-			Bases::Instance().myStartingBase()->getPosition().getDistance(ui.lastPosition) > 800)
+			the.bases.myStart()->getPosition().getApproxDistance(ui.lastPosition) > 800)
 		{
 			if (ui.type == BWAPI::UnitTypes::Zerg_Creep_Colony)
 			{
@@ -2132,7 +2165,7 @@ void StrategyBossZerg::analyzeExtraDrones()
 
 	// Account for our own static defense.
 	// It helps keep us safe, so we should be able to make more drones than otherwise.
-	int nSunks = UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Sunken_Colony);
+	int nSunks = the.my.all.count(BWAPI::UnitTypes::Zerg_Sunken_Colony);
 	extraDrones += 1.8 * nSunks;
 
 	// In ZvZ, deliberately undercompensate, because making too many drones is death.
@@ -2200,7 +2233,7 @@ int StrategyBossZerg::techTier(TechUnit techUnit) const
 // 0 if the building is finished, infinity if it does not exist.
 int StrategyBossZerg::findRemainingBuildTime(BWAPI::UnitType type) const
 {
-	for (const auto unit : _self->getUnits())
+	for (BWAPI::Unit unit : _self->getUnits())
 	{
 		if (unit->getType() == type)
 		{
@@ -2208,7 +2241,7 @@ int StrategyBossZerg::findRemainingBuildTime(BWAPI::UnitType type) const
 		}
 	}
 
-	return 999999;
+    return INT_MAX;
 }
 
 // How much time left in the lair's current upgrade?
@@ -2217,7 +2250,7 @@ int StrategyBossZerg::findRemainingBuildTime(BWAPI::UnitType type) const
 // NOTE It's easy to upgrade this to "when does this building time become free?"
 int StrategyBossZerg::lairUpgradeTime() const
 {
-	for (const auto unit : _self->getUnits())
+	for (BWAPI::Unit unit : _self->getUnits())
 	{
 		if (unit->getType() == BWAPI::UnitTypes::Zerg_Lair)
 		{
@@ -2225,7 +2258,7 @@ int StrategyBossZerg::lairUpgradeTime() const
 		}
 	}
 
-	return 999999;
+    return INT_MAX;
 }
 
 // We want to build a hydra den for lurkers. Is it time yet?
@@ -2271,54 +2304,84 @@ void StrategyBossZerg::setAvailableTechUnits(std::array<bool, int(TechUnit::Size
 	available[int(TechUnit::Devourers)] = hasGreaterSpire && nGas >= 2;
 }
 
-// Set flags to recommend that certain abilities are worth having.
-void StrategyBossZerg::recommendResearch(const PlayerSnapshot & snap)
+// Set flags or counts to recommend that certain abilities are worth having.
+void StrategyBossZerg::recommendTech()
 {
     if (_enemyRace == BWAPI::Races::Terran)
     {
+        _recommendDefensiveSpire =
+            the.your.seen.count(BWAPI::UnitTypes::Terran_Dropship) > 0 ||
+            the.your.seen.count(BWAPI::UnitTypes::Terran_Science_Vessel) > 0;
+
         // Always make a queen, because we may be able to infest a command center.
-        _recommendParasite = true;
+        _recommendParasite = 1;
         _recommendEnsnare =
-            snap.getCount(BWAPI::UnitTypes::Terran_Marine) +
-            snap.getCount(BWAPI::UnitTypes::Terran_Medic) +
-            snap.getCount(BWAPI::UnitTypes::Terran_Firebat) +
-            4 * snap.getCount(BWAPI::UnitTypes::Terran_Wraith)
-                >= 24;
+            (the.your.seen.count(BWAPI::UnitTypes::Terran_Marine) +
+            the.your.seen.count(BWAPI::UnitTypes::Terran_Medic) +
+            the.your.seen.count(BWAPI::UnitTypes::Terran_Firebat) +
+            the.your.seen.count(BWAPI::UnitTypes::Terran_Ghost) +
+            4 * the.your.seen.count(BWAPI::UnitTypes::Terran_Wraith) +
+            2 * the.your.seen.count(BWAPI::UnitTypes::Terran_Valkyrie))
+                / 24;
         _recommendBroodling =
-            snap.getCount(BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode) +
-            snap.getCount(BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode)
-                >= 2;
+            (the.your.seen.count(BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode) +
+            the.your.seen.count(BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode) + 1)
+                / 3;
     }
     else if (_enemyRace == BWAPI::Races::Protoss)
     {
+        _recommendDefensiveSpire =
+            the.your.seen.count(BWAPI::UnitTypes::Protoss_Shuttle) > 0 ||
+            the.your.seen.count(BWAPI::UnitTypes::Protoss_Arbiter) > 0 ||
+            the.your.seen.count(BWAPI::UnitTypes::Protoss_Carrier) > 0;
+
         _recommendParasite =
-            snap.getCount(BWAPI::UnitTypes::Protoss_Shuttle) > 0 ||
-            snap.getCount(BWAPI::UnitTypes::Protoss_Arbiter) > 0 ||
-            snap.getCount(BWAPI::UnitTypes::Protoss_Carrier) > 0;
+            (the.your.seen.count(BWAPI::UnitTypes::Protoss_Shuttle) > 0 ||
+            the.your.seen.count(BWAPI::UnitTypes::Protoss_Arbiter) > 0 ||
+            the.your.seen.count(BWAPI::UnitTypes::Protoss_Carrier) > 0)
+                ? 1 : 0;
         _recommendEnsnare =
-            snap.getCount(BWAPI::UnitTypes::Protoss_Corsair) >= 6 ||
-            snap.getCount(BWAPI::UnitTypes::Protoss_Dark_Templar) >= 8;
+            (the.your.seen.count(BWAPI::UnitTypes::Protoss_Corsair) >= 6 ||
+            the.your.seen.count(BWAPI::UnitTypes::Protoss_Dark_Templar) >= 8)
+                ? 1 : 0;
         _recommendBroodling =
-            snap.getCount(BWAPI::UnitTypes::Protoss_High_Templar) > 2;  // they might be for archons
+            (the.your.seen.count(BWAPI::UnitTypes::Protoss_High_Templar) + 1) / 3;
     }
     else
     {
         // Zerg.
-        _recommendParasite = false;
+        _recommendDefensiveSpire = false;
+
+        _recommendParasite = 0;
         _recommendEnsnare =
-            snap.getCount(BWAPI::UnitTypes::Zerg_Mutalisk) > 12 ||
-            snap.getCount(BWAPI::UnitTypes::Zerg_Hydralisk) > 16;
+            (the.your.seen.count(BWAPI::UnitTypes::Zerg_Mutalisk) > 12 ||
+            the.your.seen.count(BWAPI::UnitTypes::Zerg_Hydralisk) > 16)
+                ? 1 : 0;
         _recommendBroodling =
-            snap.getCount(BWAPI::UnitTypes::Zerg_Defiler_Mound) > 0 ||
-            snap.getCount(BWAPI::UnitTypes::Zerg_Defiler) > 0 ||
-            snap.getCount(BWAPI::UnitTypes::Zerg_Ultralisk_Cavern) > 0 ||
-            snap.getCount(BWAPI::UnitTypes::Zerg_Ultralisk) > 0;
+            the.your.seen.count(BWAPI::UnitTypes::Zerg_Lurker) / 6 +
+            the.your.seen.count(BWAPI::UnitTypes::Zerg_Defiler) / 2 +
+            the.your.seen.count(BWAPI::UnitTypes::Zerg_Ultralisk) / 2;
     }
+
+    // Don't recommend high numbers unless we've already started the research.
+    if (!_self->hasResearched(BWAPI::TechTypes::Ensnare) && !_self->isResearching(BWAPI::TechTypes::Ensnare))
+    {
+        _recommendEnsnare = std::min(_recommendEnsnare, 1);
+    }
+    if (!_self->hasResearched(BWAPI::TechTypes::Spawn_Broodlings) && !_self->isResearching(BWAPI::TechTypes::Spawn_Broodlings))
+    {
+        _recommendBroodling = std::min(_recommendBroodling, 1);
+    }
+
+    _recommendQueens = std::min(
+        Config::Skills::MaxQueens,
+        std::max(_recommendParasite, std::max(_recommendEnsnare, _recommendBroodling))
+        );
 }
 
 void StrategyBossZerg::vProtossTechScores(const PlayerSnapshot & snap)
 {
-	_wantAirArmor = snap.getCount(BWAPI::UnitTypes::Protoss_Corsair) >= 5;
+	_wantAirArmor = snap.count(BWAPI::UnitTypes::Protoss_Corsair) >= 5;
 
 	// Bias.
 	techScores[int(TechUnit::Hydralisks)] =  11;
@@ -2343,7 +2406,7 @@ void StrategyBossZerg::vProtossTechScores(const PlayerSnapshot & snap)
 		}
 	}
 
-	for (const std::pair<BWAPI::UnitType, int> & unitCount : snap.getCounts())
+    for (const std::pair<BWAPI::UnitType, int> & unitCount : snap.getCounts())
 	{
 		BWAPI::UnitType type = unitCount.first;
 		int count = unitCount.second;
@@ -2459,7 +2522,7 @@ void StrategyBossZerg::vProtossTechScores(const PlayerSnapshot & snap)
 // Decide what units counter the terran unit mix.
 void StrategyBossZerg::vTerranTechScores(const PlayerSnapshot & snap)
 {
-	_wantAirArmor = snap.getCount(BWAPI::UnitTypes::Terran_Valkyrie) >= 4;
+	_wantAirArmor = snap.count(BWAPI::UnitTypes::Terran_Valkyrie) >= 4;
     
     // Bias.
 	techScores[int(TechUnit::Mutalisks)]  =  11;   // default lair tech
@@ -2473,7 +2536,7 @@ void StrategyBossZerg::vTerranTechScores(const PlayerSnapshot & snap)
 		techScores[int(_techTarget)] += 13;
 	}
 
-	for (const std::pair<BWAPI::UnitType, int> & unitCount : snap.getCounts())
+    for (const std::pair<BWAPI::UnitType, int> & unitCount : snap.getCounts())
 	{
 		BWAPI::UnitType type = unitCount.first;
 		int count = unitCount.second;
@@ -2556,7 +2619,8 @@ void StrategyBossZerg::vTerranTechScores(const PlayerSnapshot & snap)
         }
         else if (type == BWAPI::UnitTypes::Terran_Battlecruiser)
         {
-            techScores[int(TechUnit::Hydralisks)] += count * 5;
+            techScores[int(TechUnit::Hydralisks)] += count * 6;
+            techScores[int(TechUnit::Mutalisks)] -= count * 2;
             techScores[int(TechUnit::Guardians)] -= count * 4;
             techScores[int(TechUnit::Devourers)] += count * 6;
             techScores[int(TechUnit::Ultralisks)] -= count * 2;
@@ -2607,7 +2671,7 @@ void StrategyBossZerg::vZergTechScores(const PlayerSnapshot & snap)
 	// NOTE Nothing decreases the zergling score or increases the hydra score.
 	//      We never go hydra in ZvZ.
 	//      But after getting hive we may go lurkers.
-	for (const std::pair<BWAPI::UnitType, int> & unitCount : snap.getCounts())
+    for (const std::pair<BWAPI::UnitType, int> & unitCount : snap.getCounts())
 	{
 		BWAPI::UnitType type = unitCount.first;
 		int count = unitCount.second;
@@ -2678,9 +2742,9 @@ void StrategyBossZerg::calculateTechScores(int lookaheadFrames)
 
 	PlayerSnapshot snap(_enemy);
 
-    recommendResearch(snap);
+    recommendTech();
 
-    _enemySeemsToBeDead = enemySeemsToBeDead(snap);
+    _enemySeemsToBeDead = enemySeemsToBeDead();
     if (_enemySeemsToBeDead)
 	{
 		// Special case: We'll tech to and make mutalisks to finish off the enemy.
@@ -2737,9 +2801,9 @@ void StrategyBossZerg::calculateTechScores(int lookaheadFrames)
 	techScores[int(TechUnit::Devourers)] += 2 * airUpScore;
 
 	// Undetected lurkers are more valuable.
-	if (!InformationManager::Instance().enemyHasMobileDetection())
+	if (!the.info.enemyHasMobileDetection())
 	{
-		if (!InformationManager::Instance().enemyHasStaticDetection())
+		if (!the.info.enemyHasStaticDetection())
 		{
 			techScores[int(TechUnit::Lurkers)] += 5;
 		}
@@ -2929,7 +2993,7 @@ void StrategyBossZerg::chooseUnitMix()
 	// Special case: If we're going air, zerglings cannot be the best.
 	// Other ground units are excluded above by calling them unavailable.
 	TechUnit bestUnit = TechUnit::None;
-	int techScore = -99999;
+	int techScore = INT_MIN;
 	for (int i = int(TechUnit::None); i < int(TechUnit::Size); ++i)
 	{
 		if (available[i] && techScores[i] > techScore && (!goingIslandAir || !hasSpire || TechUnit(i) != TechUnit::Zerglings))
@@ -3030,7 +3094,7 @@ void StrategyBossZerg::chooseUnitMix()
 		}
 		gasUnit = BWAPI::UnitTypes::Zerg_Guardian;
 	}
-	else if (bestUnit == TechUnit::Devourers)
+	else if (bestUnit == TechUnit::Devourers && nDevourers < devourerLimit())
 	{
 		// We want an anti-air unit in the mix to make use of the acid spores.
 		if (hasDen && techScores[int(TechUnit::Hydralisks)] > techScores[int(TechUnit::Mutalisks)])
@@ -3054,7 +3118,7 @@ void StrategyBossZerg::chooseUnitMix()
 void StrategyBossZerg::chooseAuxUnit()
 {
 	const int maxAuxGuardians = 8;
-	const int maxAuxDevourers = std::min(4, nMutas / 2);
+	const int maxAuxDevourers = std::min(4, devourerLimit());
 
 	// The default is no aux unit.
 	_auxUnit = BWAPI::UnitTypes::None;
@@ -3101,7 +3165,7 @@ void StrategyBossZerg::chooseAuxUnit()
 		techScores[int(TechUnit::Lurkers)] > 0)
 	{
 		_auxUnit = BWAPI::UnitTypes::Zerg_Lurker;
-		int nMineralUnits = UnitUtil::GetCompletedUnitCount(_mineralUnit);
+		int nMineralUnits = the.my.completed.count(_mineralUnit);
 		if (nMineralUnits >= 12)
 		{
 			_auxUnitCount = nMineralUnits / 12;
@@ -3161,8 +3225,8 @@ void StrategyBossZerg::chooseStrategy()
 
 void StrategyBossZerg::produceUnits(int & mineralsLeft, int & gasLeft)
 {
-	const int numMineralUnits = UnitUtil::GetAllUnitCount(_mineralUnit);
-	const int numGasUnits = (_gasUnit == BWAPI::UnitTypes::None) ? 0 : UnitUtil::GetAllUnitCount(_gasUnit);
+	const int numMineralUnits = the.my.all.count(_mineralUnit);
+	const int numGasUnits = (_gasUnit == BWAPI::UnitTypes::None) ? 0 : the.my.all.count(_gasUnit);
 
 	int larvasLeft = nLarvas;
 
@@ -3182,7 +3246,7 @@ void StrategyBossZerg::produceUnits(int & mineralsLeft, int & gasLeft)
 
 	// Before the main production, squeeze out one aux unit, if we want one. Only one per call.
 	if (_auxUnit != BWAPI::UnitTypes::None &&
-		UnitUtil::GetAllUnitCount(_auxUnit) < _auxUnitCount &&
+		the.my.all.count(_auxUnit) < _auxUnitCount &&
 		larvasLeft > 0 &&
 		numMineralUnits > 2 &&
 		gasLeft >= _auxUnit.gasPrice())
@@ -3202,7 +3266,7 @@ void StrategyBossZerg::produceUnits(int & mineralsLeft, int & gasLeft)
 	if (_gasUnit == BWAPI::UnitTypes::None ||
 		gas < _gasUnit.gasPrice() ||
 		double(numMineralUnits) / double(numGasUnits) < 0.2 ||
-		_gasUnit == BWAPI::UnitTypes::Zerg_Devourer && nDevourers >= std::min(maxDevourers, nMutas / 2))
+        _gasUnit == BWAPI::UnitTypes::Zerg_Devourer && nDevourers >= devourerLimit())
 	{
 		// Only the mineral unit.
 		while (larvasLeft >= 0 && mineralsLeft >= 0 && gasLeft >= 0)
@@ -3297,185 +3361,202 @@ void StrategyBossZerg::produceUnits(int & mineralsLeft, int & gasLeft)
 // Also makes queens and infested terrans--units used sparingly.
 void StrategyBossZerg::produceOtherStuff(int & mineralsLeft, int & gasLeft, bool hasEnoughUnits)
 {
-	// Used in conditions for some rules below.
-	const int armorUps = _self->getUpgradeLevel(BWAPI::UpgradeTypes::Zerg_Carapace);
+    // Used in conditions for some rules below.
+    const int armorUps = _self->getUpgradeLevel(BWAPI::UpgradeTypes::Zerg_Carapace);
 
-	// Get zergling speed if at all sensible.
-	if (hasPool && nDrones >= 9 && (nGas > 0 || gas >= 100) &&
-		(nLings >= 6 || _mineralUnit == BWAPI::UnitTypes::Zerg_Zergling) &&
-		_self->getUpgradeLevel(BWAPI::UpgradeTypes::Metabolic_Boost) == 0 &&
-		!_self->isUpgrading(BWAPI::UpgradeTypes::Metabolic_Boost) &&
+    // Get zergling speed if at all sensible.
+    if (hasPool && nDrones >= 9 && (nGas > 0 || gas >= 100) &&
+        (nLings >= 6 || _mineralUnit == BWAPI::UnitTypes::Zerg_Zergling) &&
+        _self->getUpgradeLevel(BWAPI::UpgradeTypes::Metabolic_Boost) == 0 &&
+        !_self->isUpgrading(BWAPI::UpgradeTypes::Metabolic_Boost) &&
         !_self->isUpgrading(BWAPI::UpgradeTypes::Adrenal_Glands))
-	{
-		produce(BWAPI::UpgradeTypes::Metabolic_Boost);
-		mineralsLeft -= 100;
-		gasLeft -= 100;
-	}
+    {
+        produce(BWAPI::UpgradeTypes::Metabolic_Boost);
+        mineralsLeft -= 100;
+        gasLeft -= 100;
+    }
 
-	// Ditto zergling attack rate.
-	if (hasPool && hasHiveTech && nDrones >= 12 && (nGas > 0 || gas >= 200) &&
-		(nLings >= 8 || _mineralUnit == BWAPI::UnitTypes::Zerg_Zergling) &&
-		_self->getUpgradeLevel(BWAPI::UpgradeTypes::Adrenal_Glands) == 0 &&
-		!_self->isUpgrading(BWAPI::UpgradeTypes::Adrenal_Glands) &&
+    // Ditto zergling attack rate.
+    if (hasPool && hasHiveTech && nDrones >= 12 && (nGas > 0 || gas >= 200) &&
+        (nLings >= 8 || _mineralUnit == BWAPI::UnitTypes::Zerg_Zergling) &&
+        _self->getUpgradeLevel(BWAPI::UpgradeTypes::Adrenal_Glands) == 0 &&
+        !_self->isUpgrading(BWAPI::UpgradeTypes::Adrenal_Glands) &&
         !_self->isUpgrading(BWAPI::UpgradeTypes::Metabolic_Boost))
-	{
-		produce(BWAPI::UpgradeTypes::Adrenal_Glands);
-		mineralsLeft -= 200;
-		gasLeft -= 200;
-	}
+    {
+        produce(BWAPI::UpgradeTypes::Adrenal_Glands);
+        mineralsLeft -= 200;
+        gasLeft -= 200;
+    }
 
-	// Get hydralisk den if it's next.
-	if ((_techTarget == TechUnit::Hydralisks || _techTarget == TechUnit::Lurkers && lurkerDenTiming()) &&
-		!hasDen && hasPool && nDrones >= 10 && nGas > 0 &&
-		!isBeingBuilt(BWAPI::UnitTypes::Zerg_Hydralisk_Den) &&
-		UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Hydralisk_Den) == 0)
-	{
-		produce(BWAPI::UnitTypes::Zerg_Hydralisk_Den);
-		mineralsLeft -= 100;
-		gasLeft -= 50;
-	}
+    // Get hydralisk den if it's next.
+    if ((_techTarget == TechUnit::Hydralisks || _techTarget == TechUnit::Lurkers && lurkerDenTiming()) &&
+        !hasDen && hasPool && nDrones >= 10 && nGas > 0 &&
+        !isBeingBuilt(BWAPI::UnitTypes::Zerg_Hydralisk_Den) &&
+        the.my.all.count(BWAPI::UnitTypes::Zerg_Hydralisk_Den) == 0)
+    {
+        produce(BWAPI::UnitTypes::Zerg_Hydralisk_Den);
+        mineralsLeft -= 100;
+        gasLeft -= 50;
+    }
 
-	// Get hydra speed and range if they make sense.
-	if (hasDen && nDrones >= 11 && nGas > 0 &&
-		(_mineralUnit == BWAPI::UnitTypes::Zerg_Hydralisk || _gasUnit == BWAPI::UnitTypes::Zerg_Hydralisk) &&
-		// Lurker aspect has priority, but we can get hydra upgrades until the lair starts.
-		(_techTarget != TechUnit::Lurkers || nLairs + nHives == 0) &&
-		!_self->isResearching(BWAPI::TechTypes::Lurker_Aspect))
-	{
-		if (_self->getUpgradeLevel(BWAPI::UpgradeTypes::Muscular_Augments) == 0 &&
-			!_self->isUpgrading(BWAPI::UpgradeTypes::Muscular_Augments))
-		{
-			produce(BWAPI::UpgradeTypes::Muscular_Augments);
-			mineralsLeft -= 150;
-			gasLeft -= 150;
-		}
-		else if (nHydras >= 3 &&
-			_self->getUpgradeLevel(BWAPI::UpgradeTypes::Muscular_Augments) != 0 &&
-			_self->getUpgradeLevel(BWAPI::UpgradeTypes::Grooved_Spines) == 0 &&
-			!_self->isUpgrading(BWAPI::UpgradeTypes::Grooved_Spines))
-		{
-			produce(BWAPI::UpgradeTypes::Grooved_Spines);
-			mineralsLeft -= 150;
-			gasLeft -= 150;
-		}
-	}
+    // Get hydra speed and range if they make sense.
+    if (hasDen && nDrones >= 11 && nGas > 0 &&
+        (_mineralUnit == BWAPI::UnitTypes::Zerg_Hydralisk || _gasUnit == BWAPI::UnitTypes::Zerg_Hydralisk) &&
+        // Lurker aspect has priority, but we can get hydra upgrades until the lair starts.
+        (_techTarget != TechUnit::Lurkers || nLairs + nHives == 0) &&
+        !_self->isResearching(BWAPI::TechTypes::Lurker_Aspect))
+    {
+        if (_self->getUpgradeLevel(BWAPI::UpgradeTypes::Muscular_Augments) == 0 &&
+            !_self->isUpgrading(BWAPI::UpgradeTypes::Muscular_Augments))
+        {
+            produce(BWAPI::UpgradeTypes::Muscular_Augments);
+            mineralsLeft -= 150;
+            gasLeft -= 150;
+        }
+        else if (nHydras >= 3 &&
+            _self->getUpgradeLevel(BWAPI::UpgradeTypes::Muscular_Augments) != 0 &&
+            _self->getUpgradeLevel(BWAPI::UpgradeTypes::Grooved_Spines) == 0 &&
+            !_self->isUpgrading(BWAPI::UpgradeTypes::Grooved_Spines))
+        {
+            produce(BWAPI::UpgradeTypes::Grooved_Spines);
+            mineralsLeft -= 150;
+            gasLeft -= 150;
+        }
+    }
 
-	// Get lurker aspect if it's next.
-	if (_techTarget == TechUnit::Lurkers &&
-		hasDen && hasLairTech && nDrones >= 9 && nGas > 0 &&
-		(!_emergencyGroundDefense || gasLeft >= 150) &&
-		!_self->hasResearched(BWAPI::TechTypes::Lurker_Aspect) &&
-		!_self->isResearching(BWAPI::TechTypes::Lurker_Aspect) &&
-		!_self->isUpgrading(BWAPI::UpgradeTypes::Muscular_Augments) &&
-		!_self->isUpgrading(BWAPI::UpgradeTypes::Grooved_Spines))
-	{
-		produce(BWAPI::TechTypes::Lurker_Aspect);
-		mineralsLeft -= 200;
-		gasLeft -= 200;
-	}
+    // Get lurker aspect if it's next.
+    if (_techTarget == TechUnit::Lurkers &&
+        hasDen && hasLairTech && nDrones >= 9 && nGas > 0 &&
+        (!_emergencyGroundDefense || gasLeft >= 150) &&
+        !_self->hasResearched(BWAPI::TechTypes::Lurker_Aspect) &&
+        !_self->isResearching(BWAPI::TechTypes::Lurker_Aspect) &&
+        !_self->isUpgrading(BWAPI::UpgradeTypes::Muscular_Augments) &&
+        !_self->isUpgrading(BWAPI::UpgradeTypes::Grooved_Spines))
+    {
+        produce(BWAPI::TechTypes::Lurker_Aspect);
+        mineralsLeft -= 200;
+        gasLeft -= 200;
+    }
 
-	// Make a lair. Make it earlier in ZvZ. Make it later if we only want it for hive units.
-	// Make it anyway if the enemy already has higher tech.
-	if ((lairTechUnit(_techTarget) || hiveTechUnit(_techTarget) ||
-		armorUps > 0 ||
-		InformationManager::Instance().enemyHasAirTech() ||
-		InformationManager::Instance().enemyHasCloakTech()
-		) &&
-		hasPool && nLairs + nHives == 0 && nGas > 0 &&
-		(!_emergencyGroundDefense || gasLeft >= 75) &&
-		(nDrones >= 12 || _enemyRace == BWAPI::Races::Zerg && nDrones >= 9))
-	{
-		produce(BWAPI::UnitTypes::Zerg_Lair);
-		mineralsLeft -= 150;
-		gasLeft -= 100;
-	}
+    // Make a lair. Make it earlier in ZvZ. Make it later if we only want it for hive units.
+    // Make it anyway if the enemy already has higher tech.
+    if ((lairTechUnit(_techTarget) || hiveTechUnit(_techTarget) ||
+        armorUps > 0 ||
+        the.info.enemyHasAirTech() ||
+        the.info.enemyHasCloakTech()
+        ) &&
+        hasPool && nLairs + nHives == 0 && nGas > 0 &&
+        (!_emergencyGroundDefense || gasLeft >= 75) &&
+        (nDrones >= 12 || _enemyRace == BWAPI::Races::Zerg && nDrones >= 9))
+    {
+        produce(BWAPI::UnitTypes::Zerg_Lair);
+        mineralsLeft -= 150;
+        gasLeft -= 100;
+    }
 
-	// Make a spire. Make it earlier in ZvZ.
-	if (!hasSpire && hasLairTech && nGas > 0 &&
-        (_wantDefensiveSpire || airTechUnit(_techTarget)) &&
-        (_wantDefensiveSpire || !hiveTechUnit(_techTarget) || UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Hive) > 0) &&
-		(nDrones >= 13 || _enemyRace == BWAPI::Races::Zerg && nDrones >= 9) &&
-		hasEnoughUnits &&
-		(!_emergencyGroundDefense || gasLeft >= 75) &&
-		!isBeingBuilt(BWAPI::UnitTypes::Zerg_Spire) &&
-		UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Spire) == 0)
-	{
-		produce(BWAPI::UnitTypes::Zerg_Spire);
-		mineralsLeft -= 200;
-		gasLeft -= 150;
-	}
+    // Make a spire. Make it earlier in ZvZ.
+    if (!hasSpire && hasLairTech && nGas > 0 &&
+        (_recommendDefensiveSpire || airTechUnit(_techTarget)) &&
+        (_recommendDefensiveSpire || !hiveTechUnit(_techTarget) || the.my.all.count(BWAPI::UnitTypes::Zerg_Hive) > 0) &&
+        (nDrones >= 13 || _enemyRace == BWAPI::Races::Zerg && nDrones >= 9) &&
+        hasEnoughUnits &&
+        (!_emergencyGroundDefense || gasLeft >= 75) &&
+        !isBeingBuilt(BWAPI::UnitTypes::Zerg_Spire) &&
+        the.my.all.count(BWAPI::UnitTypes::Zerg_Spire) == 0)
+    {
+        produce(BWAPI::UnitTypes::Zerg_Spire);
+        mineralsLeft -= 200;
+        gasLeft -= 150;
+    }
 
-	// Make a greater spire.
-	if ((_techTarget == TechUnit::Guardians || _techTarget == TechUnit::Devourers) &&
-		hasEnoughUnits &&
-		hasHiveTech && hasSpire && !hasGreaterSpire && nGas >= 2 && nDrones >= 15 &&
-		(!_emergencyGroundDefense || gasLeft >= 75) &&
-		!_self->isUpgrading(BWAPI::UpgradeTypes::Zerg_Flyer_Carapace) &&
-		!_self->isUpgrading(BWAPI::UpgradeTypes::Zerg_Flyer_Attacks) &&
-		UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Greater_Spire) == 0)
-	{
-		produce(BWAPI::UnitTypes::Zerg_Greater_Spire);
-		mineralsLeft -= 100;
-		gasLeft -= 150;
-	}
+    // Make a greater spire.
+    if ((_techTarget == TechUnit::Guardians || _techTarget == TechUnit::Devourers) &&
+        hasEnoughUnits &&
+        hasHiveTech && hasSpire && !hasGreaterSpire && nGas >= 2 && nDrones >= 15 &&
+        (!_emergencyGroundDefense || gasLeft >= 75) &&
+        !_self->isUpgrading(BWAPI::UpgradeTypes::Zerg_Flyer_Carapace) &&
+        !_self->isUpgrading(BWAPI::UpgradeTypes::Zerg_Flyer_Attacks) &&
+        the.my.all.count(BWAPI::UnitTypes::Zerg_Greater_Spire) == 0)
+    {
+        produce(BWAPI::UnitTypes::Zerg_Greater_Spire);
+        mineralsLeft -= 100;
+        gasLeft -= 150;
+    }
 
-	// Get overlord speed before hive. Due to the BWAPI 4.1.2 bug, we can't get it after.
-	// Skip it versus zerg, since it's rarely worth the cost.
-	if (hasLair && nGas > 0 && nDrones >= 15 &&
-		!_emergencyGroundDefense && hasEnoughUnits &&
-		_enemyRace != BWAPI::Races::Zerg &&
-		_techTarget != TechUnit::Mutalisks && _techTarget != TechUnit::Lurkers &&    // get your lair tech FIRST
-		(_gasUnit != BWAPI::UnitTypes::Zerg_Mutalisk || nMutas >= 6) &&
-		(_gasUnit != BWAPI::UnitTypes::Zerg_Lurker || nLurkers >= 4) &&
-		_self->getUpgradeLevel(BWAPI::UpgradeTypes::Pneumatized_Carapace) == 0 &&
-		!_self->isUpgrading(BWAPI::UpgradeTypes::Pneumatized_Carapace) &&
-		!_self->isUpgrading(BWAPI::UpgradeTypes::Ventral_Sacs))
-	{
-		produce(BWAPI::UpgradeTypes::Pneumatized_Carapace);
-		mineralsLeft -= 150;
-		gasLeft -= 150;
-	}
+    // Get overlord speed before hive. Due to the BWAPI 4.1.2 bug, we can't get it after.
+    // Skip it versus zerg, since it's rarely worth the cost.
+    if (hasLair && nGas > 0 && nDrones >= 15 &&
+        !_emergencyGroundDefense && hasEnoughUnits &&
+        _enemyRace != BWAPI::Races::Zerg &&
+        _techTarget != TechUnit::Mutalisks && _techTarget != TechUnit::Lurkers &&    // get your lair tech FIRST
+        (_gasUnit != BWAPI::UnitTypes::Zerg_Mutalisk || nMutas >= 6) &&
+        (_gasUnit != BWAPI::UnitTypes::Zerg_Lurker || nLurkers >= 4) &&
+        _self->getUpgradeLevel(BWAPI::UpgradeTypes::Pneumatized_Carapace) == 0 &&
+        !_self->isUpgrading(BWAPI::UpgradeTypes::Pneumatized_Carapace) &&
+        !_self->isUpgrading(BWAPI::UpgradeTypes::Ventral_Sacs) &&
+        !_self->isUpgrading(BWAPI::UpgradeTypes::Antennae))
+    {
+        produce(BWAPI::UpgradeTypes::Pneumatized_Carapace);
+        mineralsLeft -= 150;
+        gasLeft -= 150;
+    }
 
-	// Get overlord drop if we plan to drop.
-	if (hasLair && nGas > 0 && nDrones >= 18 &&
-		!_emergencyGroundDefense && hasEnoughUnits &&
-		nBases >= 3 &&
-		StrategyManager::Instance().dropIsPlanned() &&
-		_self->getUpgradeLevel(BWAPI::UpgradeTypes::Pneumatized_Carapace) == 1 &&
-		_self->getUpgradeLevel(BWAPI::UpgradeTypes::Ventral_Sacs) == 0 &&
-		!_self->isUpgrading(BWAPI::UpgradeTypes::Ventral_Sacs))
-	{
-		produce(BWAPI::UpgradeTypes::Ventral_Sacs);
-		mineralsLeft -= 200;
-		gasLeft -= 200;
-	}
+    // Get overlord drop if we plan to drop.
+    if (hasLair && nGas > 0 && nDrones >= 18 &&
+        nBases >= 3 &&
+        !_emergencyGroundDefense && hasEnoughUnits &&
+        StrategyManager::Instance().dropIsPlanned() &&
+        _self->getUpgradeLevel(BWAPI::UpgradeTypes::Pneumatized_Carapace) == 1 &&
+        _self->getUpgradeLevel(BWAPI::UpgradeTypes::Ventral_Sacs) == 0 &&
+        !_self->isUpgrading(BWAPI::UpgradeTypes::Ventral_Sacs) &&
+        !_self->isUpgrading(BWAPI::UpgradeTypes::Antennae))
+    {
+        produce(BWAPI::UpgradeTypes::Ventral_Sacs);
+        mineralsLeft -= 200;
+        gasLeft -= 200;
+    }
 
-	// Make a queen's nest.
-	// Make it later versus zerg.
-	// Wait until pneumatized carapace is done (except versus zerg, when we don't get that),
-	// because the bot has often been getting a queen's nest too early.
-	if (!hasQueensNest && hasLair && nGas >= 2 && nDrones >= 24 &&
-		!_emergencyGroundDefense && hasEnoughUnits &&
+    // Get overlord sight range if we're maxed and accumulating resources.
+    // This will be very rare.
+    if (_supplyUsed > 400 - 12 && mineralsLeft > 500 && gasLeft > 500 &&
+        hasLair && nGas >= 3 && nDrones >= 60 &&
+        nBases >= 3 &&
+        _self->getUpgradeLevel(BWAPI::UpgradeTypes::Pneumatized_Carapace) == 1 &&
+        !_self->isUpgrading(BWAPI::UpgradeTypes::Ventral_Sacs) &&
+        !_self->isUpgrading(BWAPI::UpgradeTypes::Antennae))
+    {
+        produce(BWAPI::UpgradeTypes::Antennae);
+        mineralsLeft -= 150;
+        gasLeft -= 150;
+    }
 
-		(hiveTechUnit(_techTarget) ||
-		armorUps == 2 ||
-		_enemyRace == BWAPI::Races::Zerg && nMutas >= 12) &&
+    // Make a queen's nest.
+    // Make it later versus zerg.
+    // Wait until pneumatized carapace is done (except versus zerg, when we don't get that),
+    // because the bot has often been getting a queen's nest too early.
+    if (!hasQueensNest && hasLair && nGas >= 2 && nDrones >= 24 &&
+        !_emergencyGroundDefense && hasEnoughUnits &&
 
-		!isBeingBuilt(BWAPI::UnitTypes::Zerg_Queens_Nest) &&
-		UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Queens_Nest) == 0 &&
+        (hiveTechUnit(_techTarget) ||
+        armorUps == 2 ||
+        _enemyRace == BWAPI::Races::Zerg && nMutas >= 12) &&
 
-		(_enemyRace == BWAPI::Races::Zerg ||
-		_self->getUpgradeLevel(BWAPI::UpgradeTypes::Pneumatized_Carapace) == 1 ||
-		_self->isUpgrading(BWAPI::UpgradeTypes::Pneumatized_Carapace) && lairUpgradeTime() < (BWAPI::UnitTypes::Zerg_Queens_Nest).buildTime()))
-	{
-		produce(BWAPI::UnitTypes::Zerg_Queens_Nest);
-		mineralsLeft -= 150;
-		gasLeft -= 100;
-	}
+        !isBeingBuilt(BWAPI::UnitTypes::Zerg_Queens_Nest) &&
+        the.my.all.count(BWAPI::UnitTypes::Zerg_Queens_Nest) == 0 &&
+
+        (_enemyRace == BWAPI::Races::Zerg ||
+        _self->getUpgradeLevel(BWAPI::UpgradeTypes::Pneumatized_Carapace) == 1 ||
+        _self->isUpgrading(BWAPI::UpgradeTypes::Pneumatized_Carapace) && lairUpgradeTime() < (BWAPI::UnitTypes::Zerg_Queens_Nest).buildTime()))
+    {
+        produce(BWAPI::UnitTypes::Zerg_Queens_Nest);
+        mineralsLeft -= 150;
+        gasLeft -= 100;
+    }
 
     // Possibly research queen spells.
     // We don't even think about it unless we already have a queen.
     if (nQueens > 0 && hasQueensNest && nGas >= 2 && nDrones >= 24 &&
+        _recommendQueens &&
         !_self->isResearching(BWAPI::TechTypes::Ensnare) &&
         !_self->isResearching(BWAPI::TechTypes::Spawn_Broodlings) &&
         !_self->isUpgrading(BWAPI::UpgradeTypes::Gamete_Meiosis))       // +50 energy
@@ -3487,16 +3568,16 @@ void StrategyBossZerg::produceOtherStuff(int & mineralsLeft, int & gasLeft, bool
             gasLeft -= 100;
         }
 
-        if (_recommendBroodling && !_self->hasResearched(BWAPI::TechTypes::Spawn_Broodlings))
+        if (_recommendBroodling >= 2 && !_self->hasResearched(BWAPI::TechTypes::Spawn_Broodlings))
         {
             produce(BWAPI::TechTypes::Spawn_Broodlings);
             mineralsLeft -= 100;
             gasLeft -= 100;
         }
 
-        if ((_recommendEnsnare || _recommendBroodling) &&
+        if ((_recommendEnsnare || _recommendBroodling >= 2) &&
             _self->getUpgradeLevel(BWAPI::UpgradeTypes::Gamete_Meiosis) == 0 &&
-            nGas >= 2 && nDrones >= 42 &&
+            nGas >= 3 && (nDrones >= 60 || nDrones >= 30 && nQueens >= 4) &&
             !_emergencyGroundDefense && !_emergencyNow && enoughArmy())
         {
             produce(BWAPI::UpgradeTypes::Gamete_Meiosis);
@@ -3505,185 +3586,186 @@ void StrategyBossZerg::produceOtherStuff(int & mineralsLeft, int & gasLeft, bool
         }
     }
 
-	// Make a hive.
-	// Ongoing lair research will delay the hive.
-	// In ZvZ, get hive only if plenty of mutas are already in the air. Otherwise hive can be too fast.
-	if ((hiveTechUnit(_techTarget) || armorUps >= 2) &&
-		nHives == 0 && hasLair && hasQueensNest && nDrones >= 16 && nGas >= 2 &&
-		!_emergencyGroundDefense && hasEnoughUnits &&
-		(_enemyRace != BWAPI::Races::Zerg || nMutas >= 12) &&
-		(_self->getUpgradeLevel(BWAPI::UpgradeTypes::Pneumatized_Carapace) == 1 || _enemyRace == BWAPI::Races::Zerg) &&
-		!_self->isUpgrading(BWAPI::UpgradeTypes::Pneumatized_Carapace) &&
-		!_self->isUpgrading(BWAPI::UpgradeTypes::Ventral_Sacs))
-	{
-		produce(BWAPI::UnitTypes::Zerg_Hive);
-		mineralsLeft -= 200;
-		gasLeft -= 150;
-	}
+    // Make a hive.
+    // Ongoing lair research will delay the hive.
+    // In ZvZ, get hive only if plenty of mutas are already in the air. Otherwise hive can be too fast.
+    if ((hiveTechUnit(_techTarget) || armorUps >= 2) &&
+        nHives == 0 && hasLair && hasQueensNest && nDrones >= 16 && nGas >= 2 &&
+        !_emergencyGroundDefense && hasEnoughUnits &&
+        (_enemyRace != BWAPI::Races::Zerg || nMutas >= 12) &&
+        (_self->getUpgradeLevel(BWAPI::UpgradeTypes::Pneumatized_Carapace) == 1 || _enemyRace == BWAPI::Races::Zerg) &&
+        !_self->isUpgrading(BWAPI::UpgradeTypes::Pneumatized_Carapace) &&
+        !_self->isUpgrading(BWAPI::UpgradeTypes::Ventral_Sacs) &&
+        !_self->isUpgrading(BWAPI::UpgradeTypes::Antennae))
+    {
+        produce(BWAPI::UnitTypes::Zerg_Hive);
+        mineralsLeft -= 200;
+        gasLeft -= 150;
+    }
 
-	// Move toward ultralisks.
-	if (_techTarget == TechUnit::Ultralisks && !hasUltra && hasHiveTech && nDrones >= 24 && nGas >= 3 &&
-		!_emergencyGroundDefense && hasEnoughUnits &&
-		!isBeingBuilt(BWAPI::UnitTypes::Zerg_Ultralisk_Cavern) &&
-		UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Ultralisk_Cavern) == 0)
-	{
-		produce(BWAPI::UnitTypes::Zerg_Ultralisk_Cavern);
-		mineralsLeft -= 150;
-		gasLeft -= 200;
-	}
-	else if (hasUltra && nDrones >= 24 && nGas >= 3)
-	{
-		if (_self->getUpgradeLevel(BWAPI::UpgradeTypes::Anabolic_Synthesis) == 0 &&
-			!_self->isUpgrading(BWAPI::UpgradeTypes::Anabolic_Synthesis))
-		{
-			produce(BWAPI::UpgradeTypes::Anabolic_Synthesis);
-			mineralsLeft -= 200;
-			gasLeft -= 200;
-		}
-		else if (_self->getUpgradeLevel(BWAPI::UpgradeTypes::Anabolic_Synthesis) != 0 &&
-			_self->getUpgradeLevel(BWAPI::UpgradeTypes::Chitinous_Plating) == 0 &&
-			!_self->isUpgrading(BWAPI::UpgradeTypes::Chitinous_Plating))
-		{
-			produce(BWAPI::UpgradeTypes::Chitinous_Plating);
-			mineralsLeft -= 150;
-			gasLeft -= 150;
-		}
-	}
-    
-	// We want to expand.
-	// Division of labor: Expansions are here, macro hatcheries are "urgent production issues".
-	// However, macro hatcheries may be placed at expansions.
-	// Don't expand if we're getting rushed and it's not safe.
-	if (nDrones > nMineralPatches + 3 * nGas && nFreeBases > 0 &&
-		!isBeingBuilt(BWAPI::UnitTypes::Zerg_Hatchery))
-	{
-		bool makeIt = true;
-		MacroLocation loc = MacroLocation::Expo;
-		if (OpponentModel::Instance().getDarnLikelyEnemyPlan() == OpeningPlan::FastRush &&
-			nHatches <= 1 &&
-			Bases::Instance().baseCount(_enemy) <= 1)
-		{
-			// In case of fast rush, macro hatchery first, or skip it altogether.
-			if (mineralsLeft >= 300 && nLarvas == 0)
-			{
-				loc = MacroLocation::Macro;
-			}
-			else if (nLings < 6)
-			{
-				makeIt = false;
-			}
-			else if (nLings < 12 && !enoughArmy())
-			{
-				loc = MacroLocation::Macro;
-			}
-			else if (Random::Instance().flag(0.20))
-			{
-				loc = MacroLocation::Hidden;
-			}
-		}
-		else if (_gasUnit == BWAPI::UnitTypes::None || nHatches % 2 == 0)
-		{
-			// Be a little generous with mineral-only expansions
-			loc = MacroLocation::MinOnly;
-		}
-		if (makeIt)
-		{
-			produce(MacroAct(BWAPI::UnitTypes::Zerg_Hatchery, loc));
-			mineralsLeft -= 300;
-		}
-	}
+    // Move toward ultralisks.
+    if (_techTarget == TechUnit::Ultralisks && !hasUltra && hasHiveTech && nDrones >= 24 && nGas >= 3 &&
+        !_emergencyGroundDefense && hasEnoughUnits &&
+        !isBeingBuilt(BWAPI::UnitTypes::Zerg_Ultralisk_Cavern) &&
+        the.my.all.count(BWAPI::UnitTypes::Zerg_Ultralisk_Cavern) == 0)
+    {
+        produce(BWAPI::UnitTypes::Zerg_Ultralisk_Cavern);
+        mineralsLeft -= 150;
+        gasLeft -= 200;
+    }
+    else if (hasUltra && nDrones >= 24 && nGas >= 3)
+    {
+        if (_self->getUpgradeLevel(BWAPI::UpgradeTypes::Anabolic_Synthesis) == 0 &&
+            !_self->isUpgrading(BWAPI::UpgradeTypes::Anabolic_Synthesis))
+        {
+            produce(BWAPI::UpgradeTypes::Anabolic_Synthesis);
+            mineralsLeft -= 200;
+            gasLeft -= 200;
+        }
+        else if (_self->getUpgradeLevel(BWAPI::UpgradeTypes::Anabolic_Synthesis) != 0 &&
+            _self->getUpgradeLevel(BWAPI::UpgradeTypes::Chitinous_Plating) == 0 &&
+            !_self->isUpgrading(BWAPI::UpgradeTypes::Chitinous_Plating))
+        {
+            produce(BWAPI::UpgradeTypes::Chitinous_Plating);
+            mineralsLeft -= 150;
+            gasLeft -= 150;
+        }
+    }
 
-	// Get gas. If necessary, expand for it.
-	bool addExtractor = false;
-	if (nFreeGas > 0 && hasPool && !isBeingBuilt(BWAPI::UnitTypes::Zerg_Extractor))
-	{
-		// A. If we have a functioning economy, get our first gas.
-		if (nGas == 0 && nDrones >= 10)
-		{
-			addExtractor = true;
-			if (!WorkerManager::Instance().isCollectingGas())
-			{
-				produce(MacroCommandType::StartGas);
-			}
-		}
-		// B. Late in the game, we have many drones. Make extractors freely.
-		else if (nDrones >= 50)
-		{
-			addExtractor = true;
-		}
-		// C. Or make more extractors if we have a low ratio of gas to minerals.
-		else if ((_gasUnit != BWAPI::UnitTypes::None || _mineralUnit.gasPrice() > 0) &&
-			nDrones > 3 * Bases::Instance().baseCount(_self) + 3 * nGas + 4 &&
-			(minerals + 50) / (gas + 50) >= 3)
-		{
-			addExtractor = true;
-		}
-		// D. At least make a second extractor if our gas unit is expensive in gas (most are).
-		else if (nGas < 2 && nDrones >= 10 &&
-			_gasUnit != BWAPI::UnitTypes::None && _gasUnit.gasPrice() >= 100)
-		{
-			addExtractor = true;
-		}
-		// E. If we have a big mineral excess and enough drones, get more extractors no matter what.
-		else if (nDrones > 3 * Bases::Instance().baseCount(_self) + 3 * nGas + 6 &&
-			(minerals + 50) / (gas + 50) >= 6)
-		{
-			addExtractor = true;
-		}
-		// E. If we have lair tech, get at least 2 extractors.
-		// If aiming for hive tech, get at least 3.
-		// Doesn't break 1-base tech strategies, because then the geyser is not available.
-		else if (hasLairTech && nGas < 2 && nDrones >= 12 ||
-			hiveTechUnit(_techTarget) && nGas < 3 && nDrones >= 18)
-		{
-			addExtractor = true;
-		}
-		if (addExtractor)
-		{
-			produce(BWAPI::UnitTypes::Zerg_Extractor);
-			mineralsLeft -= 50;
-		}
-	}
-	// F. Or expand if we are out of free geysers.
-	else if ((_mineralUnit.gasPrice() > 0 || _gasUnit != BWAPI::UnitTypes::None) &&
-		nFreeGas == 0 && nFreeBases > 0 && hasPool &&
-		nDrones > 3 * Bases::Instance().baseCount(_self) + 3 * nGas + 5 &&
-		(minerals + 100) / (gas + 100) >= 4 && minerals > 350 &&
-		!isBeingBuilt(BWAPI::UnitTypes::Zerg_Hatchery))
-	{
-		// This asks for a gas base, but we didn't check whether any are available.
-		// If none are left, we'll get a mineral only.
-		produce(BWAPI::UnitTypes::Zerg_Hatchery);
-		mineralsLeft -= 300;
-	}
+    // We want to expand.
+    // Division of labor: Expansions are here, macro hatcheries are "urgent production issues".
+    // However, macro hatcheries may be placed at expansions.
+    // Don't expand if we're getting rushed and it's not safe.
+    if (nDrones > nMineralPatches + 3 * nGas && nFreeBases > 0 &&
+        !isBeingBuilt(BWAPI::UnitTypes::Zerg_Hatchery))
+    {
+        bool makeIt = true;
+        MacroLocation loc = MacroLocation::Expo;
+        if (OpponentModel::Instance().getDarnLikelyEnemyPlan() == OpeningPlan::FastRush &&
+            nHatches <= 1 &&
+            the.bases.baseCount(_enemy) <= 1)
+        {
+            // In case of fast rush, macro hatchery first, or skip it altogether.
+            if (mineralsLeft >= 300 && nLarvas == 0)
+            {
+                loc = MacroLocation::Main;
+            }
+            else if (nLings < 6)
+            {
+                makeIt = false;
+            }
+            else if (nLings < 12 && !enoughArmy())
+            {
+                loc = MacroLocation::Main;
+            }
+            else if (Random::Instance().flag(0.20))
+            {
+                loc = MacroLocation::Hidden;
+            }
+        }
+        else if (_gasUnit == BWAPI::UnitTypes::None || nHatches % 2 == 0)
+        {
+            // Be a little generous with mineral-only expansions
+            loc = MacroLocation::MinOnly;
+        }
+        if (makeIt)
+        {
+            produce(MacroAct(BWAPI::UnitTypes::Zerg_Hatchery, loc));
+            mineralsLeft -= 300;
+        }
+    }
 
-	// Prepare an evo chamber or two.
-	// Terran doesn't want the first evo until after den or spire.
-	// On islands, we go air so get only 1 evo and get it later.
-	if (hasPool && nGas > 0 &&
-		!_emergencyGroundDefense && hasEnoughUnits &&
-		nEvo == UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Evolution_Chamber) &&     // none under construction
-		!isBeingBuilt(BWAPI::UnitTypes::Zerg_Evolution_Chamber))
-	{
-		if (nEvo == 0 && nDrones >= 18 && (_enemyRace != BWAPI::Races::Terran || hasDen || hasSpire || hasUltra) ||
-			nEvo == 1 && nDrones >= 30 && nGas >= 2 && (hasDen || hasSpire || hasUltra) && nFreeEvo() == 0 ||
-			nEvo == 0 && nDrones >= 30 && nGas > 0 && hasLairTech && Bases::Instance().isIslandStart())
-		{
-			produce(BWAPI::UnitTypes::Zerg_Evolution_Chamber);
-			mineralsLeft -= 75;
-		}
-	}
+    // Get gas. If necessary, expand for it.
+    bool addExtractor = false;
+    if (nFreeGas > 0 && hasPool && !isBeingBuilt(BWAPI::UnitTypes::Zerg_Extractor))
+    {
+        // A. If we have a functioning economy, get our first gas.
+        if (nGas == 0 && nDrones >= 10)
+        {
+            addExtractor = true;
+            if (!WorkerManager::Instance().isCollectingGas())
+            {
+                produce(MacroCommandType::StartGas);
+            }
+        }
+        // B. Late in the game, we have many drones. Make extractors freely.
+        else if (nDrones >= 50)
+        {
+            addExtractor = true;
+        }
+        // C. Or make more extractors if we have a low ratio of gas to minerals.
+        else if ((_gasUnit != BWAPI::UnitTypes::None || _mineralUnit.gasPrice() > 0) &&
+            nDrones > 3 * the.bases.baseCount(_self) + 3 * nGas + 4 &&
+            (minerals + 50) / (gas + 50) >= 3)
+        {
+            addExtractor = true;
+        }
+        // D. At least make a second extractor if our gas unit is expensive in gas (most are).
+        else if (nGas < 2 && nDrones >= 10 &&
+            _gasUnit != BWAPI::UnitTypes::None && _gasUnit.gasPrice() >= 100)
+        {
+            addExtractor = true;
+        }
+        // E. If we have a big mineral excess and enough drones, get more extractors no matter what.
+        else if (nDrones > 3 * the.bases.baseCount(_self) + 3 * nGas + 6 &&
+            (minerals + 50) / (gas + 50) >= 6)
+        {
+            addExtractor = true;
+        }
+        // E. If we have lair tech, get at least 2 extractors.
+        // If aiming for hive tech, get at least 3.
+        // Doesn't break 1-base tech strategies, because then the geyser is not available.
+        else if (hasLairTech && nGas < 2 && nDrones >= 12 ||
+            hiveTechUnit(_techTarget) && nGas < 3 && nDrones >= 18)
+        {
+            addExtractor = true;
+        }
+        if (addExtractor)
+        {
+            produce(BWAPI::UnitTypes::Zerg_Extractor);
+            mineralsLeft -= 50;
+        }
+    }
+    // F. Or expand if we are out of free geysers.
+    else if ((_mineralUnit.gasPrice() > 0 || _gasUnit != BWAPI::UnitTypes::None) &&
+        nFreeGas == 0 && nFreeBases > 0 && hasPool &&
+        nDrones > 3 * the.bases.baseCount(_self) + 3 * nGas + 5 &&
+        (minerals + 100) / (gas + 100) >= 4 && minerals > 350 &&
+        !isBeingBuilt(BWAPI::UnitTypes::Zerg_Hatchery))
+    {
+        // This asks for a gas base, but we didn't check whether any are available.
+        // If none are left, we'll get a mineral only.
+        produce(MacroAct(BWAPI::UnitTypes::Zerg_Hatchery, MacroLocation::GasOnly));
+        mineralsLeft -= 300;
+    }
+
+    // Prepare an evo chamber or two.
+    // Terran doesn't want the first evo until after den or spire.
+    // On islands, we go air so get only 1 evo and get it later.
+    if (hasPool && nGas > 0 &&
+        !_emergencyGroundDefense && hasEnoughUnits &&
+        nEvo == the.my.all.count(BWAPI::UnitTypes::Zerg_Evolution_Chamber) &&     // none under construction
+        !isBeingBuilt(BWAPI::UnitTypes::Zerg_Evolution_Chamber))
+    {
+        if (nEvo == 0 && nDrones >= 18 && (_enemyRace != BWAPI::Races::Terran || hasDen || hasSpire || hasUltra) ||
+            nEvo == 1 && nDrones >= 30 && nGas >= 2 && (hasDen || hasSpire || hasUltra) && nFreeEvo() == 0 ||
+            nEvo == 0 && nDrones >= 30 && nGas > 0 && hasLairTech && the.bases.isIslandStart())
+        {
+            produce(BWAPI::UnitTypes::Zerg_Evolution_Chamber);
+            mineralsLeft -= 75;
+        }
+    }
 
     // Used below.
     int attackUps = _self->getUpgradeLevel(BWAPI::UpgradeTypes::Zerg_Melee_Attacks);
 
     // If we're in reasonable shape, get carapace upgrades, or melee attack in case of ZvZ.
-	// On islands, we go air so don't get ground upgrades before hive.
-	if (nEvo > 0 && nDrones >= 12 && nGas > 0 &&
+    // On islands, we go air so don't get ground upgrades before hive.
+    if (nEvo > 0 && nDrones >= 12 && nGas > 0 &&
         hasPool && nFreeEvo() > 0 &&
-		!_emergencyGroundDefense && hasEnoughUnits &&
-		(!Bases::Instance().isIslandStart() || hasHiveTech))
-	{
+        !_emergencyGroundDefense && hasEnoughUnits &&
+        (!the.bases.isIslandStart() || hasHiveTech))
+    {
         if (_enemyRace == BWAPI::Races::Zerg)
         {
             if (attackUps == 0 ||
@@ -3716,28 +3798,28 @@ void StrategyBossZerg::produceOtherStuff(int & mineralsLeft, int & gasLeft, bool
                 }
             }
         }
-	}
+    }
 
-	// If we have 2 evos, or if carapace upgrades are done, also get melee attack.
-	if ((nEvo >= 2 || nEvo > 0 && armorUps == 3) && nDrones >= 14 && nGas >= 2 &&
+    // If we have 2 evos, or if carapace upgrades are done, also get melee attack.
+    if ((nEvo >= 2 || nEvo > 0 && armorUps == 3) && nDrones >= 14 && nGas >= 2 &&
         _enemyRace != BWAPI::Races::Zerg &&
         hasPool && nFreeEvo() > 0 && (hasDen || hasSpire || hasUltra) &&
-		!_emergencyGroundDefense && hasEnoughUnits &&
-		!_self->isUpgrading(BWAPI::UpgradeTypes::Zerg_Melee_Attacks))
-	{
-		if (attackUps == 0 ||
-			attackUps == 1 && hasLairTech ||
-			attackUps == 2 && hasHiveTech)
-		{
-			// But delay if we're going mutas and don't have many yet. They want the resources.
-			if (!(hasSpire && _gasUnit == BWAPI::UnitTypes::Zerg_Mutalisk && nMutas < 6))
-			{
-				produce(BWAPI::UpgradeTypes::Zerg_Melee_Attacks);
-				mineralsLeft -= 100;   // TODO not correct for upgrades 2 or 3
-				gasLeft -= 100;        // ditto
-			}
-		}
-	}
+        !_emergencyGroundDefense && hasEnoughUnits &&
+        !_self->isUpgrading(BWAPI::UpgradeTypes::Zerg_Melee_Attacks))
+    {
+        if (attackUps == 0 ||
+            attackUps == 1 && hasLairTech ||
+            attackUps == 2 && hasHiveTech)
+        {
+            // But delay if we're going mutas and don't have many yet. They want the resources.
+            if (!(hasSpire && _gasUnit == BWAPI::UnitTypes::Zerg_Mutalisk && nMutas < 6))
+            {
+                produce(BWAPI::UpgradeTypes::Zerg_Melee_Attacks);
+                mineralsLeft -= 100;   // TODO not correct for upgrades 2 or 3
+                gasLeft -= 100;        // ditto
+            }
+        }
+    }
 
     // Possibly get burrow.
     if (Config::Skills::Burrow &&
@@ -3753,73 +3835,55 @@ void StrategyBossZerg::produceOtherStuff(int & mineralsLeft, int & gasLeft, bool
         gasLeft -= 100;
     }
 
-	// If we're going air and expect to keep needing air units, get air upgrades.
-	// NOTE Due to a BWAPI 4.1.2 bug, it can't research upgrades in a greater spire.
-	//      So we stop at flyer carapace +2.
-	//      Comments show how to get the higher upgrades.
-	if (hasSpire && nDrones >= 15 && nGas > 0 &&
-		hasPool &&
-		!_emergencyGroundDefense && hasEnoughUnits &&
-		(_wantAirArmor || 
-		nMutas + nGuardians + nDevourers >= 8 &&
-		(_gasUnit != BWAPI::UnitTypes::None && _gasUnit.isFlyer() || goingIslandAir)) &&
-		!_self->isUpgrading(BWAPI::UpgradeTypes::Zerg_Flyer_Carapace) &&
-		!_self->isUpgrading(BWAPI::UpgradeTypes::Zerg_Flyer_Attacks))
-	{
-		const int airArmorUps = _self->getUpgradeLevel(BWAPI::UpgradeTypes::Zerg_Flyer_Carapace);
-		const int airAttackUps = _self->getUpgradeLevel(BWAPI::UpgradeTypes::Zerg_Flyer_Attacks);
+    // If we're going air and expect to keep needing air units, get air upgrades.
+    // NOTE Due to a BWAPI 4.1.2 bug, it can't research upgrades in a greater spire.
+    //      So we stop at flyer carapace +2.
+    //      Comments show how to get the higher upgrades.
+    if (hasSpire && nDrones >= 15 && nGas > 0 &&
+        the.my.all.count(BWAPI::UnitTypes::Zerg_Greater_Spire) == 0 &&
+        hasPool &&
+        !_emergencyGroundDefense && hasEnoughUnits &&
+        (_wantAirArmor ||
+        nMutas + nGuardians + nDevourers >= 8 &&
+        (_gasUnit != BWAPI::UnitTypes::None && _gasUnit.isFlyer() || goingIslandAir)) &&
+        !_self->isUpgrading(BWAPI::UpgradeTypes::Zerg_Flyer_Carapace) &&
+        !_self->isUpgrading(BWAPI::UpgradeTypes::Zerg_Flyer_Attacks))
+    {
+        const int airArmorUps = _self->getUpgradeLevel(BWAPI::UpgradeTypes::Zerg_Flyer_Carapace);
+        const int airAttackUps = _self->getUpgradeLevel(BWAPI::UpgradeTypes::Zerg_Flyer_Attacks);
 
-		//if (airArmorUps < 2 && hasLairTech ||
-		//	airArmorUps < 3 && hasGreaterSpire && hasHiveTech)
-		if (airArmorUps < 2 && hasLairTech && !hasGreaterSpire)
-		{
-			produce(BWAPI::UpgradeTypes::Zerg_Flyer_Carapace);
-			mineralsLeft -= 150;     // TODO not correct for upgrades 2 or 3
-			gasLeft -= 150;          // ditto
-		}
-		/*
-		else if (airArmorUps == 3 && airAttackUps < 3 && hasGreaterSpire && hasHiveTech &&
-			nMutas + nGuardians >= 10 &&		// devourers don't count
-			!_self->isUpgrading(BWAPI::UpgradeTypes::Zerg_Flyer_Attacks))
-		{
-			produce(BWAPI::UpgradeTypes::Zerg_Flyer_Attacks);
-			mineralsLeft -= 100;     // TODO not correct for upgrades 2 or 3
-			gasLeft -= 100;          // ditto
-		}
-		*/
-	}
-
-	// Possibly make one queen, if we already have a queen's nest.
-    if (Config::Skills::MaxQueens > 0 &&
-        hasQueensNest && nQueens == 0 && nDrones >= 20 &&
-		// Not if we're short of other units.
-		!_emergencyGroundDefense && !_emergencyNow && enoughArmy() &&
-		// Not if the enemy is apparently on their last legs.
-		enemyGroundArmySize > 0 && enemyAntigroundArmySize > 0 && Bases::Instance().baseCount(_enemy) >= 2 &&
-		// Not if we formerly had a queen and it died too recently. Leave a gap in time.
-        // Exception: Ensnare can be so valuable that we want to keep it available.
-		// (If we never had a queen, _lastQueenAliveFrame is 0 and the check is "is the game long enough?")
-		(_recommendEnsnare || BWAPI::Broodwar->getFrameCount() - _lastQueenAliveFrame > 3*60*24))
-	{
-        // Make a queen if a queen spell is recommended. See recommendResearch().
-		if (_recommendParasite || _recommendEnsnare || _recommendBroodling)
-		{
-			produce(BWAPI::UnitTypes::Zerg_Queen);
-			mineralsLeft -= 100;
-			gasLeft -= 100;
-            nLarvas -= 1;
+        //if (airArmorUps < 2 && hasLairTech ||
+        //	airArmorUps < 3 && hasGreaterSpire && hasHiveTech)
+        if (airArmorUps < 2 && hasLairTech && !hasGreaterSpire)
+        {
+            produce(BWAPI::UpgradeTypes::Zerg_Flyer_Carapace);
+            mineralsLeft -= 150;     // TODO not correct for upgrades 2 or 3
+            gasLeft -= 150;          // ditto
         }
-	}
+        /*
+        else if (airArmorUps == 3 && airAttackUps < 3 && hasGreaterSpire && hasHiveTech &&
+        nMutas + nGuardians >= 10 &&		// devourers don't count
+        !_self->isUpgrading(BWAPI::UpgradeTypes::Zerg_Flyer_Attacks))
+        {
+        produce(BWAPI::UpgradeTypes::Zerg_Flyer_Attacks);
+        mineralsLeft -= 100;     // TODO not correct for upgrades 2 or 3
+        gasLeft -= 100;          // ditto
+        }
+        */
+    }
 
-    // Possibly make additional queens, if we want to broodling enemies.
-    if (Config::Skills::MaxQueens > 1 &&
-        nQueens > 0 && nQueens < Config::Skills::MaxQueens && hasQueensNest && nDrones >= 28 &&
-        _recommendBroodling &&
-        (_self->hasResearched(BWAPI::TechTypes::Spawn_Broodlings) || _self->isResearching(BWAPI::TechTypes::Spawn_Broodlings)) &&
+    // Possibly add queens, if we already have a queen's nest.
+    if (Config::Skills::MaxQueens > 0 &&
+        hasQueensNest && nQueens < _recommendQueens &&
+        nDrones >= 20 + 6 * nQueens &&
         // Not if we're short of other units.
         !_emergencyGroundDefense && !_emergencyNow && enoughArmy() &&
         // Not if the enemy is apparently on their last legs.
-        enemyGroundArmySize > 0 && enemyAntigroundArmySize > 0 && Bases::Instance().baseCount(_enemy) >= 2)
+        enemyGroundArmySize > 0 && enemyAntigroundArmySize > 0 && the.bases.baseCount(_enemy) >= 2 &&
+        // Not if we formerly had a queen and it died too recently. Leave a gap in time.
+        // Exception: Ensnare can be so valuable that we want to keep it available.
+        // (If we never had a queen, _lastQueenAliveFrame is 0 and the check is "is the game long enough?")
+        (_recommendEnsnare || the.now() - _lastQueenAliveFrame > 3 * 60 * 24))
     {
         produce(BWAPI::UnitTypes::Zerg_Queen);
         mineralsLeft -= 100;
@@ -3828,26 +3892,28 @@ void StrategyBossZerg::produceOtherStuff(int & mineralsLeft, int & gasLeft, bool
     }
 
     // Possibly make an infested terran.
-    /* TODO doesn't work - infested terran is ordered but not made
-    BWAPI::Broodwar->printf("%d %d", nInfestedCC, _lastInfestedTerranOrderFrame + 26 * 24);
-    if (nInfestedCC > 0 && nInfestedTerrans < 2 && _lastInfestedTerranOrderFrame + 180 * 24 < BWAPI::Broodwar->getFrameCount() &&
+    // TODO when infesteds can be used more effectively, change 90 to a small number or remove that line
+    if (nInfestedCC > 0 &&
+        nInfestedTerrans < Config::Skills::MaxInfestedTerrans &&
+        _lastInfestedTerranOrderFrame + 90 * 24 < the.now() &&
         nGas >= 2 &&
         mineralsLeft >= 100 && gasLeft >= 50 &&
-        enemyGroundArmySize > 0 && enemyAntigroundArmySize > 0 && Bases::Instance().baseCount(_enemy) > 0)
+        enemyGroundArmySize > 0 && enemyAntigroundArmySize > 0 && the.bases.baseCount(_enemy) > 0)
     {
-        _lastInfestedTerranOrderFrame = BWAPI::Broodwar->getFrameCount();
+        _lastInfestedTerranOrderFrame = the.now();
         produce(BWAPI::UnitTypes::Zerg_Infested_Terran);
         mineralsLeft -= 100;
         gasLeft -= 50;
     }
-    */
 
     // In the late game, add defilers.
-	// Add them later if the defilerScore is negative--currently, only terran sets it other than 0.
-	// Get defilers and consume even if we are in a state of emergency. We need defilers then!
-	if (hasHiveTech &&
-		(defilerScore >= 0 && nDrones >= 35 && nGas >= 2 || nDrones >= 60 && nGas >= 4 && hasUltraUps) &&
-		UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Defiler_Mound) == 0 &&
+    // Add them later if the defilerScore is negative--currently, only terran sets it other than 0.
+    // Get defilers and consume even if we are in a state of emergency. We need defilers then!
+    if (hasHiveTech &&
+        ( defilerScore >= 16 && nDrones >= 18 && nGas >= 1 ||
+          defilerScore >=  0 && nDrones >= 35 && nGas >= 2 ||
+          hasUltraUps        && nDrones >= 60 && nGas >= 4) &&
+		the.my.all.count(BWAPI::UnitTypes::Zerg_Defiler_Mound) == 0 &&
 		!isBeingBuilt(BWAPI::UnitTypes::Zerg_Defiler_Mound))
 	{
 		produce(BWAPI::UnitTypes::Zerg_Defiler_Mound);
@@ -3856,8 +3922,8 @@ void StrategyBossZerg::produceOtherStuff(int & mineralsLeft, int & gasLeft, bool
 	}
 
 	// And, of course, defiler abilities.
-	if (hasPool && nDrones >= 30 && nGas >= 2 &&
-		UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Zerg_Defiler_Mound) > 0)
+	if (hasPool && nGas >= 1 &&
+		the.my.completed.count(BWAPI::UnitTypes::Zerg_Defiler_Mound) > 0)
 	{
 		if (!_self->hasResearched(BWAPI::TechTypes::Consume) &&
 			!_self->isResearching(BWAPI::TechTypes::Consume))
@@ -3876,7 +3942,7 @@ void StrategyBossZerg::produceOtherStuff(int & mineralsLeft, int & gasLeft, bool
 				mineralsLeft -= 200;
 				gasLeft -= 200;
 			}
-			else if (nDrones >= 50 &&
+			else if (nDrones >= 55 &&
                 enoughArmy() && enoughGroundArmy() &&
                 _self->hasResearched(BWAPI::TechTypes::Plague) &&
 				_self->getUpgradeLevel(BWAPI::UpgradeTypes::Metasynaptic_Node) == 0 &&
@@ -3968,7 +4034,12 @@ void StrategyBossZerg::drawStrategyBossInformation()
 			y += 10;
 			BWAPI::Broodwar->drawTextScreen(x, y, "%c%d%c %s", cyan, _auxUnitCount, green, UnitTypeName(_auxUnit).c_str());
 		}
-		if (_techTarget != TechUnit::None)
+        if (_recommendQueens)
+        {
+            y += 10;
+            BWAPI::Broodwar->drawTextScreen(x, y, "%c%d%c Queen%s", cyan, _recommendQueens, green, _recommendQueens == 1 ? "" : "s");
+        }
+        if (_techTarget != TechUnit::None)
 		{
 			y += 10;
 			BWAPI::Broodwar->drawTextScreen(x, y, "%cplan %c%s", white, green,
@@ -4073,7 +4144,7 @@ void StrategyBossZerg::handleUrgentProductionIssues(BuildOrderQueue & queue)
 	else
 	{
 		// Check for less urgent reactions less often.
-		int frameOffset = BWAPI::Broodwar->getFrameCount() % 32;
+		int frameOffset = the.now() % 32;
 		if (frameOffset == 0)
 		{
 			makeUrgentReaction(queue);
@@ -4135,7 +4206,7 @@ BuildOrder & StrategyBossZerg::freshProductionPlan()
 	chooseStrategy();
 
 	// If we're making gas units, short on gas, and not gathering gas, fix that first.
-	// NOTE Does not check whether we have any extractors.
+	// NOTE Does not check whether we have any extractors. Doesn't matter.
 	if ((_gasUnit != BWAPI::UnitTypes::None && gas < _gasUnit.gasPrice() || gas < _mineralUnit.gasPrice()) &&
 		!WorkerManager::Instance().isCollectingGas())
 	{
@@ -4145,12 +4216,12 @@ BuildOrder & StrategyBossZerg::freshProductionPlan()
 	// Decide whether we have "enough" units to be safe while we tech up or otherwise spend resources.
 	// This helps the bot, e.g., not make a spire right off when it has just finished lurker research.
 	// This ought to be based on the danger of the enemy's army, but for now we use an arbitrary low limit.
-	const int numMineralUnits = UnitUtil::GetAllUnitCount(_mineralUnit);
-	const int numGasUnits = (_gasUnit == BWAPI::UnitTypes::None) ? 0 : UnitUtil::GetAllUnitCount(_gasUnit);
+	const int numMineralUnits = the.my.all.count(_mineralUnit);
+	const int numGasUnits = (_gasUnit == BWAPI::UnitTypes::None) ? 0 : the.my.all.count(_gasUnit);
 	const bool hasEnoughUnits =
 		numMineralUnits + 2 * numGasUnits >= 10 &&
-		(!hasSpire || !InformationManager::Instance().enemyHasAirTech() ||
-		nMutas >= 4 || UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Scourge) >= 2 ||
+		(!hasSpire || !the.info.enemyHasAirTech() ||
+		nMutas >= 4 || the.my.all.count(BWAPI::UnitTypes::Zerg_Scourge) >= 2 ||
 		numMineralUnits >= 6 && numGasUnits >= 6);
 	
 	int mineralsLeft = minerals;

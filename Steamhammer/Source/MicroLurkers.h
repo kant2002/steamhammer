@@ -13,6 +13,9 @@ namespace UAlbertaBot
 		BWAPI::Unit getNearestTarget(BWAPI::Unit lurker, const BWAPI::Unitset & targets) const;
 		BWAPI::Unit getFarthestTarget(BWAPI::Unit lurker, const BWAPI::Unitset & targets) const;
 
+        bool hiddenEnemyInRange(BWAPI::Unit lurker) const;
+        bool okToUnburrow(BWAPI::Unit lurker) const;
+
 	public:
 
 		MicroLurkers();

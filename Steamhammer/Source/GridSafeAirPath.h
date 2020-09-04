@@ -6,12 +6,9 @@
 
 namespace UAlbertaBot
 {
-class The;
-
 class GridSafeAirPath : public Grid
 {
 private:
-    The & the;
     std::vector<BWAPI::TilePosition> sortedTilePositions;
 
 	void compute(const BWAPI::TilePosition & start, int limit);

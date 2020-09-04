@@ -57,9 +57,10 @@ void Grid::draw() const
 			int n = grid[x][y];
 			if (n)
 			{
+                char color = n < 0 ? purple : gray;
 				BWAPI::Broodwar->drawTextMap(
 					BWAPI::Position(x * 32 + 8, y * 32 + 8),
-					"%c%d", yellow, n);
+					"%c%d", color, n);
 			}
 		}
 	}

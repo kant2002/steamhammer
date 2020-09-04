@@ -1,8 +1,7 @@
 #include "BuildingManager.h"
 
 #include "Bases.h"
-#include "MapTools.h"
-#include "Micro.h"
+#include "BuildingPlacer.h"
 #include "ProductionManager.h"
 #include "ScoutManager.h"
 #include "The.h"
@@ -13,8 +12,7 @@ using namespace UAlbertaBot;
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
 BuildingManager::BuildingManager()
-	: the(The::Root())
-	, _reservedMinerals(0)
+	: _reservedMinerals(0)
     , _reservedGas(0)
 	, _stalledForLackOfSpace(false)
 {
@@ -37,7 +35,7 @@ void BuildingManager::update()
 bool BuildingManager::buildingTimedOut(const Building & b) const
 {
 	return
-		BWAPI::Broodwar->getFrameCount() - b.startFrame > 60 * 24 ||
+		the.now() - b.startFrame > 60 * 24 ||
 		b.buildersSent > 2;
 }
 
@@ -92,13 +90,13 @@ void BuildingManager::assignWorkersToUnassignedBuildings()
 
 		if (b.buildersSent > 0 &&
 			b.type == BWAPI::UnitTypes::Zerg_Hatchery &&
-			b.macroLocation != MacroLocation::Macro &&
-			UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Larva) == 0)	// yes, we may need more production
+			b.macroLocation != MacroLocation::Main &&
+			the.my.all.count(BWAPI::UnitTypes::Zerg_Larva) == 0)	// yes, we may need more production
 		{
 			// This is a zerg expansion which failed--we sent a builder and it never built.
 			// The builder was most likely killed along the way.
 			// Conclude that we need more production and change it to a macro hatchery.
-			b.macroLocation = MacroLocation::Macro;
+			b.macroLocation = MacroLocation::Main;
 		}
 
 		// The builder may have already been decided before we got this far.
@@ -145,7 +143,7 @@ void BuildingManager::assignWorkersToUnassignedBuildings()
 
 		//BWAPI::Broodwar->printf("assign builder %d to %s", b.builderUnit->getID(), UnitTypeName(b.type).c_str());
 
-        BuildingPlacer::Instance().reserveTiles(b.finalPosition,b.type.tileWidth(),b.type.tileHeight());
+        the.placer.reserveTiles(b.finalPosition,b.type.tileWidth(),b.type.tileHeight());
 
         b.status = BuildingStatus::Assigned;
 	}
@@ -174,7 +172,7 @@ void BuildingManager::constructAssignedBuildings()
 
 			b.buildCommandGiven = false;
 			b.status = BuildingStatus::Unassigned;
-			BuildingPlacer::Instance().freeTiles(b.finalPosition, b.type.tileWidth(), b.type.tileHeight());
+			the.placer.freeTiles(b.finalPosition, b.type.tileWidth(), b.type.tileHeight());
 		}
 		else if (!b.builderUnit->isConstructing())
         {
@@ -189,9 +187,9 @@ void BuildingManager::constructAssignedBuildings()
             {
 				// Give it a little time to happen.
 				// This mainly prevents over-frequent retrying.
-				if (BWAPI::Broodwar->getFrameCount() > b.placeBuildingDeadline)
+				if (the.now() > b.placeBuildingDeadline)
 				{
-					//BWAPI::Broodwar->printf("release and redo builder %d for %s", b.builderUnit->getID(), UnitTypeName(b.type).c_str());
+				    //BWAPI::Broodwar->printf("release and redo builder %d for %s", b.builderUnit->getID(), UnitTypeName(b.type).c_str());
 
 					// tell worker manager the unit we had is not needed now, since we might not be able
 					// to get a valid location soon enough
@@ -205,7 +203,7 @@ void BuildingManager::constructAssignedBuildings()
 					--b.buildersSent;
 
 					// Unreserve the building location. The building will mark its own location.
-					BuildingPlacer::Instance().freeTiles(b.finalPosition, b.type.tileWidth(), b.type.tileHeight());
+					the.placer.freeTiles(b.finalPosition, b.type.tileWidth(), b.type.tileHeight());
 				}
 			}
             else
@@ -217,11 +215,11 @@ void BuildingManager::constructAssignedBuildings()
 				if (b.buildCommandGiven)
 				{
 					b.placeBuildingDeadline =
-						BWAPI::Broodwar->getFrameCount() + 2 * BWAPI::Broodwar->getLatencyFrames();
+						the.now() + 2 * BWAPI::Broodwar->getLatencyFrames();
 				}
 				else
 				{
-					//BWAPI::Broodwar->printf("failed to start cnstruction of %s, error %d", UnitTypeName(b.type).c_str(), BWAPI::Broodwar->getLastError());
+					//BWAPI::Broodwar->printf("failed to start construction of %s, error %d", UnitTypeName(b.type).c_str(), BWAPI::Broodwar->getLastError());
 				}
 			}
         }
@@ -276,7 +274,7 @@ void BuildingManager::checkForStartedConstruction()
 
                 b.status = BuildingStatus::UnderConstruction;
 
-                BuildingPlacer::Instance().freeTiles(b.finalPosition,b.type.tileWidth(),b.type.tileHeight());
+                the.placer.freeTiles(b.finalPosition,b.type.tileWidth(),b.type.tileHeight());
 
                 // Only one Building will match.
 				// We keep running the outer loop to look for more buildings starting construction.
@@ -388,70 +386,21 @@ void BuildingManager::checkReservedResources()
 	if (minerals != _reservedMinerals || gas != _reservedGas)
 	{
 		// This message should ideally never happen. If it does, we correct the error and carry on.
-		// BWAPI::Broodwar->printf("reserves wrong: %d %d should be %d %d", _reservedMinerals, _reservedGas, minerals, gas);
+		//BWAPI::Broodwar->printf("reserves wrong: %d %d should be %d %d", _reservedMinerals, _reservedGas, minerals, gas);
 		_reservedMinerals = minerals;
 		_reservedGas = gas;
 	}
-}
-
-// The caller specifies a desired position, which the building should be placed near.
-// It can be anything. This method handles the usual case, where the desired position is
-// based on the MacroLocation.
-// Macrolocations not handled here are special cases and dealt with elsewhere.
-BWAPI::TilePosition BuildingManager::getStandardDesiredPosition(MacroLocation loc) const
-{
-    if (loc == MacroLocation::Front)
-    {
-        BWAPI::TilePosition front = Bases::Instance().frontPoint();
-        if (front.isValid())
-        {
-            return front;
-        }
-    }
-    else if (loc == MacroLocation::Natural)
-    {
-        Base * natural = Bases::Instance().myNaturalBase();
-        if (natural)
-        {
-            return natural->getTilePosition();
-        }
-    }
-    else if (loc == MacroLocation::Center)
-    {
-        // Near the center of the map.
-        return BWAPI::TilePosition(BWAPI::Broodwar->mapWidth() / 2, BWAPI::Broodwar->mapHeight() / 2);
-    }
-    else if (loc == MacroLocation::Proxy)
-    {
-        if (Bases::Instance().enemyStart())
-        {
-            // We know where the enemy is. We can proxy in or close to the enemy base.
-            // Other code should try to find the enemy base first!
-            BWAPI::TilePosition proxy = BuildingPlacer::Instance().getProxyPosition(Bases::Instance().enemyStart());
-            if (proxy.isValid())
-            {
-                // BWAPI::Broodwar->printf("proxy at %d,%d", proxy.x, proxy.y);
-                return proxy;
-            }
-        }
-        // We don't know where the enemy is, or can't find a close proxy position,
-        // but we can at least proxy to the center of the map.
-        return getStandardDesiredPosition(MacroLocation::Center);
-    }
-
-    // Default: Build in the current main base, which is guaranteed to exist (though it may be empty or in enemy cobtrol).
-    return Bases::Instance().myMainBase()->getTilePosition();
 }
 
 // Add a new building to be constructed and return it.
 // The builder may be null. In that case, the building manager will assign a worker on its own later.
 Building & BuildingManager::addTrackedBuildingTask(const MacroAct & act, BWAPI::TilePosition desiredLocation, BWAPI::Unit builder, bool isGasSteal)
 {
-	UAB_ASSERT(act.isBuilding(), "trying to build a non-building");
+	UAB_ASSERT(act.isBuilding(), "bad building");
 
 	if (isGasSteal)
 	{
-		// BWAPI::Broodwar->printf("gas steal into building manager");
+		//BWAPI::Broodwar->printf("gas steal into building manager");
 	}
 
 	BWAPI::UnitType type = act.getUnitType();
@@ -467,7 +416,7 @@ Building & BuildingManager::addTrackedBuildingTask(const MacroAct & act, BWAPI::
 	// The builder, if provided, may have been killed, mind controlled, or morphed.
 	if (builder && builder->exists() && builder->getPlayer() == BWAPI::Broodwar->self() && builder->getType().isWorker())
 	{
-		// BWAPI::Broodwar->printf("build man receives worker %d for %s", builder->getID(), UnitTypeName(type).c_str());
+		//BWAPI::Broodwar->printf("build man receives worker %d for %s", builder->getID(), UnitTypeName(type).c_str());
 		b.builderUnit = builder;
 	}
 
@@ -510,16 +459,16 @@ void BuildingManager::setBuilderUnit(Building & b)
 	UAB_ASSERT(!b.builderUnit, "incorrectly replacing builder");
 
 	// Grab the closest worker from WorkerManager.
-	// It knows to return the scout wotker if this is a gas steal.
+	// It knows to return the scout worker if this is a gas steal.
 	b.builderUnit = WorkerManager::Instance().getBuilder(b);
 	if (b.builderUnit)
 	{
 		WorkerManager::Instance().setBuildWorker(b.builderUnit, b.type);
-		// BWAPI::Broodwar->printf("build man assigns worker %d for %s", b.builderUnit ? b.builderUnit->getID() : -1, UnitTypeName(b.type).c_str());
+		//BWAPI::Broodwar->printf("build man assigns worker %d for %s", b.builderUnit ? b.builderUnit->getID() : -1, UnitTypeName(b.type).c_str());
 	}
 	else
 	{
-		// BWAPI::Broodwar->printf("no builder available to assign");
+		//BWAPI::Broodwar->printf("no builder available to assign");
 	}
 }
 
@@ -529,13 +478,13 @@ void BuildingManager::releaseBuilderUnit(Building & b)
 {
 	if (b.isGasSteal)
 	{
-		ScoutManager::Instance().gasStealOver();
+		ScoutManager::Instance().setGasStealOver();
 	}
 	else
 	{
 		if (b.builderUnit)
 		{
-			// BWAPI::Broodwar->printf("build man releases worker for %s", UnitTypeName(b.type).c_str());
+			//BWAPI::Broodwar->printf("build man releases worker for %s", UnitTypeName(b.type).c_str());
 			
 			WorkerManager::Instance().finishedWithWorker(b.builderUnit);
 		}
@@ -634,7 +583,7 @@ void BuildingManager::drawBuildingInformation(int x, int y)
         return;
     }
 
-    for (const auto unit : BWAPI::Broodwar->self()->getUnits())
+    for (BWAPI::Unit unit : BWAPI::Broodwar->self()->getUnits())
     {
         BWAPI::Broodwar->drawTextMap(unit->getPosition().x,unit->getPosition().y+5,"\x07%d",unit->getID());
     }
@@ -646,6 +595,7 @@ void BuildingManager::drawBuildingInformation(int x, int y)
 
 	for (const Building & b : _buildings)
     {
+        std::string steal = b.isGasSteal ? " (steal)" : "";
         if (b.status == BuildingStatus::Unassigned)
         {
 			int x1 = b.desiredPosition.x * 32;
@@ -659,13 +609,13 @@ void BuildingManager::drawBuildingInformation(int x, int y)
 				color = red;
 			}
 
-			BWAPI::Broodwar->drawTextScreen(x, y + 40 + ((yspace)* 10), "%c %s", color, NiceMacroActName(b.type.getName()).c_str());
+			BWAPI::Broodwar->drawTextScreen(x, y + 40 + ((yspace)* 10), "%c %s%s", color, NiceMacroActName(b.type.getName()).c_str(), steal.c_str());
 			BWAPI::Broodwar->drawTextScreen(x + 150, y + 40 + ((yspace++) * 10), "%c Need %c", color, getBuildingWorkerCode(b));
 			BWAPI::Broodwar->drawBoxMap(x1, y1, x2, y2, BWAPI::Colors::Green, false);
         }
         else if (b.status == BuildingStatus::Assigned)
         {
-			BWAPI::Broodwar->drawTextScreen(x, y + 40 + ((yspace)* 10), "\x03 %s %d", NiceMacroActName(b.type.getName()).c_str(), b.builderUnit->getID());
+            BWAPI::Broodwar->drawTextScreen(x, y + 40 + ((yspace)* 10), "\x03 %s%s %d", NiceMacroActName(b.type.getName()).c_str(), steal.c_str(), b.builderUnit->getID());
             BWAPI::Broodwar->drawTextScreen(x+150,y+40+((yspace++)*10),"\x03 A %c (%d,%d)",getBuildingWorkerCode(b),b.finalPosition.x,b.finalPosition.y);
 
             int x1 = b.finalPosition.x*32;
@@ -678,7 +628,7 @@ void BuildingManager::drawBuildingInformation(int x, int y)
         }
         else if (b.status == BuildingStatus::UnderConstruction)
         {
-            BWAPI::Broodwar->drawTextScreen(x,y+40+((yspace)*10),"\x03 %s %d",NiceMacroActName(b.type.getName()).c_str(),b.buildingUnit->getID());
+            BWAPI::Broodwar->drawTextScreen(x, y + 40 + ((yspace)* 10), "\x03 %s%s %d", NiceMacroActName(b.type.getName()).c_str(), steal.c_str(), b.buildingUnit->getID());
             BWAPI::Broodwar->drawTextScreen(x+150,y+40+((yspace++)*10),"\x03 Const %c",getBuildingWorkerCode(b));
         }
     }
@@ -724,7 +674,7 @@ void BuildingManager::cancelBuilding(Building & b)
 	}
 	else if (b.status == BuildingStatus::Assigned)
 	{
-		BuildingPlacer::Instance().freeTiles(b.finalPosition, b.type.tileWidth(), b.type.tileHeight());
+		the.placer.freeTiles(b.finalPosition, b.type.tileWidth(), b.type.tileHeight());
 		toRemove.push_back(b);
 		undoBuildings(toRemove);
 	}
@@ -733,7 +683,7 @@ void BuildingManager::cancelBuilding(Building & b)
 		if (b.buildingUnit && b.buildingUnit->exists() && !b.buildingUnit->isCompleted())
 		{
 			the.micro.Cancel(b.buildingUnit);
-			BuildingPlacer::Instance().freeTiles(b.finalPosition, b.type.tileWidth(), b.type.tileHeight());
+			the.placer.freeTiles(b.finalPosition, b.type.tileWidth(), b.type.tileHeight());
 		}
 		toRemove.push_back(b);
 		undoBuildings(toRemove);
@@ -786,7 +736,7 @@ BWAPI::TilePosition BuildingManager::getBuildingLocation(const Building & b)
 {
 	if (b.isGasSteal)
     {
-        Base * enemyBase = Bases::Instance().enemyStart();
+        Base * enemyBase = the.bases.enemyStart();
 		UAB_ASSERT(enemyBase, "Should find enemy base before gas steal");
 		UAB_ASSERT(enemyBase->getGeysers().size() > 0, "Should have spotted an enemy geyser");
 
@@ -796,7 +746,7 @@ BWAPI::TilePosition BuildingManager::getBuildingLocation(const Building & b)
         }
     }
 
-	int numPylons = BWAPI::Broodwar->self()->completedUnitCount(BWAPI::UnitTypes::Protoss_Pylon);
+	int numPylons = the.my.completed.count(BWAPI::UnitTypes::Protoss_Pylon);
 	if (b.type.requiresPsi() && numPylons == 0)
 	{
 		return BWAPI::TilePositions::None;
@@ -804,31 +754,30 @@ BWAPI::TilePosition BuildingManager::getBuildingLocation(const Building & b)
 
 	if (b.type.isRefinery())
 	{
-		return BuildingPlacer::Instance().getRefineryPosition();
+		return the.placer.getRefineryPosition();
 	}
 
-	if (b.type.isResourceDepot())
+    MacroLocation loc = b.macroLocation;
+
+    // A resource depot going Anywhere is really going to an expansion.
+    if (b.type.isResourceDepot() && loc == MacroLocation::Anywhere)
+    {
+        loc = MacroLocation::Expo;
+    }
+
+    // A resource depot goes at an expansion location, except for certain non-base hatchery locations.
+    if (b.type.isResourceDepot() &&
+        b.macroLocation != MacroLocation::Main &&
+        b.macroLocation != MacroLocation::Proxy &&
+        b.macroLocation != MacroLocation::Front &&
+        b.macroLocation != MacroLocation::Center)
 	{
-		BWAPI::TilePosition front = Bases::Instance().frontPoint();
-		if (b.macroLocation == MacroLocation::Front &&
-			front.isValid() &&
-			!the.groundAttacks.inRange(b.type, front))
-		{
-            // This means build an additional hatchery at our existing front base, wherever it is.
-			return front;
-		}
-		Base * natural = Bases::Instance().myNaturalBase();
-		if (b.macroLocation == MacroLocation::Natural &&
-			natural &&
-			!the.groundAttacks.inRange(b.type, natural->getTilePosition()))
-		{
-			return natural->getTilePosition();
-		}
-        if (b.macroLocation != MacroLocation::Macro && b.macroLocation != MacroLocation::Proxy)
-		{
-			return MapTools::Instance().getNextExpansion(b.macroLocation == MacroLocation::Hidden, true, b.macroLocation != MacroLocation::MinOnly);
-		}
-		// Else if it's a macro hatchery or other location, treat it like any other building.
+        BWAPI::TilePosition pos = the.placer.getExpoLocationTile(b.macroLocation);
+        // TODO check that the location is open
+        if (pos.isValid() && !the.groundAttacks.inRange(b.type, pos))
+        {
+            return pos;
+        }
 	}
 
     int distance = Config::Macro::BuildingSpacing;
@@ -855,7 +804,7 @@ BWAPI::TilePosition BuildingManager::getBuildingLocation(const Building & b)
 	}
 
 	// Get a position within our region.
-	return BuildingPlacer::Instance().getBuildLocationNear(b, distance);
+	return the.placer.getBuildLocationNear(b, distance);
 }
 
 // The buildings failed or were canceled.
@@ -865,9 +814,9 @@ void BuildingManager::undoBuildings(const std::vector< std::reference_wrapper<Bu
 	for (Building & b : toRemove)
 	{
 		// If the building was to establish a base, unreserve the base location.
-		if (b.type.isResourceDepot() && b.macroLocation != MacroLocation::Macro && b.finalPosition.isValid())
+		if (b.type.isResourceDepot() && b.macroLocation != MacroLocation::Main && b.finalPosition.isValid())
 		{
-			Base * base = Bases::Instance().getBaseAtTilePosition(b.finalPosition);
+			Base * base = the.bases.getBaseAtTilePosition(b.finalPosition);
 			if (base)
 			{
 				base->unreserve();

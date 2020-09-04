@@ -14,7 +14,7 @@ using namespace UAlbertaBot;
 BWAPI::Unit MicroOverlords::nearestSpore(BWAPI::Unit overlord) const
 {
 	BWAPI::Unit best = nullptr;
-	int bestDistance = 99999;
+    int bestDistance = INT_MAX;
 
 	for (BWAPI::Unit defense : InformationManager::Instance().getStaticDefense())
 	{
@@ -75,7 +75,7 @@ void MicroOverlords::assignOverlords()
 	// 2. Find overlords without bases and bases without overlords.
 	std::set<Base *> unassignedBases;
 	unassignedOverlords = getUnits();
-	for (Base * base : Bases::Instance().getBases())
+	for (Base * base : the.bases.getAll())
 	{
 		if (base->getOwner() == BWAPI::Broodwar->self())
 		{

@@ -1,5 +1,5 @@
-#include "Common.h"
 #include "MapGrid.h"
+
 #include "Bases.h"
 #include "The.h"
 
@@ -12,13 +12,11 @@ MapGrid & MapGrid::Instance()
 }
 
 MapGrid::MapGrid()
-	: the(The::Root())
 {
 }
 
 MapGrid::MapGrid(int mapWidth, int mapHeight, int cellSize) 
-	: the(The::Root())
-	, mapWidth(mapWidth)
+	: mapWidth(mapWidth)
 	, mapHeight(mapHeight)
 	, cellSize(cellSize)
 	, cols((mapWidth + cellSize - 1) / cellSize)
@@ -187,7 +185,7 @@ void MapGrid::update()
 
 	//BWAPI::Broodwar->printf("MapGrid info: WH(%d, %d)  CS(%d)  RC(%d, %d)  C(%d)", mapWidth, mapHeight, cellSize, rows, cols, cells.size());
 
-	for (const auto unit : BWAPI::Broodwar->self()->getUnits()) 
+	for (BWAPI::Unit unit : BWAPI::Broodwar->self()->getUnits()) 
 	{
 		if (unit->isCompleted() || unit->getType().isBuilding())
 		{
@@ -196,7 +194,7 @@ void MapGrid::update()
 		}
 	}
 
-	for (const auto unit : BWAPI::Broodwar->enemy()->getUnits()) 
+	for (BWAPI::Unit unit : BWAPI::Broodwar->enemy()->getUnits()) 
 	{
 		if (unit->exists() &&
 			(unit->isCompleted() || unit->getType().isBuilding()) &&
@@ -228,7 +226,7 @@ void MapGrid::getUnits(BWAPI::Unitset & units, BWAPI::Position center, int radiu
 			const GridCell & cell(getCellByIndex(row,col));
 			if(ourUnits)
 			{
-				for (const auto unit : cell.ourUnits)
+				for (BWAPI::Unit unit : cell.ourUnits)
 				{
 					BWAPI::Position d(unit->getPosition() - center);
 					if(d.x * d.x + d.y * d.y <= radiusSq)
@@ -242,7 +240,7 @@ void MapGrid::getUnits(BWAPI::Unitset & units, BWAPI::Position center, int radiu
 			}
 			if(oppUnits)
 			{
-				for (const auto unit : cell.oppUnits) if (unit->getType() != BWAPI::UnitTypes::Unknown)
+				for (BWAPI::Unit unit : cell.oppUnits) if (unit->getType() != BWAPI::UnitTypes::Unknown)
 				{
 					BWAPI::Position d(unit->getPosition() - center);
 					if(d.x * d.x + d.y * d.y <= radiusSq)

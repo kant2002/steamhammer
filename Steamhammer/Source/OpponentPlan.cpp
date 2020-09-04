@@ -3,6 +3,7 @@
 #include "Bases.h"
 #include "InformationManager.h"
 #include "PlayerSnapshot.h"
+#include "The.h"
 
 using namespace UAlbertaBot;
 
@@ -26,7 +27,7 @@ bool OpponentPlan::fastPlan(OpeningPlan plan)
 //      so we don't recognize all the rushes that we should.
 bool OpponentPlan::recognizeWorkerRush()
 {
-	BWAPI::Position myOrigin = Bases::Instance().myStartingBase()->getPosition();
+	BWAPI::Position myOrigin = the.bases.myStart()->getPosition();
 
 	int enemyWorkerRushCount = 0;
 
@@ -101,7 +102,7 @@ void OpponentPlan::recognize()
 {
 	// Don't recognize island plans.
 	// The regular plans and reactions do not make sense for island maps.
-	if (Bases::Instance().isIslandStart())
+	if (the.bases.isIslandStart())
 	{
 		return;
 	}
@@ -109,7 +110,7 @@ void OpponentPlan::recognize()
 	// Recognize fast plans first, slow plans below.
 
 	// Recognize in-base proxy buildings. Info manager does it for us.
-	if (Bases::Instance().getEnemyProxy())
+	if (the.bases.getEnemyProxy())
 	{
 		_openingPlan = OpeningPlan::Proxy;
 		_planIsFixed = true;
@@ -131,12 +132,12 @@ void OpponentPlan::recognize()
 	// Recognize fast rushes.
 	// TODO consider distance and speed: when might units have been produced?
 	//      as it stands, 4 pool is unrecognized half the time because lings are seen too late
-	if (frame < 1600 && snap.getCount(BWAPI::UnitTypes::Zerg_Spawning_Pool) > 0 ||
-		frame < 3200 && snap.getCount(BWAPI::UnitTypes::Zerg_Zergling) > 0 ||
-		frame < 1750 && snap.getCount(BWAPI::UnitTypes::Protoss_Gateway) > 0 ||
-		frame < 3300 && snap.getCount(BWAPI::UnitTypes::Protoss_Zealot) > 0 ||
-		frame < 1400 && snap.getCount(BWAPI::UnitTypes::Terran_Barracks) > 0 ||
-		frame < 3000 && snap.getCount(BWAPI::UnitTypes::Terran_Marine) > 0)
+	if (frame < 1600 && snap.count(BWAPI::UnitTypes::Zerg_Spawning_Pool) > 0 ||
+		frame < 3200 && snap.count(BWAPI::UnitTypes::Zerg_Zergling) > 0 ||
+		frame < 1750 && snap.count(BWAPI::UnitTypes::Protoss_Gateway) > 0 ||
+		frame < 3300 && snap.count(BWAPI::UnitTypes::Protoss_Zealot) > 0 ||
+		frame < 1400 && snap.count(BWAPI::UnitTypes::Terran_Barracks) > 0 ||
+		frame < 3000 && snap.count(BWAPI::UnitTypes::Terran_Marine) > 0)
 	{
 		_openingPlan = OpeningPlan::FastRush;
 		_planIsFixed = true;
@@ -152,17 +153,17 @@ void OpponentPlan::recognize()
 	// Recognize slower rushes.
 	// TODO make sure we've seen the bare geyser in the enemy base!
 	// TODO seeing an enemy worker carrying gas also means the enemy has gas
-	if (snap.getCount(BWAPI::UnitTypes::Zerg_Hatchery) >= 2 &&
-		snap.getCount(BWAPI::UnitTypes::Zerg_Spawning_Pool) > 0 &&
-		snap.getCount(BWAPI::UnitTypes::Zerg_Extractor) == 0
+	if (snap.count(BWAPI::UnitTypes::Zerg_Hatchery) >= 2 &&
+		snap.count(BWAPI::UnitTypes::Zerg_Spawning_Pool) > 0 &&
+		snap.count(BWAPI::UnitTypes::Zerg_Extractor) == 0
 		||
-		snap.getCount(BWAPI::UnitTypes::Terran_Barracks) >= 2 &&
-		snap.getCount(BWAPI::UnitTypes::Terran_Refinery) == 0 &&
-		snap.getCount(BWAPI::UnitTypes::Terran_Command_Center) <= 1
+		snap.count(BWAPI::UnitTypes::Terran_Barracks) >= 2 &&
+		snap.count(BWAPI::UnitTypes::Terran_Refinery) == 0 &&
+		snap.count(BWAPI::UnitTypes::Terran_Command_Center) <= 1
 		||
-		snap.getCount(BWAPI::UnitTypes::Protoss_Gateway) >= 2 &&
-		snap.getCount(BWAPI::UnitTypes::Protoss_Assimilator) == 0 &&
-		snap.getCount(BWAPI::UnitTypes::Protoss_Nexus) <= 1)
+		snap.count(BWAPI::UnitTypes::Protoss_Gateway) >= 2 &&
+		snap.count(BWAPI::UnitTypes::Protoss_Assimilator) == 0 &&
+		snap.count(BWAPI::UnitTypes::Protoss_Nexus) <= 1)
 	{
 		_openingPlan = OpeningPlan::HeavyRush;
 		_planIsFixed = true;
@@ -179,10 +180,10 @@ void OpponentPlan::recognize()
 	// Recognize expansions with pre-placed static defense.
 	// Zerg can't do this.
 	// NOTE Incomplete test! We don't check the location of the static defense
-	if (Bases::Instance().baseCount(BWAPI::Broodwar->enemy()) >= 2)
+	if (the.bases.baseCount(BWAPI::Broodwar->enemy()) >= 2)
 	{
-		if (snap.getCount(BWAPI::UnitTypes::Terran_Bunker) > 0 ||
-			snap.getCount(BWAPI::UnitTypes::Protoss_Photon_Cannon) > 0)
+		if (snap.count(BWAPI::UnitTypes::Terran_Bunker) > 0 ||
+			snap.count(BWAPI::UnitTypes::Protoss_Photon_Cannon) > 0)
 		{
 			_openingPlan = OpeningPlan::SafeExpand;
 			return;
@@ -191,7 +192,7 @@ void OpponentPlan::recognize()
 
 	// Recognize a naked expansion.
 	// This has to run after the SafeExpand check, since it doesn't check for what's missing.
-	if (Bases::Instance().baseCount(BWAPI::Broodwar->enemy()) >= 2)
+	if (the.bases.baseCount(BWAPI::Broodwar->enemy()) >= 2)
 	{
 		_openingPlan = OpeningPlan::NakedExpand;
 		return;
@@ -199,11 +200,11 @@ void OpponentPlan::recognize()
 
 	// Recognize a turtling enemy.
 	// NOTE Incomplete test! We don't check where the defenses are placed.
-	if (Bases::Instance().baseCount(BWAPI::Broodwar->enemy()) < 2)
+	if (the.bases.baseCount(BWAPI::Broodwar->enemy()) < 2)
 	{
-		if (snap.getCount(BWAPI::UnitTypes::Terran_Bunker) >= 2 ||
-			snap.getCount(BWAPI::UnitTypes::Protoss_Photon_Cannon) >= 2 ||
-			snap.getCount(BWAPI::UnitTypes::Zerg_Sunken_Colony) >= 2)
+		if (snap.count(BWAPI::UnitTypes::Terran_Bunker) >= 2 ||
+			snap.count(BWAPI::UnitTypes::Protoss_Photon_Cannon) >= 2 ||
+			snap.count(BWAPI::UnitTypes::Zerg_Sunken_Colony) >= 2)
 		{
 			_openingPlan = OpeningPlan::Turtle;
 			return;

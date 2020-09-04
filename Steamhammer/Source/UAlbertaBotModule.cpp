@@ -4,33 +4,25 @@
  *----------------------------------------------------------------------
  */
 
-#include "JSONTools.h"
-
 #include "UAlbertaBotModule.h"
 
-#include "Bases.h"
-#include "Common.h"
-#include "OpponentModel.h"
+#include "../../BOSS/source/BOSS.h"
+#include "GameCommander.h"
 #include "ParseUtils.h"
-#include "UnitUtil.h"
 
 using namespace UAlbertaBot;
 
 UAlbertaBotModule::UAlbertaBotModule()
-	: the(The::Root())
 {
 }
 
 // BWAPI calls this when the bot starts.
 void UAlbertaBotModule::onStart()
 {
-	the.initialize();
+    the.initialize();
 
     // Initialize BOSS, the Build Order Search System
     BOSS::init();
-
-	// Map analysis.
-	Bases::Instance().initialize();
 
 	// Parse the bot's configuration file.
 	// Change this file path (in config.cpp) to point to your config file.
@@ -90,7 +82,8 @@ void UAlbertaBotModule::onFrame()
         BWAPI::Broodwar->drawTextScreen(10, 75, "%cFile Not Found (or is empty): %c %s", white, green, Config::ConfigFile::ConfigFileLocation.c_str());
         return;
     }
-    else if (!Config::ConfigFile::ConfigFileParsed)
+
+    if (!Config::ConfigFile::ConfigFileParsed)
     {
         BWAPI::Broodwar->drawBoxScreen(0,0,450,100, BWAPI::Colors::Black, true);
         BWAPI::Broodwar->setTextSize(BWAPI::Text::Size::Huge);

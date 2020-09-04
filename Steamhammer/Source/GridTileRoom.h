@@ -7,13 +7,8 @@
 
 namespace UAlbertaBot
 {
-class The;
-
 class GridTileRoom : public Grid
 {
-private:
-	The & the;
-
 public:
 	GridTileRoom();
 

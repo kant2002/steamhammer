@@ -12,7 +12,7 @@ namespace Config
     {
         bool ConfigFileFound                = false;
         bool ConfigFileParsed               = false;
-        std::string ConfigFileLocation      = "bwapi-data/AI/Steamhammer_2.4.2.json";
+        std::string ConfigFileLocation      = "bwapi-data/AI/Steamhammer_3.0.2.json";
     }
 
 	namespace IO
@@ -37,8 +37,7 @@ namespace Config
 		bool SurrenderWhenHopeIsLost        = true;
 
         bool ScoutHarassEnemy               = false;
-		bool AutoGasSteal                   = true;
-		double RandomGasStealRate           = 0.0;
+		bool GasSteal                       = true;
 
         bool Burrow                         = true;
         int MaxQueens                       = 0;
@@ -84,26 +83,26 @@ namespace Config
         bool DrawBuildOrderSearchInfo       = false;
 		bool DrawQueueFixInfo				= false;
         bool DrawScoutInfo                  = false;
-        bool DrawResourceInfo               = false;
         bool DrawWorkerInfo                 = false;
         bool DrawModuleTimers               = false;
         bool DrawReservedBuildingTiles      = false;
         bool DrawCombatSimulationInfo       = false;
         bool DrawBuildingInfo               = false;
-        bool DrawMouseCursorInfo            = false;
         bool DrawEnemyUnitInfo              = false;
+        bool DrawUnitCounts                 = false;
 		bool DrawHiddenEnemies				= false;
 		bool DrawMapInfo					= false;
         bool DrawMapGrid                    = false;
 		bool DrawMapDistances				= false;
+        bool DrawTerrainHeights             = false;
 		bool DrawBaseInfo					= false;
 		bool DrawStrategyBossInfo			= false;
-		bool DrawUnitTargetInfo				= false;
+		bool DrawUnitTargets				= false;
 		bool DrawUnitOrders					= false;
 		bool DrawMicroState					= false;
         bool DrawSquadInfo                  = false;
 		bool DrawClusters					= false;
-        bool DrawBOSSStateInfo              = false;
+        bool DrawResourceAmounts            = false;
 
         BWAPI::Color ColorLineTarget        = BWAPI::Colors::White;
         BWAPI::Color ColorLineMineral       = BWAPI::Colors::Cyan;

@@ -1,6 +1,7 @@
 #include "MicroManager.h"
 #include "MicroLurkers.h"
 
+#include "InformationManager.h"
 #include "The.h"
 #include "UnitUtil.h"
 
@@ -10,7 +11,7 @@ using namespace UAlbertaBot;
 BWAPI::Unit MicroLurkers::getNearestTarget(BWAPI::Unit lurker, const BWAPI::Unitset & targets) const
 {
 	int highPriority = 0;
-	int closestDist = 99999;
+    int closestDist = INT_MAX;
 	BWAPI::Unit bestTarget = nullptr;
 
 	for (BWAPI::Unit target : targets)
@@ -60,6 +61,61 @@ BWAPI::Unit MicroLurkers::getFarthestTarget(BWAPI::Unit lurker, const BWAPI::Uni
 	return bestTarget;
 }
 
+// An unseen enemy could kill the lurker if it unburrows now. That means either
+// 1. An undetected cloaked unit like a dark templar, or
+// 2. A known enemy in range but out of sight on high ground.
+bool MicroLurkers::hiddenEnemyInRange(BWAPI::Unit lurker) const
+{
+    if (UnitUtil::EnemyDetectorInRange(lurker))
+    {
+        // We're detected anyway, unburrowing won't make us more detected.
+        return false;
+    }
+
+    for (const auto & kv : the.info.getUnitData(the.enemy()).getUnits())
+    {
+        const UnitInfo & ui(kv.second);
+
+        if (!ui.goneFromLastPosition && !ui.lifted)
+        {
+            if (ui.unit && ui.unit->isVisible())
+            {
+                // The enemy unit is in sight.
+                if (!ui.unit->isDetected() &&
+                    lurker->getDistance(ui.lastPosition) < 8 * 32)
+                {
+                    //BWAPI::Broodwar->printf("lurker %d near cloaked %s", lurker->getID(), UnitTypeName(ui.type).c_str());
+                    return true;
+                }
+            }
+            else
+            {
+                // The enemy unit is out of sight.
+                int enemyRange = UnitUtil::GetAttackRangeAssumingUpgrades(ui.type, BWAPI::UnitTypes::Zerg_Lurker);
+                if (enemyRange > 0 && lurker->getDistance(ui.lastPosition) <= enemyRange + 31)
+                {
+                    //BWAPI::Broodwar->printf("lurker %d near unseen %s", lurker->getID(), UnitTypeName(ui.type).c_str());
+                    return true;
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
+// The lurker can probably unburrow without dying immediately or irradiating its friends.
+// Though the answer will be wrong if we're surrounded by dragoons....
+// Unburrow only at set intervals, to reduce the burrow-unburrow frenzy.
+bool MicroLurkers::okToUnburrow(BWAPI::Unit lurker) const
+{
+    return
+        BWAPI::Broodwar->getFrameCount() % 25 == 0 &&
+        lurker->getHitPoints() > 31 &&
+        !lurker->isIrradiated() &&
+        !hiddenEnemyInRange(lurker);
+}
+
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
 MicroLurkers::MicroLurkers()
@@ -79,8 +135,8 @@ void MicroLurkers::executeMicro(const BWAPI::Unitset & targets, const UnitCluste
 	std::copy_if(targets.begin(), targets.end(), std::inserter(lurkerTargets, lurkerTargets.end()),
 		[=](BWAPI::Unit u){
 			return
-                !u->isFlying() &&
                 u->isVisible() &&
+                !u->isFlying() &&
                 u->isDetected() &&
  				u->getPosition().isValid() &&
                 !infestable(u) &&
@@ -105,7 +161,7 @@ void MicroLurkers::executeMicro(const BWAPI::Unitset & targets, const UnitCluste
 
 			const int lurkerRange = BWAPI::UnitTypes::Zerg_Lurker.groundWeapon().maxRange();
 
-			if (Config::Debug::DrawUnitTargetInfo) {
+			if (Config::Debug::DrawUnitTargets) {
 				BWAPI::Broodwar->drawLineMap(lurker->getPosition(), target->getPosition(), BWAPI::Colors::Blue);
 				if (lurker->getTarget() && lurker->getTarget()->getPosition().isValid())
 				{
@@ -115,16 +171,7 @@ void MicroLurkers::executeMicro(const BWAPI::Unitset & targets, const UnitCluste
 				BWAPI::Broodwar->drawTextMap(lurker->getPosition() + BWAPI::Position(20, -10), "%c%d/192", white, dist);
 			}
 
-			// Special case for photon cannons. Don't engage them with only a few lurkers.
-			// TODO the special case doesn't help
-			const bool cannonDanger =
-				target->getType() == BWAPI::UnitTypes::Protoss_Photon_Cannon &&
-				lurkers.size() < 5;
-			const int cannonRange = (BWAPI::UnitTypes::Protoss_Photon_Cannon).groundWeapon().maxRange();
-
-			if (dist <= 64 ||
-				isThreat && dist <= lurkerRange ||
-				cannonDanger && dist > cannonRange + 32 && dist < cannonRange + 128)
+			if (dist <= 65 || isThreat && dist <= lurkerRange)
 			{
 				// Burrow or stay burrowed.
 				if (lurker->canBurrow())
@@ -143,14 +190,13 @@ void MicroLurkers::executeMicro(const BWAPI::Unitset & targets, const UnitCluste
 				isThreat && dist > std::max(lurkerRange, 32 + UnitUtil::GetAttackRange(target, lurker)))
 			{
 				// Possibly unburrow and move.
-				if (lurker->canUnburrow() && !inOrderRange && lurker->getHitPoints() > 30 && !lurker->isIrradiated())
+				if (lurker->canUnburrow() &&
+                    !inOrderRange &&
+                    okToUnburrow(lurker))
 				{
-					// Unburrow only at set intervals. Reduces the burrow-unburrow frenzy.
-					if (BWAPI::Broodwar->getFrameCount() % 24 == 0)
-					{
-						the.micro.Unburrow(lurker);
-					}
-				}
+                    //BWAPI::Broodwar->printf("unburrow lurker %d with target", lurker->getID());
+                    the.micro.Unburrow(lurker);
+                }
 				else if (lurker->isBurrowed())
 				{
 					if (dist <= lurkerRange)
@@ -182,7 +228,7 @@ void MicroLurkers::executeMicro(const BWAPI::Unitset & targets, const UnitCluste
 		}
 		else
 		{
-			if (Config::Debug::DrawUnitTargetInfo)
+			if (Config::Debug::DrawUnitTargets)
 			{
 				BWAPI::Broodwar->drawLineMap(lurker->getPosition(), order.getPosition(), BWAPI::Colors::White);
 			}
@@ -199,9 +245,13 @@ void MicroLurkers::executeMicro(const BWAPI::Unitset & targets, const UnitCluste
 			}
 			else
 			{
-				if (lurker->canUnburrow())
+                if (lurker->canUnburrow())
 				{
-					the.micro.Unburrow(lurker);
+                    if (okToUnburrow(lurker))
+                    {
+                        //BWAPI::Broodwar->printf("unburrow lurker %d without target", lurker->getID());
+                        the.micro.Unburrow(lurker);
+                    }
 				}
 				else
 				{
@@ -232,12 +282,14 @@ BWAPI::Unit MicroLurkers::getTarget(BWAPI::Unit lurker, const BWAPI::Unitset & t
 		}
 	}
 
+    // If we can shoot, choose the most distant target because it's more effective.
 	if (lurker->isBurrowed() && !targetsInRange.empty())
 	{
 		return getFarthestTarget(lurker, targetsInRange);
 	}
 
 	// If any targets are in lurker range, then always return one of the targets in range.
+    // The nearest one is the one we should approach.
 	const BWAPI::Unitset & newTargets = targetsInRange.empty() ? targets : targetsInRange;
 	return getNearestTarget(lurker, newTargets);
 }

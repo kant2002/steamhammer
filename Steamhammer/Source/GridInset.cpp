@@ -15,7 +15,6 @@ const int actionY[LegalActions] = { 0, 0, 1, -1 };
 // Necessary if a Grid subclass is created before BWAPI is initialized.
 GridInset::GridInset()
 	: GridWalk()
-	, the(The::Root())
 {
 }
 
@@ -30,7 +29,7 @@ void GridInset::initialize()
 	fringe.reserve(width * height);
 
 	// 1. Put any walkable tiles on the edge of the map into the fringe.
-	// They are next an unwalkable edge and have inset == 1.
+	// They are next to an unwalkable edge and have inset == 1.
 	for (int x = 0; x < width; ++x)				// this includes the corner tiles
 	{
 		if (the.partitions.walkable(x, 0))

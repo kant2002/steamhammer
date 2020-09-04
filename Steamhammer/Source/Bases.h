@@ -30,17 +30,16 @@ namespace UAlbertaBot
 	class Bases
 	{
 	private:
-		The & the;
-
 		std::vector<Base *> bases;
 		std::vector<Base *> startingBases;			// starting locations
 		Base * startingBase;                        // always set, not always owned by us
 		Base * mainBase;							// always set, owned by us iff we own any base
 		Base * naturalBase;                         // not always set - some maps have no natural
 		Base * enemyStartingBase;					// set when and if we find out
-		std::vector<BWAPI::Unit> smallMinerals;		// patches too small to be worth mining
+		BWAPI::Unitset smallMinerals;		        // patches too small to be worth mining
 
 		bool islandStart;
+        bool islandBases;
 		std::map<BWAPI::Unit, Base *> baseBlockers;	// neutral building to destroy -> base it belongs to
 
 		// Debug data structures. Not used for any other purpose, can be deleted with their uses.
@@ -49,7 +48,9 @@ namespace UAlbertaBot
 
 		Bases();
 
-		bool checkIslandMap() const;
+        void setBaseIDs();
+        bool checkIslandStart() const;
+        bool checkIslandBases() const;
 		void rememberBaseBlockers();
 		void setNaturalBase();
 
@@ -69,6 +70,7 @@ namespace UAlbertaBot
 		void updateEnemyStart();
 		void updateBaseOwners();
 		void updateMainBase();
+        void updateSmallMinerals();
 
 	public:
 		void initialize();
@@ -78,12 +80,13 @@ namespace UAlbertaBot
 		void drawBaseInfo() const;
 		void drawBaseOwnership(int x, int y) const;
 
-		Base * myStartingBase() const { return startingBase; };		// always set
-		Base * myMainBase() const { return mainBase; }				// always set
-		Base * myNaturalBase() const { return naturalBase; };		// may be null
-		Base * frontBase() const;									// may be null
+		Base * myStart() const { return startingBase; };		// always set
+		Base * myMain() const { return mainBase; }				// always set
+		Base * myNatural() const { return naturalBase; };		// may be null
+		Base * myFront() const;									// may be null
 		BWAPI::TilePosition frontPoint() const;
 		bool isIslandStart() const { return islandStart; };
+        bool hasIslandBases() const { return islandBases; };
 
 		Base * enemyStart() const { return enemyStartingBase; }		// may be null at first
 
@@ -91,15 +94,15 @@ namespace UAlbertaBot
 		bool connectedToStart(const BWAPI::TilePosition & tile) const;
 
 		Base * getBaseAtTilePosition(BWAPI::TilePosition pos);
-		const std::vector<Base *> & getBases() const { return bases; };
-		const std::vector<Base *> & getStartingBases() const { return startingBases; };
-		const std::vector<BWAPI::Unit> & getSmallMinerals() const { return smallMinerals; };
+		const std::vector<Base *> & getAll() const { return bases; };
+		const std::vector<Base *> & getStarting() const { return startingBases; };
+		const BWAPI::Unitset & getSmallMinerals() const { return smallMinerals; };
 
 		int baseCount(BWAPI::Player player) const;
 		int completedBaseCount(BWAPI::Player player) const;
 		int freeLandBaseCount() const;
 		int mineralPatchCount() const;
-		int geyserCount() const;
+        int geyserCount(BWAPI::Player player) const;
 		void gasCounts(int & nRefineries, int & nFreeGeysers) const;
 
 		bool getEnemyProxy() const;

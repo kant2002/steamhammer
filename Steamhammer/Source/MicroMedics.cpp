@@ -24,7 +24,7 @@ void MicroMedics::update(const UnitCluster & cluster, BWAPI::Unit vanguard)
 
 	// create a set of all medic targets
 	BWAPI::Unitset medicTargets;
-    for (const auto unit : BWAPI::Broodwar->self()->getUnits())
+    for (BWAPI::Unit unit : BWAPI::Broodwar->self()->getUnits())
     {
         if (unit->getHitPoints() < unit->getInitialHitPoints() && unit->getType().isOrganic())
         {
@@ -43,7 +43,7 @@ void MicroMedics::update(const UnitCluster & cluster, BWAPI::Unit vanguard)
             continue;
         }
 
-        int closestMedicDist = 99999;
+        int closestMedicDist = INT_MAX;
         BWAPI::Unit closestMedic = nullptr;
 
         for (const auto medic : availableMedics)
@@ -84,7 +84,7 @@ void MicroMedics::update(const UnitCluster & cluster, BWAPI::Unit vanguard)
 int MicroMedics::getTotalEnergy()
 {
 	int energy = 0;
-	for (const auto unit : getUnits())
+	for (BWAPI::Unit unit : getUnits())
 	{
 		energy += unit->getEnergy();
 	}

@@ -10,7 +10,6 @@ using namespace UAlbertaBot;
 // Necessary if a Grid subclass is created before BWAPI is initialized.
 GridTileRoom::GridTileRoom()
 	: Grid()
-	, the(The::Root())
 {
 }
 

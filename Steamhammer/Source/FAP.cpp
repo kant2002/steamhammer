@@ -154,7 +154,7 @@ namespace UAlbertaBot {
 		}
 
 		auto closestEnemy = enemyUnits.end();
-		int closestDist = 99999999;        // actually distance squared
+        int closestDist = INT_MAX;        // actually distance squared
 
 		// NOTE This skips siege tanks, which do splash damage under swarm.
 		const bool hitUnderSwarm =
@@ -238,7 +238,7 @@ namespace UAlbertaBot {
 
 	void FastAPproximation::medicsim(const FAPUnit & fu, std::vector<FAPUnit> &friendlyUnits) {
 		auto closestHealable = friendlyUnits.end();
-        int closestDist = 99999999;
+        int closestDist = INT_MAX;
 
 		for (auto it = friendlyUnits.begin(); it != friendlyUnits.end(); ++it) {
 			if (it->isOrganic && it->health < it->maxHealth && !it->didHealThisFrame) {
@@ -268,7 +268,7 @@ namespace UAlbertaBot {
 
 	bool FastAPproximation::suicideSim(const FAPUnit & fu, std::vector<FAPUnit>& enemyUnits) {
 		auto closestEnemy = enemyUnits.end();
-        int closestDist = 99999999;
+        int closestDist = INT_MAX;
 
 		for (auto enemyIt = enemyUnits.begin(); enemyIt != enemyUnits.end(); ++enemyIt) {
 			if (enemyIt->flying) {

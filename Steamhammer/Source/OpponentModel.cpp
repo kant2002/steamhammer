@@ -1,7 +1,10 @@
+#include <fstream>
+
 #include "OpponentModel.h"
 
 #include "Bases.h"
 #include "Random.h"
+#include "The.h"
 
 using namespace UAlbertaBot;
 
@@ -34,7 +37,7 @@ OpeningPlan OpponentModel::predictEnemyPlan() const
 	double weight = 1.0;
 	for (const GameRecord * record : _pastGameRecords)
 	{
-		if (_gameRecord.sameMatchup(*record))
+		if (sameMatchup(*record))
 		{
 			PlanInfoType & info = planInfo[int(record->getEnemyPlan())];
 			info.games += 1;
@@ -78,7 +81,7 @@ void OpponentModel::considerSingleStrategy()
 
 	for (const GameRecord * record : _pastGameRecords)
 	{
-		if (_gameRecord.sameMatchup(*record))
+		if (sameMatchup(*record))
 		{
 			OpeningPlan plan = record->getEnemyPlan();
 			if (plan == OpeningPlan::Unknown)
@@ -112,7 +115,7 @@ void OpponentModel::considerOpenings()
 	// Gather basic information from the game records.
 	for (const GameRecord * record : _pastGameRecords)
 	{
-		if (_gameRecord.sameMatchup(*record))
+		if (sameMatchup(*record))
 		{
 			++_summary.totalGames;
 			if (record->getWin())
@@ -371,7 +374,7 @@ void OpponentModel::reconsiderEnemyPlan()
 		return;
 	}
 
-	if (!_gameRecord.getEnemyIsRandom() || BWAPI::Broodwar->enemy()->getRace() == BWAPI::Races::Unknown)
+	if (!_gameRecord.getEnemyIsRandom() || the.enemy()->getRace() == BWAPI::Races::Unknown)
 	{
 		// For now, we only update the expected plan if the enemy went random
 		// and we have now learned its race. 
@@ -387,78 +390,6 @@ void OpponentModel::reconsiderEnemyPlan()
 
 	// We set the new expected plan even if it is Unknown. Better to know that we don't know.
 	_expectedEnemyPlan = predictEnemyPlan();
-}
-
-// If it seems appropriate to try to steal the enemy's gas, note that.
-// We randomly steal gas at a configured rate, then possibly auto-steal gas if
-// we have data about the opponent suggesting it might be a good idea.
-// This version runs once per game at the start. Future versions might run later,
-// so they can take into account what the opponent is doing.
-void OpponentModel::considerGasSteal()
-{
-	// 1. Random gas stealing.
-	// This part really should run only once per game.
-	if (Random::Instance().flag(Config::Skills::RandomGasStealRate))
-	{
-		_recommendGasSteal = true;
-		return;
-	}
-
-	// 2. Is auto gas stealing turned on?
-	if (!Config::Skills::AutoGasSteal)
-	{
-		return;
-	}
-
-	// 3. Gather data.
-	// We add fictitious games saying that not stealing gas was tried once and won, and stealing gas
-	// was tried thrice and lost. That way we don't try stealing gas unless we lose games without;
-	// it represents that stealing gas has a cost.
-	int nGames = 4;           // 4 fictitious games total
-	int nWins = 1;            // 1 fictitious win total
-	int nStealTries = 3;      // 3 fictitious gas steals
-	int nStealWins = 0;       // 3 fictitious losses on gas steal
-	int nStealSuccesses = 0;  // for deciding on timing (not used yet)
-	for (const GameRecord * record : _pastGameRecords)
-	{
-		if (_gameRecord.sameMatchup(*record))
-		{
-			++nGames;
-			if (record->getWin())
-			{
-				++nWins;
-			}
-			if (record->getFrameScoutSentForGasSteal())
-			{
-				++nStealTries;
-				if (record->getWin())
-				{
-					++nStealWins;
-				}
-				if (record->getGasStealHappened())
-				{
-					++nStealSuccesses;
-				}
-			}
-		}
-	}
-
-	// 3. Decide.
-	// We're deciding whether to TRY to steal gas, so measure whether TRYING helps.
-	// Because of the fictitious games, we never divide by zero.
-	int plainGames = nGames - nStealTries;
-	int plainWins = nWins - nStealWins;
-	double plainWinRate = double(plainWins) / plainGames;
-	double stealWinRate = double(nStealWins) / nStealTries;
-
-	double plainUCB = plainWinRate + UCB1_bound(plainGames, nGames);
-	double stealUCB = stealWinRate + UCB1_bound(nStealTries, nGames);
-
-	//BWAPI::Broodwar->printf("plain wins %d/%d -> %g steal wins %d/%d -> %g",
-	//	plainWins, plainGames, plainUCB,
-	//	nStealWins, nStealTries, stealUCB);
-
-	_recommendGasSteal = stealUCB > plainUCB;
 }
 
 // Find the past game record which best matches the current game and remember it.
@@ -524,9 +455,8 @@ OpponentModel::OpponentModel()
 	, _singleStrategy(false)
 	, _initialExpectedEnemyPlan(OpeningPlan::Unknown)
 	, _expectedEnemyPlan(OpeningPlan::Unknown)
-	, _recommendGasSteal(false)
 {
-	std::string name = BWAPI::Broodwar->enemy()->getName();
+	std::string name = the.enemy()->getName();
 
 	// Replace characters that the filesystem may not like with '_'.
 	// TODO Obviously not a thorough job.
@@ -538,6 +468,9 @@ OpponentModel::OpponentModel()
 // Read past game records from the opponent model file, and do initial analysis.
 void OpponentModel::read()
 {
+    // This creates the skills, which is necessary for reading the data files.
+    the.skillkit.initialize();
+
 	if (Config::IO::ReadOpponentModel)
 	{
         std::ifstream inFile;
@@ -581,7 +514,6 @@ void OpponentModel::read()
 	_expectedEnemyPlan = _initialExpectedEnemyPlan = predictEnemyPlan();
 	considerSingleStrategy();
 	considerOpenings();
-	considerGasSteal();
 }
 
 // Write the game records to the opponent model file.
@@ -607,7 +539,7 @@ void OpponentModel::write()
 
 		// Rewrite any old records that were read in.
 		// Not needed for local testing or for SSCAIT, necessary for other competitions.
-		for (auto record : _pastGameRecords)
+		for (GameRecord * record : _pastGameRecords)
 		{
 			if (nToSkip > 0)
 			{
@@ -673,6 +605,13 @@ void OpponentModel::predictEnemy(int lookaheadFrames, PlayerSnapshot & snap) con
 	}
 }
 
+// Is this game record for the same matchup as the current game?
+// We usually ignore records which aren't.
+bool OpponentModel::sameMatchup(const GameRecord & record) const
+{
+    return _gameRecord.sameMatchup(record);
+}
+
 // The recognized enemy opening plan.
 OpeningPlan OpponentModel::getEnemyPlan() const
 {
@@ -718,7 +657,7 @@ OpeningPlan OpponentModel::getDarnLikelyEnemyPlan() const
 	}
 
 	if (_gameRecord.getEnemyIsRandom() &&
-		BWAPI::Broodwar->enemy()->getRace() != BWAPI::Races::Unknown)
+		the.enemy()->getRace() != BWAPI::Races::Unknown)
 	{
 		return _expectedEnemyPlan;
 	}

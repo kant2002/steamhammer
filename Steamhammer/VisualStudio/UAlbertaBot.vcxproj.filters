@@ -168,6 +168,14 @@
     <ClCompile Include="..\Source\BOSimulator.cpp" />
     <ClCompile Include="..\Source\GameRecordNow.cpp" />
     <ClCompile Include="..\Source\GridSafeAirPath.cpp" />
+    <ClCompile Include="..\Source\GridCreep.cpp" />
+    <ClCompile Include="..\Source\ResourceInfo.cpp" />
+    <ClCompile Include="..\Source\Skill.cpp" />
+    <ClCompile Include="..\Source\ScoutBoss.cpp" />
+    <ClCompile Include="..\Source\SkillGasSteal.cpp" />
+    <ClCompile Include="..\Source\SkillKit.cpp" />
+    <ClCompile Include="..\Source\SkillUnitTimings.cpp" />
+    <ClCompile Include="..\Source\GridBuildable.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Source\CombatCommander.h">
@@ -304,5 +312,13 @@
     <ClInclude Include="..\Source\BOSimulator.h" />
     <ClInclude Include="..\Source\GameRecordNow.h" />
     <ClInclude Include="..\Source\GridSafeAirPath.h" />
+    <ClInclude Include="..\Source\GridCreep.h" />
+    <ClInclude Include="..\Source\ResourceInfo.h" />
+    <ClInclude Include="..\Source\Skill.h" />
+    <ClInclude Include="..\Source\ScoutBoss.h" />
+    <ClInclude Include="..\Source\SkillGasSteal.h" />
+    <ClInclude Include="..\Source\SkillKit.h" />
+    <ClInclude Include="..\Source\SkillUnitTimings.h" />
+    <ClInclude Include="..\Source\GridBuildable.h" />
   </ItemGroup>
 </Project>
