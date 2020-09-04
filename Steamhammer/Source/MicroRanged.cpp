@@ -1,6 +1,7 @@
 #include "MicroRanged.h"
 
 #include "Bases.h"
+#include "InformationManager.h"
 #include "The.h"
 #include "UnitUtil.h"
 
@@ -37,12 +38,13 @@ void MicroRanged::assignTargets(const BWAPI::Unitset & rangedUnits, const BWAPI:
 	// The set of potential targets.
 	BWAPI::Unitset rangedUnitTargets;
     std::copy_if(targets.begin(), targets.end(), std::inserter(rangedUnitTargets, rangedUnitTargets.end()),
-		[](BWAPI::Unit u) {
+		[=](BWAPI::Unit u) {
 		return
 			u->isVisible() &&
 			u->isDetected() &&
 			u->getType() != BWAPI::UnitTypes::Zerg_Larva &&
 			u->getType() != BWAPI::UnitTypes::Zerg_Egg &&
+            !infestable(u) &&
 			!u->isInvincible();
 	});
 
@@ -304,7 +306,7 @@ BWAPI::Unit MicroRanged::getTarget(BWAPI::Unit rangedUnit, const BWAPI::Unitset 
 	return bestScore > 0 ? bestTarget : nullptr;
 }
 
-// get the attack priority of a target unit
+// How much do we want to attack this enenmy target?
 int MicroRanged::getAttackPriority(BWAPI::Unit rangedUnit, BWAPI::Unit target) 
 {
 	const BWAPI::UnitType rangedType = rangedUnit->getType();
@@ -337,7 +339,7 @@ int MicroRanged::getAttackPriority(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 		return 15;
 	}
 
-	// if the target is building something near our base something is fishy
+	// if the target is building something near our base, something is fishy
     BWAPI::Position ourBasePosition = BWAPI::Position(Bases::Instance().myMainBase()->getPosition());
 	if (target->getDistance(ourBasePosition) < 1000) {
 		if (target->getType().isWorker() && (target->isConstructing() || target->isRepairing()))
@@ -359,7 +361,7 @@ int MicroRanged::getAttackPriority(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 	}
     
 	if (rangedType.isFlyer()) {
-		// Exceptions if we're a flyer (other than scourge, which is handled above).
+		// Exceptions if we're a flyer.
 		if (targetType == BWAPI::UnitTypes::Zerg_Scourge)
 		{
 			return 12;
@@ -436,11 +438,20 @@ int MicroRanged::getAttackPriority(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 	}
 	// Also as bad are other dangerous things.
 	if (targetType == BWAPI::UnitTypes::Terran_Science_Vessel ||
-		targetType == BWAPI::UnitTypes::Zerg_Scourge ||
-		targetType == BWAPI::UnitTypes::Protoss_Observer)
+		targetType == BWAPI::UnitTypes::Zerg_Scourge)
 	{
 		return 10;
 	}
+    if (targetType == BWAPI::UnitTypes::Protoss_Observer)
+    {
+        // If we have cloaked units, observers are worse than threats.
+        if (InformationManager::Instance().weHaveCloakTech())
+        {
+            return 11;
+        }
+        // Otherwise, they are equal.
+        return 10;
+    }
 	// Next are workers.
 	if (targetType.isWorker()) 
 	{
@@ -468,61 +479,8 @@ int MicroRanged::getAttackPriority(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 	{
 		return 8;
 	}
-	// Nydus canal is the most important building to kill.
-	if (targetType == BWAPI::UnitTypes::Zerg_Nydus_Canal)
-	{
-		return 10;
-	}
-	// Spellcasters are as important as key buildings.
-	// Also remember to target other non-threat combat units.
-	if (targetType.isSpellcaster() ||
-		targetType.groundWeapon() != BWAPI::WeaponTypes::None ||
-		targetType.airWeapon() != BWAPI::WeaponTypes::None)
-	{
-		return 7;
-	}
-	// Templar tech and spawning pool are more important.
-	if (targetType == BWAPI::UnitTypes::Protoss_Templar_Archives)
-	{
-		return 7;
-	}
-	if (targetType == BWAPI::UnitTypes::Zerg_Spawning_Pool)
-	{
-		return 7;
-	}
-	// Don't forget the nexus/cc/hatchery.
-	if (targetType.isResourceDepot())
-	{
-		return 6;
-	}
-	if (targetType == BWAPI::UnitTypes::Protoss_Pylon)
-	{
-		return 5;
-	}
-	if (targetType == BWAPI::UnitTypes::Terran_Factory || targetType == BWAPI::UnitTypes::Terran_Armory)
-	{
-		return 5;
-	}
-	// Downgrade unfinished/unpowered buildings, with exceptions.
-	if (targetType.isBuilding() &&
-		(!target->isCompleted() || !target->isPowered()) &&
-		!(	targetType.isResourceDepot() ||
-			targetType.groundWeapon() != BWAPI::WeaponTypes::None ||
-			targetType.airWeapon() != BWAPI::WeaponTypes::None ||
-			targetType == BWAPI::UnitTypes::Terran_Bunker))
-	{
-		return 2;
-	}
-	if (targetType.gasPrice() > 0)
-	{
-		return 4;
-	}
-	if (targetType.mineralPrice() > 0)
-	{
-		return 3;
-	}
-	// Finally everything else.
-	return 1;
+
+    return getBackstopAttackPriority(target);
 }
 
 // Should the unit stay (or return) home until ready to move out?

@@ -34,6 +34,19 @@ bool UnitUtil::IsCompletedResourceDepot(BWAPI::Unit unit)
 		(unit->isCompleted() || unit->getType() == BWAPI::UnitTypes::Zerg_Lair || unit->getType() == BWAPI::UnitTypes::Zerg_Hive);
 }
 
+// Is the resource depot almost finished? We may want to start transferring workers now.
+// A lair or hive is a completed resource depot even if not a completed unit.
+bool UnitUtil::IsNearlyCompletedResourceDepot(BWAPI::Unit unit, int framesLeft)
+{
+    return
+        unit &&
+        unit->getType().isResourceDepot() &&
+        (unit->isCompleted() ||
+         unit->getRemainingBuildTime() <= framesLeft ||
+         unit->getType() == BWAPI::UnitTypes::Zerg_Lair ||
+         unit->getType() == BWAPI::UnitTypes::Zerg_Hive);
+}
+
 bool UnitUtil::IsStaticDefense(BWAPI::UnitType type)
 {
 	return
@@ -641,7 +654,7 @@ int UnitUtil::GetUncompletedUnitCount(BWAPI::UnitType type)
 			}
 		}
 
-		// The basic case.
+		// The basic case. Includes morphing buildings.
 		else if (unit->getType() == type && !unit->isCompleted())
 		{
 			++count;

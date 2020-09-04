@@ -44,7 +44,11 @@ MacroLocation MacroAct::getMacroLocationFromString(std::string & s)
 	{
 		return MacroLocation::Center;
 	}
-	if (s == "gas steal")
+    if (s == "proxy")
+    {
+        return MacroLocation::Proxy;
+    }
+    if (s == "gas steal")
 	{
 		return MacroLocation::GasSteal;
 	}
@@ -593,57 +597,23 @@ void MacroAct::produce(BWAPI::Unit producer)
 		return;
 	}
 
-	// If it's a terran add-on.
+	// A terran add-on.
 	if (isAddon())
 	{
 		The::Root().micro.Make(producer, getUnitType());
 	}
-	// If it's a building other than a morphed zerg building.
-	else if (isBuilding()                                   // implies act.isUnit()
+	// A building other than a morphed zerg building.
+	else if (isBuilding()                                   // implies isUnit()
 		&& !UnitUtil::IsMorphedBuildingType(getUnitType())) // not morphed from another zerg building
 	{
-		// Every once in a while, pick a new base as the "main" base to build in.
-		if (getRace() != BWAPI::Races::Protoss || getUnitType() == BWAPI::UnitTypes::Protoss_Pylon)
-		{
-			// NOTE This has been removed.
-			// InformationManager::Instance().maybeChooseNewMainBase();
-		}
-
-		// By default, build in the main base.
-		// BuildingManager will override the location if it needs to.
-		// Otherwise it will find some spot near desiredLocation.
-		BWAPI::TilePosition desiredLocation = Bases::Instance().myMainBase()->getTilePosition();
-
-		if (getMacroLocation() == MacroLocation::Front)
-		{
-			BWAPI::TilePosition front = Bases::Instance().frontPoint();
-			if (front.isValid())
-			{
-				desiredLocation = front;
-			}
-		}
-		else if (getMacroLocation() == MacroLocation::Natural)
-		{
-			Base * natural = Bases::Instance().myNaturalBase();
-			if (natural)
-			{
-				desiredLocation = natural->getTilePosition();
-			}
-		}
-		else if (getMacroLocation() == MacroLocation::Center)
-		{
-			// Near the center of the map.
-			desiredLocation = BWAPI::TilePosition(BWAPI::Broodwar->mapWidth() / 2, BWAPI::Broodwar->mapHeight() / 2);
-		}
-
-		BuildingManager::Instance().addBuildingTask(*this, desiredLocation, nullptr, getMacroLocation() == MacroLocation::GasSteal);
+        BWAPI::TilePosition desiredPosition = BuildingManager::Instance().getStandardDesiredPosition(getMacroLocation());
+        BuildingManager::Instance().addBuildingTask(*this, desiredPosition, nullptr, getMacroLocation() == MacroLocation::GasSteal);
 	}
-	// if we're dealing with a non-building unit, or a morphed zerg building
+	// A non-building unit, or a morphed zerg building.
 	else if (isUnit())
 	{
 		The::Root().micro.Make(producer, getUnitType());
 	}
-	// if we're dealing with a tech research
 	else if (isTech())
 	{
 		producer->research(getTechType());
@@ -654,6 +624,6 @@ void MacroAct::produce(BWAPI::Unit producer)
 	}
 	else
 	{
-		UAB_ASSERT(false, "Can't produce");
+		UAB_ASSERT(false, "can't produce");
 	}
 }

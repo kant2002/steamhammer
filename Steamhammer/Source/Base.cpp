@@ -5,84 +5,89 @@
 
 using namespace UAlbertaBot;
 
-// NOTE This depends on tilePosition, so the startingBase flag must be declared after tilePosition.
-bool Base::isStartingBase() const
-{
-	for (BWAPI::TilePosition tile : BWAPI::Broodwar->getStartLocations())
-	{
-		if (tile == tilePosition)
-		{
-			return true;
-		}
-	}
-	return false;
-}
-
 // For setting base.id on initialization.
 // The first base gets base id 1.
 static int BaseID = 1;
 
-// Create a base given its position and a set of resources that may belong to it.
-// The caller is responsible for eliminating resources which are too small to be worth it.
-Base::Base(BWAPI::TilePosition pos, const BWAPI::Unitset availableResources)
-	: id(BaseID)
-	, tilePosition(pos)
-	, distances(pos)
-	, reserved(false)
-	, startingBase(isStartingBase())
-	, workerDanger(false)
-	, failedPlacements(0)
-	, resourceDepot(nullptr)
-	, owner(BWAPI::Broodwar->neutral())
+// Is the base one of the map's starting bases?
+// The only purpose of this method is to initialize the startingBase flag.
+// NOTE This depends on tilePosition, so the startingBase flag must be declared after tilePosition.
+bool Base::findIsStartingBase() const
 {
-	++BaseID;
-
-	GridDistances resourceDistances(pos, BaseResourceRange, false);
-
-	for (BWAPI::Unit resource : availableResources)
-	{
-		if (resource->getInitialTilePosition().isValid() && resourceDistances.getStaticUnitDistance(resource) >= 0)
-		{
-			if (resource->getType().isMineralField())
-			{
-				minerals.insert(resource);
-			}
-			else if (resource->getType() == BWAPI::UnitTypes::Resource_Vespene_Geyser)
-			{
-				geysers.insert(resource);
-			}
-		}
-	}
-
-	// Fill in the set of blockers, destructible neutral units that are very close to the base
-	// and may interfere with its operation.
-	// This does not include the minerals to mine!
-	for (const auto unit : BWAPI::Broodwar->getStaticNeutralUnits())
-	{
-		// NOTE Khaydarin crystals are not destructible, and I don't know any way
-		// to find that out other than to check the name explicitly. Is there a way?
-		if (!unit->getType().canMove() &&
-			!unit->isInvincible() &&
-			unit->isTargetable() &&
-			!unit->isFlying() &&
-			unit->getType().getName().find("Khaydarin") == std::string::npos)
-		{
-			int dist = resourceDistances.getStaticUnitDistance(unit);
-			if (dist >= 0 && dist <= 9)
-			{
-				blockers.insert(unit);
-			}
-		}
-	}
+    for (BWAPI::TilePosition tile : BWAPI::Broodwar->getStartLocations())
+    {
+        if (tile == tilePosition)
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
-// Called from InformationManager to work around a bug related to BWAPI 4.1.2.
-// TODO is this still needed and correct?
+// Create a base given its position and a set of resources that may belong to it.
+// The caller is responsible for eliminating resources which are too small to be worth it.
+Base::Base(BWAPI::TilePosition pos, const BWAPI::Unitset availableResources)
+    : id(BaseID)
+    , tilePosition(pos)
+    , distances(pos)
+    , reserved(false)
+    , startingBase(findIsStartingBase())
+    , workerDanger(false)
+    , failedPlacements(0)
+    , resourceDepot(nullptr)
+    , owner(BWAPI::Broodwar->neutral())
+{
+    ++BaseID;
+
+    GridDistances resourceDistances(pos, BaseResourceRange, false);
+
+    for (BWAPI::Unit resource : availableResources)
+    {
+        if (resource->getInitialTilePosition().isValid() && resourceDistances.getStaticUnitDistance(resource) >= 0)
+        {
+            if (resource->getType().isMineralField())
+            {
+                minerals.insert(resource);
+            }
+            else if (resource->getType() == BWAPI::UnitTypes::Resource_Vespene_Geyser)
+            {
+                geysers.insert(resource);
+            }
+        }
+    }
+
+    // Fill in the set of blockers, destructible neutral units that are very close to the base
+    // and may interfere with its operation.
+    // This does not include the minerals to mine!
+    for (BWAPI::Unit unit : BWAPI::Broodwar->getStaticNeutralUnits())
+    {
+        // NOTE Khaydarin crystals are not destructible, and I don't know any way
+        // to find that out other than to check the name explicitly. Is there a way?
+        if (!unit->getType().canMove() &&
+            !unit->isInvincible() &&
+            unit->isTargetable() &&
+            !unit->isFlying() &&
+            unit->getType().getName().find("Khaydarin") == std::string::npos)
+        {
+            int dist = resourceDistances.getStaticUnitDistance(unit);
+            if (dist >= 0 && dist <= 9)
+            {
+                blockers.insert(unit);
+            }
+        }
+    }
+}
+
+// Recalculate the base's set of geysers, including refineries (completed or not).
+// This only works for visible geysers, so it should be called only for bases we own.
+// Called to work around a bug related to BWAPI 4.1.2.
 void Base::findGeysers()
 {
-	for (auto unit : BWAPI::Broodwar->getNeutralUnits())
+    geysers.clear();
+
+	for (BWAPI::Unit unit : BWAPI::Broodwar->getAllUnits())
 	{
 		if ((unit->getType() == BWAPI::UnitTypes::Resource_Vespene_Geyser || unit->getType().isRefinery()) &&
 			unit->getPosition().isValid() &&
@@ -93,7 +98,7 @@ void Base::findGeysers()
 	}
 }
 
-// Return the center of the resource depot.
+// Return the center of the resource depot location (whether one is there or not).
 const BWAPI::Position Base::getCenter() const
 {
 	return BWAPI::Position(tilePosition) + BWAPI::Position(64, 48);

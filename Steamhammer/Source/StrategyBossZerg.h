@@ -80,7 +80,7 @@ class StrategyBossZerg
 	int nCompletedHatches;
 	int nSpores;
 
-	int nGas;          // taken geysers
+	int nGas;          // taken geysers, including those with extractor morphing
 	int nFreeGas;      // untaken geysers at our completed bases
 
 	int nDrones;
@@ -129,10 +129,13 @@ class StrategyBossZerg
 	int enemyAntigroundArmySize;
 	int defilerScore;
 
+    bool _enemySeemsToBeDead;
     bool _wantDefensiveSpire;
 
 	int _lastQueenAliveFrame;	// last frame we had a living queen (now if one is still alive)
 	bool _recommendParasite;
+    bool _recommendEnsnare;
+    bool _recommendBroodling;
 
 	// For choosing the tech target and the unit mix.
 	std::array<int, int(TechUnit::Size)> techScores;
@@ -144,6 +147,7 @@ class StrategyBossZerg
 	bool enoughArmy() const;
 	bool enoughGroundArmy() const;
 	bool enemySeemsToBeDead(const PlayerSnapshot & snap) const;
+    bool canSafelyMineGas() const;
 
     int getOurSpireTiming() const;
 

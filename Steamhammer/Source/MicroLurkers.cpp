@@ -77,11 +77,14 @@ void MicroLurkers::executeMicro(const BWAPI::Unitset & targets, const UnitCluste
 	// Potential targets.
 	BWAPI::Unitset lurkerTargets;
 	std::copy_if(targets.begin(), targets.end(), std::inserter(lurkerTargets, lurkerTargets.end()),
-		[](BWAPI::Unit u){
+		[=](BWAPI::Unit u){
 			return
-				u->isVisible() &&
-				!u->isFlying() &&
-				u->getPosition().isValid();
+                !u->isFlying() &&
+                u->isVisible() &&
+                u->isDetected() &&
+ 				u->getPosition().isValid() &&
+                !infestable(u) &&
+                !u->isInvincible();
 		});
 	
 	for (BWAPI::Unit lurker : lurkers)
@@ -264,11 +267,6 @@ int MicroLurkers::getAttackPriority(BWAPI::Unit target) const
 		return 10;
 	}
 
-	// Nydus canal is critical.
-	if (targetType == BWAPI::UnitTypes::Zerg_Nydus_Canal)
-	{
-		return 10;
-	}
 	// Something that can attack us or aid in combat
 	if (UnitUtil::CanAttackGround(target) && !target->getType().isWorker())
 	{
@@ -291,36 +289,14 @@ int MicroLurkers::getAttackPriority(BWAPI::Unit target) const
 	{
 		return 8;
 	}
-	// next is special buildings
-	if (targetType == BWAPI::UnitTypes::Zerg_Spore_Colony)
-	{
-		return 6;
-	}
-	if (targetType == BWAPI::UnitTypes::Terran_Comsat_Station)
-	{
-		return 6;
-	}
-	if (targetType == BWAPI::UnitTypes::Zerg_Spawning_Pool)
-	{
-		return 5;
-	}
-	if (targetType == BWAPI::UnitTypes::Protoss_Observatory || targetType == BWAPI::UnitTypes::Protoss_Robotics_Facility)
-	{
-		return 5;
-	}
-	if (targetType == BWAPI::UnitTypes::Protoss_Pylon)
-	{
-		return 5;
-	}
-	// next is buildings that cost gas
-	if (targetType.gasPrice() > 0)
-	{
-		return 4;
-	}
-	if (targetType.mineralPrice() > 0)
-	{
-		return 3;
-	}
-	// then everything else
-	return 1;
+    if (targetType == BWAPI::UnitTypes::Terran_Comsat_Station)      // even if unfinished
+    {
+        return 7;
+    }
+    if (targetType == BWAPI::UnitTypes::Protoss_Observatory || targetType == BWAPI::UnitTypes::Protoss_Robotics_Facility)
+    {
+        return 7;
+    }
+
+    return getBackstopAttackPriority(target);
 }

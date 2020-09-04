@@ -7,8 +7,10 @@ namespace UAlbertaBot {
 	class FastAPproximation {
 		struct FAPUnit {
 			FAPUnit(BWAPI::Unit u);
-			FAPUnit(UnitInfo ui);
-			const FAPUnit &operator= (const FAPUnit &other) const;
+			FAPUnit(const UnitInfo & ui);
+
+			const FAPUnit &operator= (const FAPUnit & other) const;
+            double unitSpeed(const UnitInfo & ui) const;
 
 			int id = 0;
 
@@ -90,7 +92,6 @@ namespace UAlbertaBot {
 			void isimulate();
 			void unitDeath(const FAPUnit & fu, std::vector <FAPUnit> &itsFriendlies);
 			void convertToUnitType(const FAPUnit &fu, BWAPI::UnitType ut);
-
 	};
 
 }

@@ -540,10 +540,6 @@ BWAPI::TilePosition BuildingPlacer::findSpecialLocation(const Building & b) cons
 			tile = findGroupedLocation(b);
 		}
 	}
-	else if (b.type == BWAPI::UnitTypes::Terran_Barracks)
-	{
-		tile = findGroupedLocation(b);
-	}
 	else if (b.type == BWAPI::UnitTypes::Protoss_Pylon)
 	{
 		tile = findPylonlessBaseLocation(b);
@@ -595,7 +591,7 @@ BWAPI::TilePosition BuildingPlacer::getBuildLocationNear(const Building & b, int
 		tile = findAnyLocation(b, extraSpace);
 	}
 
-	// Let Bases decide whether the change the main base to another base.
+	// Let Bases decide whether to change which base is the main base.
 	Bases::Instance().checkBuildingPosition(b.desiredPosition, tile);
 
 	return tile;		// may be None
@@ -681,4 +677,42 @@ BWAPI::TilePosition BuildingPlacer::getRefineryPosition()
 	}
     
     return closestGeyser;
+}
+
+// TODO UNFINISHED This is not ready to use.
+// Figure out where to place proxy buildings near this enemy base.
+BWAPI::TilePosition BuildingPlacer::getProxyPosition(const Base * base) const
+{
+    // 1. Near the enemy natural, concealed by terrain. Only possible on a few maps.
+    // TODO unimplemented
+
+    // 2. In the enemy main base, as far away as possible from the enemy's position.
+
+    // Tiles sorted in order of closeness to the enemy resource depot.
+    const BWAPI::TilePosition enemyCenter = BWAPI::TilePosition(base->getCenter());
+    const std::vector<BWAPI::TilePosition> & closest = MapTools::Instance().getClosestTilesTo(enemyCenter);
+
+    // A fictitious large building to place.
+    Building b(BWAPI::UnitTypes::Zerg_Hatchery, BWAPI::TilePositions::None);
+
+    int bestDist = 8;
+    BWAPI::TilePosition bestTile = BWAPI::TilePositions::None;
+    for (const BWAPI::TilePosition & tile : closest)
+    {
+        const int dist = std::max(abs(tile.x - enemyCenter.x), abs(tile.y - enemyCenter.y));
+        if (dist > bestDist)
+        {
+            if (the.zone.at(tile) == the.zone.at(enemyCenter) && canBuildHere(tile, b))
+            {
+                bestDist = dist;
+                bestTile = tile;
+            }
+        }
+        else if (dist > 25)
+        {
+            // Too far away. Stop looking.
+            break;
+        }
+    }
+    return bestTile;
 }

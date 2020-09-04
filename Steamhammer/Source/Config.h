@@ -35,6 +35,7 @@ namespace Config
 	namespace Strategy
     {
         extern std::string StrategyName;
+        extern bool HumanOpponent;
         extern bool ScoutHarassEnemy;
 		extern bool AutoGasSteal;
 		extern double RandomGasStealRate;

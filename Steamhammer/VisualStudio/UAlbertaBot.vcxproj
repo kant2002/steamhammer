@@ -131,6 +131,7 @@
     <ClCompile Include="..\Source\FAP.cpp" />
     <ClCompile Include="..\Source\GameCommander.cpp" />
     <ClCompile Include="..\Source\GameRecord.cpp" />
+    <ClCompile Include="..\Source\GameRecordNow.cpp" />
     <ClCompile Include="..\Source\Grid.cpp" />
     <ClCompile Include="..\Source\GridAttacks.cpp" />
     <ClCompile Include="..\Source\GridDistances.cpp" />
@@ -203,6 +204,7 @@
     <ClInclude Include="..\Source\FAP.h" />
     <ClInclude Include="..\Source\GameCommander.h" />
     <ClInclude Include="..\Source\GameRecord.h" />
+    <ClInclude Include="..\Source\GameRecordNow.h" />
     <ClInclude Include="..\Source\Grid.h" />
     <ClInclude Include="..\Source\GridAttacks.h" />
     <ClInclude Include="..\Source\GridDistances.h" />

@@ -259,27 +259,25 @@ void UnitData::removeBadUnits()
 	}
 }
 
+// Should we remove this unitInfo record?
+// The records are stored per-player, so if the unit's owner changes, it definitely must go.
 const bool UnitData::badUnitInfo(const UnitInfo & ui) const
 {
-    if (!ui.unit)
-    {
-        return false;
-    }
+    return
+        // The unit should always be set. Check anyway.
+        !ui.unit ||
 
-	// Cull any refineries/assimilators/extractors that were destroyed and reverted to vespene geysers.
-	if (ui.unit->getType() == BWAPI::UnitTypes::Resource_Vespene_Geyser)
-	{ 
-		return true;
-	}
+        // The owner can change in some situations:
+        // - The unit is a refinery building and was destroyed, reverting to a neutral vespene geyser.
+        // - The unit was mind controlled.
+        // - The unit is a command center and was infested.
+        ui.unit->isVisible() && ui.unit->getPlayer() != ui.player ||
 
-	// If the unit is a building and we can currently see its position and it is not there.
-	// NOTE A terran building could have lifted off and moved away.
-	if (ui.type.isBuilding() && BWAPI::Broodwar->isVisible(BWAPI::TilePosition(ui.lastPosition)) && !ui.unit->isVisible())
-	{
-		return true;
-	}
-	
-	return false;
+        // The unit is a building and we can currently see its position and it is not there.
+        // It may have burned down, or the enemy may have chosen to destroy it.
+        // Or it may have been destroyed by splash damage while out of our sight.
+        // NOTE A terran building could have lifted off and moved away. In that case, we mistakenly drop it.
+        ui.type.isBuilding() && BWAPI::Broodwar->isVisible(BWAPI::TilePosition(ui.lastPosition)) && !ui.unit->isVisible();
 }
 
 int UnitData::getGasLost() const 

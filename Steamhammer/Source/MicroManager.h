@@ -10,6 +10,8 @@ class UnitCluster;
 enum class CasterSpell
 	{ None
 	, Parasite
+    , Ensnare
+    , Broodling
 	, DarkSwarm
 	, Plague
 	};
@@ -50,6 +52,8 @@ protected:
 	SquadOrder		order;
 
 	virtual void	executeMicro(const BWAPI::Unitset & targets, const UnitCluster & cluster) = 0;
+    int             getBackstopAttackPriority(BWAPI::Unit target) const;
+
 	void			destroyNeutralTargets(const BWAPI::Unitset & targets);
 	bool            checkPositionWalkable(BWAPI::Position pos);
 	bool            unitNearEnemy(BWAPI::Unit unit);
@@ -65,6 +69,8 @@ protected:
 	bool			isReadyToCast(BWAPI::Unit caster);
 	bool			isReadyToCastOtherThan(BWAPI::Unit caster, CasterSpell spellToAvoid);
 	void			updateCasters(const BWAPI::Unitset & casters);
+
+    bool            infestable(BWAPI::Unit target) const;
 
 	void			drawOrderText();
 

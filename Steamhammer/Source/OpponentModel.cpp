@@ -64,6 +64,13 @@ OpeningPlan OpponentModel::predictEnemyPlan() const
 // So far, we only check the plan. We have plenty of other data that could be helpful.
 void OpponentModel::considerSingleStrategy()
 {
+    // Humans, we assume, are unpredictable.
+    if (Config::Strategy::HumanOpponent)
+    {
+        _singleStrategy = false;
+        return;
+    }
+
 	// Gather info.
 	int knownPlan = 0;
 	int unknownPlan = 0;

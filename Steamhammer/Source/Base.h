@@ -25,23 +25,23 @@ private:
 	bool				workerDanger;		// for our own bases only; false for others
 	int					failedPlacements;	// count building placements that failed
 
-	bool			isStartingBase() const;	// to initialize the startingBase flag
+    bool                findIsStartingBase() const;	// to initialize the startingBase flag
 
 public:
 
-	BWAPI::Unit		resourceDepot;			// hatchery, etc., or null if none
+    // The resourceDepot pointer is set for a base if the depot has been seen.
+    // It is possible to infer a base location without seeing the depot.
+    BWAPI::Unit		resourceDepot;			// hatchery, etc., or null if none
 	BWAPI::Player	owner;					// self, enemy, neutral
 
-	int				getID()    const { return id; };
-	BWAPI::Unit		getDepot() const { return resourceDepot; };
-	BWAPI::Player	getOwner() const { return owner; };
+    Base(BWAPI::TilePosition pos, const BWAPI::Unitset availableResources);
 
-	// The resourceDepot pointer is set for a base if the depot has been seen.
-	// It is possible to infer a base location without seeing the depot.
+    int				getID()           const { return id; };
+    BWAPI::Unit		getDepot()        const { return resourceDepot; };
+    BWAPI::Player	getOwner()        const { return owner; };
+    bool            isAStartingBase() const { return startingBase; };
 
-	Base(BWAPI::TilePosition pos, const BWAPI::Unitset availableResources);
-
-	void findGeysers();
+    void findGeysers();
 
 	const BWAPI::TilePosition & getTilePosition() const { return tilePosition; };
 	const BWAPI::Position getPosition() const { return BWAPI::Position(tilePosition); };

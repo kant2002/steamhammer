@@ -44,8 +44,7 @@ public:
     static BuildingManager &	Instance();
 
     void                update();
-    void                onUnitMorph(BWAPI::Unit unit);
-    void                onUnitDestroy(BWAPI::Unit unit);
+    BWAPI::TilePosition getStandardDesiredPosition(MacroLocation loc) const;
 	Building &		    addTrackedBuildingTask(const MacroAct & act, BWAPI::TilePosition desiredLocation, BWAPI::Unit builder, bool isGasSteal);
 	void                addBuildingTask(const MacroAct & act, BWAPI::TilePosition desiredLocation, BWAPI::Unit builder, bool isGasSteal);
     void                drawBuildingInformation(int x,int y);

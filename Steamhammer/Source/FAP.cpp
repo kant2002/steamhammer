@@ -4,11 +4,11 @@
 
 UAlbertaBot::FastAPproximation fap;
 
-// This is N00byEdge's original version of FAP, slightly adjusted to fit into its new environment.
+// This is N00byEdge's original version of FAP, adjusted to fit into its new environment.
 // Newer versions exist.
 // https://github.com/N00byEdge/Neohuman/blob/master/FAP.cpp
 
-// This version is also updated to understand dark swarm, in an approximate way.
+// This version is also updated to understand dark swarm and ensnare, in an approximate way.
 // There are a few bug fixes and other improvements.
 
 // NOTE FAP does not use UnitInfo.goneFromLastPosition. The flag is always set false
@@ -393,14 +393,13 @@ namespace UAlbertaBot {
 	}
 
 	FastAPproximation::FAPUnit::FAPUnit(BWAPI::Unit u): FAPUnit(UnitInfo(u)) {
-
 	}
 
-	FastAPproximation::FAPUnit::FAPUnit(UnitInfo ui) :
+	FastAPproximation::FAPUnit::FAPUnit(const UnitInfo & ui) :
 		x(ui.lastPosition.x),
 		y(ui.lastPosition.y),
 
-		speed(ui.player->topSpeed(ui.type)),
+        speed(ui.player->topSpeed(ui.type)),
 
 		health(ui.estimateHP()),
 		maxHealth(ui.type.maxHitPoints()),
@@ -454,10 +453,38 @@ namespace UAlbertaBot {
 			groundDamage = ui.player->damage(BWAPI::WeaponTypes::Scarab);
 		}
 
-		if (ui.unit && ui.unit->isStimmed()) {
+        // Stimmed units shoot faster, unless they are also ensnared.
+        if (ui.unit && ui.unit->isStimmed() && !ui.unit->isEnsnared()) {
 			groundCooldown /= 2;
 			airCooldown /= 2;
 		}
+
+        if (ui.unit && ui.unit->isEnsnared())
+        {
+            // An ensnared unit moves and shoots more slowly.
+
+            // Half speed movement.
+            // NOTE The result is incorrect for stimmed units and units with a speed upgrade.
+            //      But it's close enough for now.
+            speed /= 2.0;
+
+            // Cooldown increased by 25%, with exceptions.
+            if (ui.type == BWAPI::UnitTypes::Zerg_Zergling && groundCooldown < 8)
+            {
+                // Zergling with the adrenal glands upgrade returns to its base cooldown of 8.
+                groundCooldown = 8;
+            }
+            else if (
+                ui.type != BWAPI::UnitTypes::Terran_Goliath &&
+                ui.type != BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode &&
+                ui.type != BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode &&
+                ui.type != BWAPI::UnitTypes::Zerg_Ultralisk &&
+                !ui.unit->isStimmed())      // handled by earlier stimmed unit adjustment
+            {
+                groundCooldown = 5 * groundCooldown / 4;
+                airCooldown = 5 * airCooldown / 4;
+            }
+        }
 
 		// Ground height for ground units.
 		if (ui.unit && !ui.unit->isFlying()) {

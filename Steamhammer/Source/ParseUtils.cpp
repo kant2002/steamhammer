@@ -172,7 +172,8 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
 			strategyCombos = &strategy["StrategyCombos"];
 		}
 
-		Config::Strategy::ScoutHarassEnemy = GetBoolByRace("ScoutHarassEnemy", strategy);
+        Config::Strategy::HumanOpponent = GetBoolByRace("HumanOpponent", strategy);
+        Config::Strategy::ScoutHarassEnemy = GetBoolByRace("ScoutHarassEnemy", strategy);
 		Config::Strategy::AutoGasSteal = GetBoolByRace("AutoGasSteal", strategy);
 		Config::Strategy::RandomGasStealRate = GetDoubleByRace("RandomGasStealRate", strategy);
 		Config::Strategy::UsePlanRecognizer = GetBoolByRace("UsePlanRecognizer", strategy);

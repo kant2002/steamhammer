@@ -115,7 +115,7 @@ void MicroManager::execute(const UnitCluster & cluster)
 		{
 			// For other orders: Units in sight of our cluster.
 			// Don't be distracted by distant units; move toward the goal.
-			for (const auto unit : cluster.units)
+			for (BWAPI::Unit unit : cluster.units)
 			{
 				// NOTE Ignores possible sight range upgrades. It's fine.
 				MapGrid::Instance().getUnits(targets, unit->getPosition(), unit->getType().sightRange(), false, true);
@@ -124,6 +124,75 @@ void MicroManager::execute(const UnitCluster & cluster)
 
 		executeMicro(targets, cluster);
 	}
+}
+
+// Attack priorities for buildings and other mostly low-priority stuff are shared among some micromanagers.
+int MicroManager::getBackstopAttackPriority(BWAPI::Unit target) const
+{
+    BWAPI::UnitType targetType = target->getType();
+
+    // Nydus canal is critical.
+    if (targetType == BWAPI::UnitTypes::Zerg_Nydus_Canal)
+    {
+        return 10;
+    }
+
+    // Spellcasters not previously mentioned are more important than key buildings.
+    // Also remember to target other non-threat combat units.
+    if (targetType.isSpellcaster() ||
+        targetType.groundWeapon() != BWAPI::WeaponTypes::None ||
+        targetType.airWeapon() != BWAPI::WeaponTypes::None)
+    {
+        return 7;
+    }
+
+    // Short circuit: Addons other than a completed comsat are worth almost nothing.
+    // TODO should also check that it is attached
+    if (targetType.isAddon() && !(targetType == BWAPI::UnitTypes::Terran_Comsat_Station && target->isCompleted()))
+    {
+        return 1;
+    }
+
+    // Short circuit: Downgrade unfinished or unpowered buildings, with exceptions.
+    if (targetType.isBuilding() &&
+        (!target->isCompleted() || !target->isPowered()) &&
+        !(targetType.isResourceDepot() ||
+        UnitUtil::GetAirWeapon(targetType) != BWAPI::WeaponTypes::None ||
+        UnitUtil::GetGroundWeapon(targetType) != BWAPI::WeaponTypes::None))
+    {
+        return 2;
+    }
+
+    // Buildings come under attack during free time, so they can be split into more levels.
+    if (targetType == BWAPI::UnitTypes::Protoss_Templar_Archives ||
+        targetType == BWAPI::UnitTypes::Zerg_Spire ||
+        targetType == BWAPI::UnitTypes::Zerg_Greater_Spire)
+    {
+        return 6;
+    }
+    if (targetType.isResourceDepot())
+    {
+        return 5;
+    }
+    if (targetType == BWAPI::UnitTypes::Protoss_Pylon ||
+        targetType == BWAPI::UnitTypes::Zerg_Spawning_Pool)
+    {
+        return 4;
+    }
+
+    // Anything with a cost.
+    if (targetType.gasPrice() > 0)
+    {
+        return 3;
+    }
+    if (targetType.mineralPrice() > 0)
+    {
+        return 2;
+    }
+
+    // Anything else that may exist.
+    return 1;
+
 }
 
 // The order is DestroyNeutral. Carry it out.
@@ -520,6 +589,20 @@ void MicroManager::updateCasters(const BWAPI::Unitset & casters)
             _casterState.insert(std::pair<BWAPI::Unit, CasterState>(caster, CasterState(caster)));
         }
     }
+}
+
+// Is the potential target a command center that we could soon infest?
+// Some unit controllers decline to attack targets that could be infested instead.
+bool MicroManager::infestable(BWAPI::Unit target) const
+{
+    return
+        target->getType() == BWAPI::UnitTypes::Terran_Command_Center &&
+        target->getHitPoints() < 750 &&
+        BWAPI::Broodwar->getClosestUnit(
+            target->getPosition(),
+            BWAPI::Filter::GetType == BWAPI::UnitTypes::Zerg_Queen && BWAPI::Filter::GetPlayer == BWAPI::Broodwar->self(),
+            8 * 32
+        );
 }
 
 void MicroManager::drawOrderText()

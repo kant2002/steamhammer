@@ -965,8 +965,12 @@ void CombatCommander::updateBaseDefenseSquads()
 						unit->getType() == BWAPI::UnitTypes::Protoss_Arbiter)
 					{
 						// NOTE Carriers don't need extra, they show interceptors.
-						nEnemyAir += 3;
+						nEnemyAir += 4;
 					}
+                    else if (unit->getType() == BWAPI::UnitTypes::Zerg_Devourer)
+                    {
+                        nEnemyAir += 3;
+                    }
 					else
 					{
 						++nEnemyAir;
@@ -975,13 +979,21 @@ void CombatCommander::updateBaseDefenseSquads()
 				else
 				{
 					// Workers don't count as ground units here.
-					if (unit->getType() == BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode ||
+                    if (unit->getType() == BWAPI::UnitTypes::Terran_Goliath ||
+                        unit->getType() == BWAPI::UnitTypes::Protoss_Zealot ||
+                        unit->getType() == BWAPI::UnitTypes::Protoss_Dragoon ||
+                        unit->getType() == BWAPI::UnitTypes::Protoss_Dark_Templar ||
+                        unit->getType() == BWAPI::UnitTypes::Zerg_Lurker)
+                    {
+                        nEnemyGround += 2;
+                    }
+                    else if (unit->getType() == BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode ||
 						unit->getType() == BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode ||
 						unit->getType() == BWAPI::UnitTypes::Protoss_Archon ||
 						unit->getType() == BWAPI::UnitTypes::Protoss_Reaver ||
-						unit->getType() == BWAPI::UnitTypes::Zerg_Lurker)
+						unit->getType() == BWAPI::UnitTypes::Zerg_Ultralisk)
 					{
-						nEnemyGround += 2;
+						nEnemyGround += 4;
 					}
 					else
 					{
@@ -1067,11 +1079,11 @@ void CombatCommander::updateBaseDefenseSquads()
 
 		// Don't let the number of defenders go negative.
 		flyingDefendersNeeded = nEnemyAir ? std::max(flyingDefendersNeeded, 2) : 0;
-		if (nEnemyGround)
+		if (nEnemyGround > 0)
 		{
 			groundDefendersNeeded = std::max(groundDefendersNeeded, 2);
 		}
-		else if (nEnemyWorkers)
+		else if (nEnemyWorkers > 0)
 		{
 			// Workers only, no other attackers.
 			groundDefendersNeeded = std::max(groundDefendersNeeded, 1 + nEnemyWorkers / 2);
@@ -1082,12 +1094,12 @@ void CombatCommander::updateBaseDefenseSquads()
 		}
 
 		// Drop unneeded defenders.
-		if (groundDefendersNeeded == 0 && flyingDefendersNeeded == 0)
+		if (groundDefendersNeeded <= 0 && flyingDefendersNeeded <= 0)
 		{
 			defenseSquad.clear();
 			continue;
 		}
-		if (groundDefendersNeeded == 0)
+		if (groundDefendersNeeded <= 0)
 		{
 			// Drop any defenders which can't shoot air.
 			BWAPI::Unitset drop;
@@ -1104,7 +1116,7 @@ void CombatCommander::updateBaseDefenseSquads()
 			}
 			// And carry on. We may still want to add air defenders.
 		}
-		if (flyingDefendersNeeded == 0)
+		if (flyingDefendersNeeded <= 0)
 		{
 			// Drop any defenders which can't shoot ground.
 			BWAPI::Unitset drop;
@@ -1338,18 +1350,11 @@ void CombatCommander::loadOrUnloadBunkers()
 bool CombatCommander::wantSquadDetectors() const
 {
 	if (BWAPI::Broodwar->enemy()->getRace() == BWAPI::Races::Protoss &&
-		InformationManager::Instance().enemyHasMobileDetection())
+		InformationManager::Instance().enemyHasMobileDetection() &&
+        InformationManager::Instance().weHaveCloakTech())
 	{
-		if (BWAPI::Broodwar->self()->hasResearched(BWAPI::TechTypes::Cloaking_Field) ||
-			BWAPI::Broodwar->self()->hasResearched(BWAPI::TechTypes::Personnel_Cloaking) ||
-			UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Protoss_Dark_Templar) > 0 ||
-			UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Protoss_Arbiter) > 0 ||
-			BWAPI::Broodwar->self()->hasResearched(BWAPI::TechTypes::Burrowing) ||
-			BWAPI::Broodwar->self()->hasResearched(BWAPI::TechTypes::Lurker_Aspect))
-		{
-			return true;
-		}
-	}
+        return true;
+    }
 
 	return
 		BWAPI::Broodwar->self()->getRace() == BWAPI::Races::Protoss ||      // observers should be safe-ish

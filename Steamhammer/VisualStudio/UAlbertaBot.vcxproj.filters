@@ -168,6 +168,7 @@
     <ClCompile Include="..\Source\GridZone.cpp" />
     <ClCompile Include="..\Source\MicroQueens.cpp" />
     <ClCompile Include="..\Source\BOSimulator.cpp" />
+    <ClCompile Include="..\Source\GameRecordNow.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Source\CombatCommander.h">
@@ -304,5 +305,6 @@
     <ClInclude Include="..\Source\GridZone.h" />
     <ClInclude Include="..\Source\MicroQueens.h" />
     <ClInclude Include="..\Source\BOSimulator.h" />
+    <ClInclude Include="..\Source\GameRecordNow.h" />
   </ItemGroup>
 </Project>

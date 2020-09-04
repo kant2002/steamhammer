@@ -261,7 +261,6 @@ Base * MapTools::nextExpansion(bool hidden, bool wantMinerals, bool wantGas)
 	
 	BWAPI::TilePosition homeTile = Bases::Instance().myStartingBase()->getTilePosition();
 	BWAPI::Position myBasePosition(homeTile);
-	Base * enemyBase = Bases::Instance().enemyStart();  // may be null or no longer enemy-owned
 
     for (Base * base : Bases::Instance().getBases())
     {
@@ -295,21 +294,25 @@ Base * MapTools::nextExpansion(bool hidden, bool wantMinerals, bool wantGas)
 				{
 					// This happens if we were already planning to expand here. Try somewhere else.
 					buildingInTheWay = true;
-					break;
+                    goto buildingLoopExit;
 				}
 
 				// TODO bug: this doesn't include enemy buildings which are known but out of sight
 				for (const auto unit : BWAPI::Broodwar->getUnitsOnTile(BWAPI::TilePosition (tile.x + x, tile.y + y)))
                 {
-                    if (unit->getType().isBuilding() && !unit->isLifted())
+                    if (unit->getType().isBuilding() &&
+                        !unit->isLifted())
+                        // TODO This is waiting until the code to lift is written.
+                        // Our own buildings are OK if we can lift them out of the way.
+                        // !(unit->getPlayer() == BWAPI::Broodwar->self() && unit->canLift()))
                     {
                         buildingInTheWay = true;
-                        break;
+                        goto buildingLoopExit;
                     }
                 }
             }
         }
-
+buildingLoopExit:
         if (buildingInTheWay)
         {
             continue;
@@ -349,7 +352,8 @@ Base * MapTools::nextExpansion(bool hidden, bool wantMinerals, bool wantGas)
         }
 
 		// Want to be far from the enemy base.
-		double distanceFromEnemy = 0.0;
+        Base * enemyBase = Bases::Instance().enemyStart();  // may be null or no longer enemy-owned
+        double distanceFromEnemy = 0.0;
 		if (enemyBase) {
 			BWAPI::TilePosition enemyTile = enemyBase->getTilePosition();
 			distanceFromEnemy = MapTools::Instance().getGroundTileDistance(tile, enemyTile);
@@ -385,7 +389,7 @@ Base * MapTools::nextExpansion(bool hidden, bool wantMinerals, bool wantGas)
 		}
 		if (wantGas)
 		{
-			score += 0.02 * base->getInitialGas();
+			score += 0.025 * base->getInitialGas();
 		}
 
 		/* TODO on a flat map, all mains may be in the same zone

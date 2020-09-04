@@ -11,9 +11,15 @@ class MicroQueens : public MicroManager
 	int parasiteScore(BWAPI::Unit u) const;
 	bool maybeParasite(BWAPI::Unit queen);
 
-	// The different updates are done on different frames to spread out the work.
+    int ensnareScore(BWAPI::Unit u) const;
+    bool maybeEnsnare(BWAPI::Unit queen);
+
+    int broodlingScore(BWAPI::Unit queen, BWAPI::Unit u) const;
+    bool maybeBroodling(BWAPI::Unit queen);
+
+    // The different updates are done on different frames to spread out the work.
 	void updateMovement(BWAPI::Unit vanguard);
-	void updateParasite();
+    void updateAction();
 
 public:
 	MicroQueens();

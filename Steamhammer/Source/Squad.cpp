@@ -678,7 +678,7 @@ bool Squad::needsToRegroup(const UnitCluster & cluster)
 	if (!vanguard)
 	{
 		_regroupStatus = yellow + std::string("No vanguard");
-		return false;
+		return true;
 	}
 
 	// Is there static defense nearby that we should take into account?

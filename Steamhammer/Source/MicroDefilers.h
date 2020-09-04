@@ -19,7 +19,7 @@ class MicroDefilers : public MicroManager
 	int swarmScore(BWAPI::Unit u) const;
 	bool maybeSwarm(BWAPI::Unit defiler);
 
-	double plagueScore(BWAPI::Unit u) const;
+	int plagueScore(BWAPI::Unit u) const;
 	bool maybePlague(BWAPI::Unit defiler);
 
 public:

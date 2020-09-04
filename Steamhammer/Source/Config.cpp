@@ -12,7 +12,7 @@ namespace Config
     {
         bool ConfigFileFound                = false;
         bool ConfigFileParsed               = false;
-        std::string ConfigFileLocation      = "bwapi-data/AI/Steamhammer_2.3.5.json";
+        std::string ConfigFileLocation      = "bwapi-data/AI/Steamhammer_2.4.json";
     }
 
 	namespace IO
@@ -34,6 +34,7 @@ namespace Config
         std::string TerranStrategyName      = "11Rax";					// default
         std::string ZergStrategyName        = "9PoolSpeed";				// default
         std::string StrategyName            = "9PoolSpeed";
+        bool HumanOpponent                  = false;
         bool ScoutHarassEnemy               = true;
 		bool AutoGasSteal                   = true;
 		double RandomGasStealRate           = 0.0;

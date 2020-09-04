@@ -15,6 +15,7 @@ enum class MacroLocation
 	, Natural      // "natural" first expansion base
     , Front        // front line base (main or natural, as available)
 	, Center       // middle of the map
+    , Proxy        // in or in range of the enemy main or natural
     , GasSteal     // this is a gas steal, the unit type must be a refinery type
 	};
 

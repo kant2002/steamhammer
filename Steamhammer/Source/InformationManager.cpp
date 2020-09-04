@@ -72,7 +72,7 @@ void InformationManager::updateUnitInfo()
 	{
 		updateUnit(unit);
 
-		// Add newly-ccompleted pylons to _ourPylons, and notify BuildingManager.
+		// Add newly-completed pylons to _ourPylons, and notify BuildingManager.
 		if (unit->getType() == BWAPI::UnitTypes::Protoss_Pylon &&
 			unit->isCompleted() &&
 			!_ourPylons.contains(unit))
@@ -1022,6 +1022,17 @@ bool InformationManager::enemyHasSiegeMode()
 	}
 
 	return false;
+}
+
+bool InformationManager::weHaveCloakTech() const
+{
+    return
+        BWAPI::Broodwar->self()->hasResearched(BWAPI::TechTypes::Cloaking_Field) ||
+        BWAPI::Broodwar->self()->hasResearched(BWAPI::TechTypes::Personnel_Cloaking) ||
+        UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Protoss_Dark_Templar) > 0 ||
+        UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Protoss_Arbiter) > 0 ||
+        BWAPI::Broodwar->self()->hasResearched(BWAPI::TechTypes::Burrowing) ||
+        BWAPI::Broodwar->self()->hasResearched(BWAPI::TechTypes::Lurker_Aspect);
 }
 
 // Our nearest static defense building that can hit ground, by air distance.

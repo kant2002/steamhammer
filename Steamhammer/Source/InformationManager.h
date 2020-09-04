@@ -92,6 +92,8 @@ public:
 	bool					enemyHasMobileDetection();
 	bool					enemyHasSiegeMode();
 
+    bool                    weHaveCloakTech() const;
+
 	void					enemySeenBurrowing();
     int                     getEnemyBuildingTiming(BWAPI::UnitType type) const;
 

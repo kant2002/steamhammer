@@ -72,7 +72,7 @@ void ProductionManager::update()
 		{
 			//BWAPI::Broodwar->printf("build finished %d, minerals and gas %d %d",
 			//	BWAPI::Broodwar->getFrameCount(), BWAPI::Broodwar->self()->minerals(), BWAPI::Broodwar->self()->gas()
-			//	);
+			//);
 		}
 
 		goOutOfBookAndClearQueue();
@@ -150,6 +150,7 @@ void ProductionManager::onUnitDestroy(BWAPI::Unit unit)
 		unit->getType().supplyProvided() == 0)
 	{
 		// We lost a building other than static defense or supply. It may be serious. Replan from scratch.
+        // BWAPI::Broodwar->printf("critical building loss");
 		goOutOfBookAndClearQueue();
 	}
 }
@@ -236,7 +237,8 @@ void ProductionManager::manageBuildOrderQueue()
 		{
 			_goals.push_front(ProductionGoal(currentItem.macroAct));
 			_queue.doneWithHighestPriorityItem();
-			continue;
+            _lastProductionFrame = BWAPI::Broodwar->getFrameCount();
+            continue;
 		}
 
 		// The unit which can produce the currentItem. May be null.
@@ -286,10 +288,25 @@ void ProductionManager::manageBuildOrderQueue()
 
 		// We didn't make anything. Check for a possible production jam.
 		// Jams can happen due to bugs, or due to losing prerequisites for planned items.
-		if (BWAPI::Broodwar->getFrameCount() > _lastProductionFrame + Config::Macro::ProductionJamFrameLimit)
+        // If the queue is empty, we didn't intend to make anything--likely we can't.
+        if (!_queue.isEmpty() &&
+            BWAPI::Broodwar->getFrameCount() > _lastProductionFrame + Config::Macro::ProductionJamFrameLimit)
 		{
-			// Looks very like a jam. Clear the queue and hope for better luck next time.
-			goOutOfBookAndClearQueue();
+            if (_queue.getHighestPriorityItem().macroAct.isUnit() &&
+                _queue.getHighestPriorityItem().macroAct.getUnitType() == BWAPI::UnitTypes::Zerg_Mutalisk &&
+                UnitUtil::GetCompletedUnitCount(BWAPI::UnitTypes::Zerg_Spire) == 0 &&
+                (UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Spire) > 0 || BuildingManager::Instance().isBeingBuilt(BWAPI::UnitTypes::Zerg_Spire)))
+            {
+                // Exception: Sometimes the opening book can intentionally pause production for over a minute
+                // while saving up for mutalisks. So if a mutalisk is next and a spire is building, do nothing.
+                // BWAPI::Broodwar->printf("saving for mutas");
+            }
+            else
+            {
+                // Looks very like a jam. Clear the queue and hope for better luck next time.
+                // BWAPI::Broodwar->printf("jam timed out");
+                goOutOfBookAndClearQueue();
+            }
 		}
 
 		// TODO not much of a loop, eh? breaks on all branches
@@ -606,35 +623,8 @@ void ProductionManager::create(BWAPI::Unit producer, const BuildOrderItem & item
 	else if (act.isBuilding()                                    // implies act.isUnit()
 		&& !UnitUtil::IsMorphedBuildingType(act.getUnitType()))  // not morphed from another zerg building
 	{
-		// By default, build in the main base.
-		// BuildingManager will override the location if it needs to.
-		// Otherwise it will find some spot near desiredLocation.
-		BWAPI::TilePosition desiredLocation = Bases::Instance().myMainBase()->getTilePosition();
-
-		if (act.getMacroLocation() == MacroLocation::Front)
-		{
-			BWAPI::TilePosition front = Bases::Instance().frontPoint();
-			if (front.isValid())
-			{
-				desiredLocation = front;
-			}
-		}
-		else if (act.getMacroLocation() == MacroLocation::Natural)
-		{
-			Base * natural = Bases::Instance().myNaturalBase();
-			if (natural)
-			{
-				desiredLocation = natural->getTilePosition();
-			}
-		}
-		else if (act.getMacroLocation() == MacroLocation::Center)
-		{
-			// Near the center of the map.
-			// NOTE This does not work reliably because of unbuildable tiles.
-			desiredLocation = BWAPI::TilePosition(BWAPI::Broodwar->mapWidth()/2, BWAPI::Broodwar->mapHeight()/2);
-		}
-		
-		BuildingManager::Instance().addBuildingTask(act, desiredLocation, _assignedWorkerForThisBuilding, item.isGasSteal);
+        BWAPI::TilePosition desiredPosition = BuildingManager::Instance().getStandardDesiredPosition(act.getMacroLocation());
+        BuildingManager::Instance().addBuildingTask(act, desiredPosition, _assignedWorkerForThisBuilding, item.isGasSteal);
 	}
 	// if we're dealing with a non-building unit, or a morphed zerg building
 	else if (act.isUnit() || act.isTech() || act.isUpgrade())
@@ -1137,6 +1127,10 @@ bool ProductionManager::nextIsBuilding() const
 // NOTE This clears the queue even if we are already out of book.
 void ProductionManager::goOutOfBookAndClearQueue()
 {
+    if (Config::Debug::DrawQueueFixInfo && !_queue.isEmpty())
+    {
+        BWAPI::Broodwar->printf("go out of book and clear queue");
+    }
 	_queue.clearAll();
 	_outOfBook = true;
 	CombatCommander::Instance().setAggression(true);
@@ -1148,6 +1142,10 @@ void ProductionManager::goOutOfBook()
 {
 	if (!_outOfBook)
 	{
-		goOutOfBookAndClearQueue();
+        if (Config::Debug::DrawQueueFixInfo && !_queue.isEmpty())
+        {
+            BWAPI::Broodwar->printf("go out of book");
+        }
+        goOutOfBookAndClearQueue();
 	}
 }

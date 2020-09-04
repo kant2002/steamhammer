@@ -64,7 +64,7 @@ void Bases::rememberBaseBlockers()
 
 // During initialization, look for a base to be our natural and remember it.
 // startingBase has already been set (of course we need to know that first).
-// Make sure it's null if we don't find one.
+// Make sure it's null if we don't find a natural.
 void Bases::setNaturalBase()
 {
 	Base * bestBase = nullptr;
@@ -72,8 +72,9 @@ void Bases::setNaturalBase()
 
 	for (Base * base : bases)
 	{
-		if (base == startingBase)
+        if (base->isAStartingBase())
 		{
+            // We or the enemy may already own it.
 			continue;
 		}
 
@@ -314,7 +315,7 @@ void Bases::updateEnemyStart()
 		return;
 	}
 
-	// Call only shen enemyStartingBase is unknown (null).
+	// Call only when enemyStartingBase is unknown (null).
 	if (inferEnemyBaseFromOverlord())
 	{
 		// We were able to deduce the enemy's location by seeing an overlord.
@@ -389,8 +390,9 @@ void Bases::updateBaseOwners()
 			BWAPI::Unit depot = nullptr;
 			for (const auto unit : units)
 			{
-				if (unit->getType().isResourceDepot())
+				if (unit->getType().isResourceDepot() && !unit->isLifted())
 				{
+                    UAB_ASSERT(unit->getType() != BWAPI::UnitTypes::Zerg_Infested_Command_Center, "infested resource depot");
 					depot = unit;
 					break;
 				}
@@ -398,6 +400,7 @@ void Bases::updateBaseOwners()
 			if (depot)
 			{
 				// The base is occupied.
+                // NOTE The player might be the neutral player. That's OK.
 				base->setOwner(depot, depot->getPlayer());
 			}
 			else
@@ -693,7 +696,7 @@ void Bases::drawBaseOwnership(int x, int y) const
 
 	BWAPI::Broodwar->drawTextScreen(x, yy, "%cBases", white);
 
-	for (Base * base : bases)
+	for (const Base * base : bases)
 	{
 		yy += 10;
 
@@ -906,6 +909,7 @@ int Bases::geyserCount() const
 
 // Current number of completed refineries at my completed bases,
 // and number of bare geysers available to be taken.
+// Not counted: The number of refineries currently under construction.
 void Bases::gasCounts(int & nRefineries, int & nFreeGeysers) const
 {
 	int refineries = 0;
@@ -913,18 +917,14 @@ void Bases::gasCounts(int & nRefineries, int & nFreeGeysers) const
 
 	for (Base * base : bases)
 	{
-		BWAPI::Unit depot = base->getDepot();
-
-		if (base->getOwner() == BWAPI::Broodwar->self() &&
-			depot &&                // should never be null, but we check anyway
-			(depot->isCompleted() || UnitUtil::IsMorphedBuildingType(depot->getType())))
+        if (base->getOwner() == BWAPI::Broodwar->self() && UnitUtil::IsCompletedResourceDepot(base->getDepot()))
 		{
 			// Recalculate the base's geysers every time.
 			// This is a slow but accurate way to work around the BWAPI geyser bug.
 			// To save cycles, call findGeysers() only when necessary (e.g. a refinery is destroyed).
 			base->findGeysers();
 
-			for (const auto geyser : base->getGeysers())
+			for (BWAPI::Unit geyser : base->getGeysers())
 			{
 				if (geyser && geyser->exists())
 				{
@@ -971,7 +971,7 @@ bool Bases::getEnemyProxy() const
 				if (myNaturalBase())
 				{
 					const int natDist = ui.lastPosition.getApproxDistance(myNaturalBase()->getCenter());
-					if (zone == naturalZone && natDist <= 24 * 32 || natDist <= 13 * 32)
+                    if (zone == naturalZone && natDist <= 24 * 32 || natDist <= 13 * 32)
 					{
 						return true;
 					}

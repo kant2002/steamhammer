@@ -124,12 +124,17 @@ int MicroScourge::getAttackPriority(BWAPI::UnitType targetType)
 		targetType == BWAPI::UnitTypes::Protoss_Corsair ||
 		targetType == BWAPI::UnitTypes::Zerg_Mutalisk)
 	{
+        // Lesser flyers that can shoot back.
 		return 5;
 	}
 	if (targetType == BWAPI::UnitTypes::Protoss_Observer)
 	{
-		// Higher priority if we have lurkers.
-		return UnitUtil::GetAllUnitCount(BWAPI::UnitTypes::Zerg_Lurker) > 0 ? 7 : 3;
+		// Higher priority if we have burrow or lurker tech.
+		return
+            (BWAPI::Broodwar->self()->hasResearched(BWAPI::TechTypes::Burrowing) ||
+            BWAPI::Broodwar->self()->hasResearched(BWAPI::TechTypes::Lurker_Aspect))
+                ? 7
+                : 5;
 	}
 
 	// Overlords, scourge, interceptors.

@@ -35,6 +35,7 @@ void MicroMelee::assignTargets(const BWAPI::Unitset & meleeUnits, const BWAPI::U
             target->getType() != BWAPI::UnitTypes::Zerg_Larva &&
             target->getType() != BWAPI::UnitTypes::Zerg_Egg &&
             target->getPosition().isValid() &&
+            !infestable(target) &&
 			!target->isInvincible() &&
 			!target->isUnderDisruptionWeb())             // melee unit can't attack under dweb
 		{
@@ -262,19 +263,19 @@ int MicroMelee::getAttackPriority(BWAPI::Unit attacker, BWAPI::Unit target) cons
 		{
 			return 10;
 		}
-if ((targetType == BWAPI::UnitTypes::Terran_Missile_Turret || targetType == BWAPI::UnitTypes::Terran_Comsat_Station) &&
-    (BWAPI::Broodwar->self()->deadUnitCount(BWAPI::UnitTypes::Protoss_Dark_Templar) == 0))
-{
-    return 9;
-}
-if (targetType == BWAPI::UnitTypes::Zerg_Spore_Colony)
-{
-    return 8;
-}
-if (targetType.isWorker())
-{
-    return 8;
-}
+        if ((targetType == BWAPI::UnitTypes::Terran_Missile_Turret || targetType == BWAPI::UnitTypes::Terran_Comsat_Station) &&
+            (BWAPI::Broodwar->self()->deadUnitCount(BWAPI::UnitTypes::Protoss_Dark_Templar) == 0))
+        {
+            return 9;
+        }
+        if (targetType == BWAPI::UnitTypes::Zerg_Spore_Colony)
+        {
+            return 8;
+        }
+        if (targetType.isWorker())
+        {
+            return 8;
+        }
     }
 
     // Short circuit: Enemy unit which is far enough outside its range is lower priority than a worker.
@@ -307,41 +308,8 @@ if (targetType.isWorker())
     {
         return 9;
     }
-    // Nydus canal is critical.
-    if (targetType == BWAPI::UnitTypes::Zerg_Nydus_Canal)
-    {
-        return 10;
-    }
-    // Buildings come under attack during free time, so they can be split into more levels.
-    if (targetType == BWAPI::UnitTypes::Zerg_Spire ||
-        targetType == BWAPI::UnitTypes::Zerg_Greater_Spire)
-    {
-        return 6;
-    }
-    if (targetType == BWAPI::UnitTypes::Protoss_Templar_Archives ||
-        targetType.isSpellcaster())
-    {
-        return 5;
-    }
-    if (targetType == BWAPI::UnitTypes::Protoss_Pylon ||
-        targetType == BWAPI::UnitTypes::Zerg_Spawning_Pool)
-    {
-        return 4;
-    }
-    // Short circuit: Addons other than a completed comsat are worth almost nothing.
-    // TODO should also check that it is attached
-    if (targetType.isAddon() && !(targetType == BWAPI::UnitTypes::Terran_Comsat_Station && target->isCompleted()))
-    {
-        return 1;
-    }
-    // anything with a cost
-    if (targetType.gasPrice() > 0 || targetType.mineralPrice() > 0)
-    {
-        return 3;
-    }
 
-    // then everything else
-    return 1;
+    return getBackstopAttackPriority(target);
 }
 
 // Retreat hurt units to allow them to regenerate health (zerg) or shields (protoss).

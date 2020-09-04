@@ -12,6 +12,7 @@ namespace UnitUtil
 	bool IsMorphedBuildingType(BWAPI::UnitType type);
 	bool IsMorphedUnitType(BWAPI::UnitType type);
 	bool IsCompletedResourceDepot(BWAPI::Unit unit);
+    bool IsNearlyCompletedResourceDepot(BWAPI::Unit unit, int framesLeft);
 
 	bool IsStaticDefense(BWAPI::UnitType type);
 	bool IsComingStaticDefense(BWAPI::UnitType type);

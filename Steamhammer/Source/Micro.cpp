@@ -110,6 +110,20 @@ void MicroState::monitor(BWAPI::Unit u)
 	// TODO other commands are not implemented yet
 }
 
+// The two positions are so close together that we can treat them as the same
+// for purposes of orders which take a position.
+bool MicroState::positionsNearlyEqual(BWAPI::Unit u,  BWAPI::Position & pos1, const BWAPI::Position & pos2) const
+{
+    int dist = u->getDistance(pos2);
+    int tolerance = dist <= 12 * 32     // within tank range?
+        ? 3                             // yes, tight tolerance
+        : std::min(96, dist / 32);      // no, be looser
+
+    return
+        abs(pos1.x - pos2.x) <= tolerance &&
+        abs(pos1.y - pos2.y) <= tolerance;
+}
+
 // If we're moving the unit a long distance, use pathfinding to avoid blocked paths.
 BWAPI::Position MicroState::getNextMovePosition(BWAPI::Unit u)
 {
@@ -185,7 +199,9 @@ void MicroState::setOrder(BWAPI::Unit u, BWAPI::Order o, BWAPI::Position p)
 {
 	check(u, o);
 
-	if (order != o || targetPosition != p)
+    // We check whether positions are "nearly equal" rather than equal
+    // to reduce unnecessary orders. Don't spam Starcraft!
+	if (order != o || !positionsNearlyEqual(u, targetPosition, p))
 	{
 		order = o;
         targetPosition = p;
@@ -564,9 +580,6 @@ void Micro::Move(BWAPI::Unit attacker, const BWAPI::Position & targetPosition)
         return;
     }
 
-	int x = attacker->getRight() + 2;
-	int y = attacker->getTop() + 20;
-
 	/*
 	auto it = orders.find(attacker);
 	if (it == orders.end())
@@ -794,7 +807,9 @@ void Micro::ReturnCargo(BWAPI::Unit worker)
 // Order construction of a building.
 bool Micro::Build(BWAPI::Unit builder, BWAPI::UnitType building, const BWAPI::TilePosition & location)
 {
-	if (!builder || !builder->exists() || !builder->getPosition().isValid() || builder->isBurrowed() ||
+    if (!builder || !builder->exists() || !builder->getType().isWorker() ||
+        !builder->getPosition().isValid() || builder->isBurrowed() ||
+        builder->getPlayer() != BWAPI::Broodwar->self() ||
 		!building.isBuilding() || !location.isValid())
 	{
 		UAB_ASSERT(false, "bad building");
@@ -1096,7 +1111,11 @@ bool Micro::UseTech(BWAPI::Unit unit, BWAPI::TechType tech, BWAPI::Unit target)
 	{
 		o = BWAPI::Orders::CastParasite;
 	}
-	else
+    else if (tech == BWAPI::TechTypes::Spawn_Broodlings)
+    {
+        o = BWAPI::Orders::CastSpawnBroodlings;
+    }
+    else
 	{
 		o = BWAPI::Orders::UnusedNothing;
 		UAB_ASSERT(false, "unsupported tech");
@@ -1118,7 +1137,11 @@ bool Micro::UseTech(BWAPI::Unit unit, BWAPI::TechType tech, const BWAPI::Positio
 	}
 
 	BWAPI::Order o;
-	if (tech == BWAPI::TechTypes::Dark_Swarm)
+    if (tech == BWAPI::TechTypes::Ensnare)
+    {
+        o = BWAPI::Orders::CastEnsnare;
+    }
+    else if (tech == BWAPI::TechTypes::Dark_Swarm)
 	{
 		o = BWAPI::Orders::CastDarkSwarm;
 	}

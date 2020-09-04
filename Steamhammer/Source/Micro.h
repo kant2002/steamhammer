@@ -32,6 +32,7 @@ private:
 	void execute(BWAPI::Unit u);		// carry out the order
 	void monitor(BWAPI::Unit u);		// check for and try to correct failures
 
+    bool positionsNearlyEqual(BWAPI::Unit u,  BWAPI::Position & pos1, const BWAPI::Position & pos2) const;
     BWAPI::Position getNextMovePosition(BWAPI::Unit u);
 
 public:
