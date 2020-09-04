@@ -90,6 +90,7 @@ class Squad
 	BWAPI::Position finalRegroupPosition() const;
 	BWAPI::Unit		nearbyStaticDefense(const BWAPI::Position & pos) const;
 
+    bool            maybeWatch();
 	void			loadTransport();
 	void			stimIfNeeded();
 

@@ -348,54 +348,92 @@ bool MicroQueens::maybeBroodling(BWAPI::Unit queen)
     return false;
 }
 
+// Each queen tries to avoid danger and keep a distance from other queens, when possible,
+// while moving to the general area of the target position.
+BWAPI::Position MicroQueens::getQueenDestination(BWAPI::Unit queen, const BWAPI::Position & target) const
+{
+    BWAPI::Race enemyRace = BWAPI::Broodwar->enemy()->getRace();
+    const int dangerRadius = enemyRace == BWAPI::Races::Terran ? 9 : (enemyRace == BWAPI::Races::Protoss ? 7 : 6);
+    const int keepAwayRadius = 4;
+
+    BWAPI::Unit danger = BWAPI::Broodwar->getClosestUnit(queen->getPosition(),
+        BWAPI::Filter::IsEnemy && BWAPI::Filter::AirWeapon != BWAPI::WeaponTypes::None,
+        32 * dangerRadius);
+
+    if (danger)
+    {
+        return DistanceAndDirection(queen->getPosition(), danger->getPosition(), -dangerRadius * 32);
+    }
+
+    int closestDist = 32 * keepAwayRadius;
+    BWAPI::Unit sister = nullptr;
+    for (BWAPI::Unit q : getUnits())
+    {
+        if (q != queen && queen->getDistance(q) < closestDist)
+        {
+            closestDist = queen->getDistance(q);
+            sister = q;
+        }
+    }
+
+    if (sister)
+    {
+        return DistanceAndDirection(queen->getPosition(), sister->getPosition(), -keepAwayRadius * 32);
+    }
+
+    return target;
+}
+
 void MicroQueens::updateMovement(BWAPI::Unit vanguard)
 {
-	for (BWAPI::Unit queen : getUnits())
-	{
-		// If it's intending to cast, we don't want to interrupt by moving.
-		if (!isReadyToCast(queen))
-		{
-            // Default destination if all else fails: The front defense line.
-            BWAPI::Position destination = Bases::Instance().myMainBase()->getPosition();
+    for (BWAPI::Unit queen : getUnits())
+    {
+        // If it's intending to cast, we don't want to interrupt by moving.
+        if (isReadyToCast(queen))
+        {
+            continue;
+        }
 
-            // If we can see an infestable command center, move toward it.
-            int nearestRange = 999999;
-            BWAPI::Unit nearestCC = nullptr;
-            for (BWAPI::Unit enemy : BWAPI::Broodwar->enemy()->getUnits())
-            {
-                if (enemy->getType() == BWAPI::UnitTypes::Terran_Command_Center &&
-                    enemy->getHitPoints() < 750 &&
-                    enemy->isCompleted() &&
-                    queen->getDistance(enemy) < nearestRange)
-                {
-                    nearestRange = queen->getDistance(enemy);
-                    nearestCC = enemy;
-                }
-            }
-            if (nearestCC)
-            {
-                destination = nearestCC->getPosition();
-            }
+        // Default destination if all else fails: The main base.
+        BWAPI::Position destination = Bases::Instance().myMainBase()->getPosition();
 
-            // Broodling costs 150 energy. Ensnare and parasite each cost 75.
-			else if (vanguard &&
-                queen->getEnergy() >= (BWAPI::Broodwar->self()->hasResearched(BWAPI::TechTypes::Spawn_Broodlings) ? 135 : 65))
-			{
-				destination = vanguard->getPosition();
-			}
-            else if (queen->getEnergy() >= (BWAPI::Broodwar->self()->hasResearched(BWAPI::TechTypes::Spawn_Broodlings) ? 150 : 75))
+        // If we can see an infestable command center, move toward it.
+        int nearestRange = 999999;
+        BWAPI::Unit nearestCC = nullptr;
+        for (BWAPI::Unit enemy : BWAPI::Broodwar->enemy()->getUnits())
+        {
+            if (enemy->getType() == BWAPI::UnitTypes::Terran_Command_Center &&
+                enemy->getHitPoints() < 750 &&
+                enemy->isCompleted() &&
+                queen->getDistance(enemy) < nearestRange)
             {
-                // No vanguard, but we have energy. Retreat to the front defense line and try to be useful.
-                // This can happen when all units are assigned to defense squads.
-                destination = BWAPI::Position(Bases::Instance().frontPoint());
+                nearestRange = queen->getDistance(enemy);
+                nearestCC = enemy;
             }
+        }
+        if (nearestCC)
+        {
+            destination = nearestCC->getPosition();
+        }
 
-			if (destination.isValid())
-			{
-				the.micro.MoveNear(queen, destination);
-			}
-		}
-	}
+        // Broodling costs 150 energy. Ensnare and parasite each cost 75.
+        else if (vanguard &&
+            queen->getEnergy() >= (BWAPI::Broodwar->self()->hasResearched(BWAPI::TechTypes::Spawn_Broodlings) ? 135 : 65))
+        {
+            destination = vanguard->getPosition();
+        }
+        else if (queen->getEnergy() >= (BWAPI::Broodwar->self()->hasResearched(BWAPI::TechTypes::Spawn_Broodlings) ? 150 : 75))
+        {
+            // No vanguard, but we have energy. Retreat to the front defense line and try to be useful.
+            // This can happen when all units are assigned to defense squads.
+            destination = BWAPI::Position(Bases::Instance().frontPoint());
+        }
+
+        if (destination.isValid())
+        {
+            the.micro.MoveNear(queen, getQueenDestination(queen, destination));
+        }
+    }
 }
 
 // Cast broodling or parasite if possible and useful.

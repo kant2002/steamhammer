@@ -1,7 +1,6 @@
 #pragma once
 
-#include <Common.h>
-#include <BWAPI.h>
+#include "Common.h"
 
 namespace UAlbertaBot
 {
@@ -55,7 +54,8 @@ public:
 };
 
 // Micro implements unit actions that the rest of the program can treat as primitive.
-// Most actually are primitive; some are complexes of game primitives.
+
+class Base;
 
 class Micro
 {
@@ -83,6 +83,7 @@ public:
     void AttackMove(BWAPI::Unit attacker, const BWAPI::Position & targetPosition);
     void Move(BWAPI::Unit attacker, const BWAPI::Position & targetPosition);
 	void MoveNear(BWAPI::Unit attacker, const BWAPI::Position & targetPosition);
+    void TransferWorker(BWAPI::Unit worker, const Base * base);
 	void RightClick(BWAPI::Unit unit, BWAPI::Unit target);
 	void MineMinerals(BWAPI::Unit unit, BWAPI::Unit mineralPatch);
 	void LaySpiderMine(BWAPI::Unit unit, BWAPI::Position pos);

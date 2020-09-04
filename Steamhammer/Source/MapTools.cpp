@@ -19,7 +19,6 @@ MapTools::MapTools()
 	// Figure out which tiles are walkable and buildable.
 	setBWAPIMapData();
 
-	// NOTE When written, this check did not work! Base placement did not recognize island bases as bases at all.
 	_hasIslandBases = false;
 	for (Base * base : Bases::Instance().getBases())
 	{
@@ -226,14 +225,13 @@ void MapTools::drawHomeDistances()
 		return;
 	}
 
-	BWAPI::TilePosition homePosition = BWAPI::Broodwar->self()->getStartLocation();
-	GridDistances d(homePosition, true);
+    BWAPI::TilePosition homePosition = Bases::Instance().myMainBase()->getTilePosition();
 
     for (int x = 0; x < BWAPI::Broodwar->mapWidth(); ++x)
     {
         for (int y = 0; y < BWAPI::Broodwar->mapHeight(); ++y)
         {
-			int dist = d.at(x, y);
+            int dist = Bases::Instance().myMainBase()->getTileDistance(BWAPI::TilePosition(x,y));
 			char color = dist == -1 ? orange : white;
 
 			BWAPI::Position pos(BWAPI::TilePosition(x, y));
@@ -283,27 +281,51 @@ Base * MapTools::nextExpansion(bool hidden, bool wantMinerals, bool wantGas)
 			continue;
 		}
 
-		BWAPI::TilePosition tile = base->getTilePosition();
-        bool buildingInTheWay = false;
+        BWAPI::TilePosition topLeft = base->getTilePosition();
+        BWAPI::TilePosition bottomRight = topLeft + BWAPI::TilePosition(4, 3);
 
+        // No good if an enemy building or burrowed unit is in the way (even if out of sight).
+        bool buildingInTheWay = false;
+        for (const auto & kv : InformationManager::Instance().getUnitData(BWAPI::Broodwar->enemy()).getUnits())
+        {
+            const UnitInfo & ui(kv.second);
+
+            if (!ui.goneFromLastPosition)
+            {
+                if (ui.type.isBuilding() && !ui.lifted || ui.burrowed)
+                {
+                    BWAPI::TilePosition lastTilePos(ui.lastPosition);
+                    if (lastTilePos.x >= topLeft.x &&
+                        lastTilePos.x < bottomRight.x &&
+                        lastTilePos.y >= topLeft.y &&
+                        lastTilePos.y < bottomRight.y)
+                    {
+                        buildingInTheWay = true;
+                        goto buildingLoopExit;
+                    }
+                }
+            }
+        }
+
+        // No good if a visible building is in the way.
         for (int x = 0; x < player->getRace().getCenter().tileWidth(); ++x)
         {
 			for (int y = 0; y < player->getRace().getCenter().tileHeight(); ++y)
             {
-				if (BuildingPlacer::Instance().isReserved(tile.x + x, tile.y + y))
+                if (BuildingPlacer::Instance().isReserved(topLeft.x + x, topLeft.y + y))
 				{
 					// This happens if we were already planning to expand here. Try somewhere else.
 					buildingInTheWay = true;
                     goto buildingLoopExit;
 				}
 
-				// TODO bug: this doesn't include enemy buildings which are known but out of sight
-				for (const auto unit : BWAPI::Broodwar->getUnitsOnTile(BWAPI::TilePosition (tile.x + x, tile.y + y)))
+                // This knows about visible units only.
+                for (BWAPI::Unit unit : BWAPI::Broodwar->getUnitsOnTile(BWAPI::TilePosition(topLeft.x + x, topLeft.y + y)))
                 {
                     if (unit->getType().isBuilding() &&
                         !unit->isLifted())
-                        // TODO This is waiting until the code to lift is written.
                         // Our own buildings are OK if we can lift them out of the way.
+                        // TODO This is waiting until the code to lift is written.
                         // !(unit->getPlayer() == BWAPI::Broodwar->self() && unit->canLift()))
                     {
                         buildingInTheWay = true;
@@ -318,8 +340,8 @@ buildingLoopExit:
             continue;
         }
 
-		// Don't take a base if the building location is known to be in range of enemy static defense.
-		if (the.groundAttacks.inRange(player->getRace().getCenter(), tile))
+		// No good if the building location is known to be in range of enemy static defense.
+        if (the.groundAttacks.inRange(player->getRace().getCenter(), topLeft))
 		{
 			continue;
 		}
@@ -336,14 +358,15 @@ buildingLoopExit:
 		// as a backup.
 
 		// Want to be close to our own base (unless this is to be a hidden base).
-		int distanceFromUs = MapTools::Instance().getGroundTileDistance(BWAPI::Position(tile), myBasePosition);
+        int distanceFromUs = Bases::Instance().myStartingBase()->getTileDistance(topLeft);
 
         // If it is not connected by ground, skip this potential base.
 		if (distanceFromUs < 0)
         {
-			if (the.partitions.id(tile) == the.partitions.id(myBasePosition))
+            if (the.partitions.id(topLeft) == the.partitions.id(myBasePosition))
 			{
-				distanceFromUs = myBasePosition.getApproxDistance(BWAPI::Position(tile));
+                // It looks to be connected by a narrow path, use air distance.
+                distanceFromUs = myBasePosition.getApproxDistance(BWAPI::Position(topLeft));
 			}
 			else
 			{
@@ -356,13 +379,13 @@ buildingLoopExit:
         double distanceFromEnemy = 0.0;
 		if (enemyBase) {
 			BWAPI::TilePosition enemyTile = enemyBase->getTilePosition();
-			distanceFromEnemy = MapTools::Instance().getGroundTileDistance(tile, enemyTile);
+            distanceFromEnemy = enemyBase->getTileDistance(topLeft);
 			if (distanceFromEnemy < 0)
 			{
 				// No ground distance found, so again substitute air distance.
-				if (the.partitions.id(tile) == the.partitions.id(enemyTile))
+                if (the.partitions.id(topLeft) == the.partitions.id(enemyTile))
 				{
-					distanceFromEnemy = enemyTile.getDistance(tile);
+                    distanceFromEnemy = enemyTile.getDistance(topLeft);
 				}
 				else
 				{
@@ -377,8 +400,8 @@ buildingLoopExit:
 		// Far from the edge of the map -> worse.
 		// It's a proxy for "how wide open is this base?" Usually a base on the edge is
 		// relatively sheltered and a base in the middle is more open (though not always).
-		int edgeXdist = std::min(tile.x, BWAPI::Broodwar->mapWidth() - tile.x);
-		int edgeYdist = std::min(tile.y, BWAPI::Broodwar->mapHeight() - tile.y);
+        int edgeXdist = std::min(topLeft.x, BWAPI::Broodwar->mapWidth() - topLeft.x);
+        int edgeYdist = std::min(topLeft.y, BWAPI::Broodwar->mapHeight() - topLeft.y);
 		int edgeDistance = std::min(edgeXdist, edgeYdist);
 		score += -1.0 * edgeDistance;
 

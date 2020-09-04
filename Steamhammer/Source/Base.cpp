@@ -80,6 +80,20 @@ Base::Base(BWAPI::TilePosition pos, const BWAPI::Unitset availableResources)
     }
 }
 
+// The base is on an island, unconnected by ground to any starting base.
+bool Base::isIsland() const
+{
+    for (BWAPI::TilePosition tile : BWAPI::Broodwar->getStartLocations())
+    {
+        if (tile != getTilePosition() && getTileDistance(tile) > 0)
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 // Recalculate the base's set of geysers, including refineries (completed or not).
 // This only works for visible geysers, so it should be called only for bases we own.
 // Called to work around a bug related to BWAPI 4.1.2.
@@ -149,10 +163,10 @@ int Base::getInitialGas() const
 // NOTE This doesn't account for mineral patches mining out, decreasing the maximum.
 int Base::getMaxWorkers() const
 {
-	return 2 * minerals.size() + 3 * geysers.size();
+	return 2 * minerals.size() + Config::Macro::WorkersPerRefinery * geysers.size();
 }
 
-// Two per mineral patch plus three per geyser.
+// How many workers are acually assigned?
 int Base::getNumWorkers() const
 {
 	// The number of assigned mineral workers.

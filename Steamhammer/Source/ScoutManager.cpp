@@ -352,7 +352,7 @@ void ScoutManager::moveGroundScout()
 				BWAPI::Unit closestWorker = enemyWorkerToHarass();
 
 				// If configured and reasonable, harass an enemy worker.
-				if (Config::Strategy::ScoutHarassEnemy && closestWorker &&
+				if (Config::Skills::ScoutHarassEnemy && closestWorker &&
 					!wantGasSteal() &&
 					_workerScout->getHitPoints() + _workerScout->getShields() > 20)
 				{

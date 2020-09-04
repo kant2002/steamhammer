@@ -18,6 +18,7 @@ struct UnitInfo
     BWAPI::Position lastPosition;
 	bool			goneFromLastPosition;   // last position was seen, and it wasn't there
 	bool			burrowed;               // believed to be burrowed (or burrowing) at this position
+    bool            lifted;                 // lifted terran building when last seen
     BWAPI::UnitType type;
 	int				completeBy;				// past frame known or future frame predicted
 	bool            completed;

@@ -65,7 +65,7 @@ OpeningPlan OpponentModel::predictEnemyPlan() const
 void OpponentModel::considerSingleStrategy()
 {
     // Humans, we assume, are unpredictable.
-    if (Config::Strategy::HumanOpponent)
+    if (Config::Skills::HumanOpponent)
     {
         _singleStrategy = false;
         return;
@@ -398,14 +398,14 @@ void OpponentModel::considerGasSteal()
 {
 	// 1. Random gas stealing.
 	// This part really should run only once per game.
-	if (Random::Instance().flag(Config::Strategy::RandomGasStealRate))
+	if (Random::Instance().flag(Config::Skills::RandomGasStealRate))
 	{
 		_recommendGasSteal = true;
 		return;
 	}
 
 	// 2. Is auto gas stealing turned on?
-	if (!Config::Strategy::AutoGasSteal)
+	if (!Config::Skills::AutoGasSteal)
 	{
 		return;
 	}
@@ -548,7 +548,7 @@ void OpponentModel::read()
         if (!inFile.good())
 		{
             inFile.clear();
-            inFile.open(Config::IO::StaticDir + _filename);
+            inFile.open(Config::IO::PreparedDataDir + _filename);
             if (!inFile.good())
             {
                 // No prepared file either. That's OK.

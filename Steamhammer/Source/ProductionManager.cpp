@@ -304,7 +304,10 @@ void ProductionManager::manageBuildOrderQueue()
             else
             {
                 // Looks very like a jam. Clear the queue and hope for better luck next time.
-                // BWAPI::Broodwar->printf("jam timed out");
+                if (Config::Debug::DrawQueueFixInfo)
+                {
+                    BWAPI::Broodwar->printf("queue: production jam timed out");
+                }
                 goOutOfBookAndClearQueue();
             }
 		}
@@ -791,7 +794,6 @@ void ProductionManager::executeCommand(MacroCommand command)
 	}
 	else if (cmd == MacroCommandType::StopGas)
 	{
-		//BWAPI::Broodwar->printf("stop gas command");
 		WorkerManager::Instance().setCollectGas(false);
 	}
 	else if (cmd == MacroCommandType::StartGas)
@@ -1129,7 +1131,7 @@ void ProductionManager::goOutOfBookAndClearQueue()
 {
     if (Config::Debug::DrawQueueFixInfo && !_queue.isEmpty())
     {
-        BWAPI::Broodwar->printf("go out of book and clear queue");
+        BWAPI::Broodwar->printf("queue: go out of book and clear queue");
     }
 	_queue.clearAll();
 	_outOfBook = true;
@@ -1142,9 +1144,9 @@ void ProductionManager::goOutOfBook()
 {
 	if (!_outOfBook)
 	{
-        if (Config::Debug::DrawQueueFixInfo && !_queue.isEmpty())
+        if (Config::Debug::DrawQueueFixInfo && _queue.isEmpty())
         {
-            BWAPI::Broodwar->printf("go out of book");
+            BWAPI::Broodwar->printf("queue: go out of book");
         }
         goOutOfBookAndClearQueue();
 	}

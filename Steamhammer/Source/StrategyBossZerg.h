@@ -97,6 +97,10 @@ class StrategyBossZerg
 	int nDevourers;
 	int nDefilers;
 
+    int nInfestedCC;
+    int nInfestedTerrans;
+    int _lastInfestedTerranOrderFrame;
+
 	// Tech stuff. It has to be completed for the tech to be available.
 	int nEvo;
 	bool hasPool;
@@ -146,8 +150,10 @@ class StrategyBossZerg
 	void updateArmySizes();
 	bool enoughArmy() const;
 	bool enoughGroundArmy() const;
-	bool enemySeemsToBeDead(const PlayerSnapshot & snap) const;
+    bool enemyIsAllAir() const;
+    bool enemySeemsToBeDead(const PlayerSnapshot & snap) const;
     bool canSafelyMineGas() const;
+    int nFreeEvo() const;
 
     int getOurSpireTiming() const;
 

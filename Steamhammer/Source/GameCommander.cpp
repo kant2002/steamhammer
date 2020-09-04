@@ -281,11 +281,31 @@ bool GameCommander::isAssigned(BWAPI::Unit unit) const
 // validates units as usable for distribution to various managers
 void GameCommander::setValidUnits()
 {
-	for (BWAPI::Unit unit : BWAPI::Broodwar->self()->getUnits())
+    /*
+    // TODO testing
+    std::string timingFile = Config::IO::WriteDir + "timing.csv";
+    static bool speed = false;
+    if (!speed && BWAPI::Broodwar->self()->getUpgradeLevel(BWAPI::UpgradeTypes::Metabolic_Boost) > 0)
+    {
+        BWAPI::Broodwar->printf("zergling speed %d", BWAPI::Broodwar->getFrameCount());
+        Logger::LogAppendToFile(timingFile, "%d,%s\n", BWAPI::Broodwar->getFrameCount(), "speed");
+        speed = true;
+    }
+    static BWAPI::Unitset lings;
+    size_t nLings = lings.size();
+    */
+
+    for (BWAPI::Unit unit : BWAPI::Broodwar->self()->getUnits())
 	{
 		if (UnitUtil::IsValidUnit(unit))
 		{	
 			_validUnits.insert(unit);
+
+            // TODO testing
+            //if (unit->getType() == BWAPI::UnitTypes::Zerg_Zergling)
+            //{
+            //    lings.insert(unit);
+            //}
 
             /*
             // TODO testing
@@ -309,6 +329,15 @@ void GameCommander::setValidUnits()
             */
         }
 	}
+
+    /*
+    // TODO testing
+    if (lings.size() > nLings)
+    {
+        BWAPI::Broodwar->printf("%d lings @ %d", lings.size(), BWAPI::Broodwar->getFrameCount());
+        Logger::LogAppendToFile(timingFile, "%d,%d,%d\n", BWAPI::Broodwar->getFrameCount(), lings.size(), BWAPI::Broodwar->self()->minerals());
+    }
+    */
 }
 
 void GameCommander::setScoutUnits()
@@ -436,7 +465,7 @@ void GameCommander::assignUnit(BWAPI::Unit unit, BWAPI::Unitset & set)
 // it's a question of taste.
 bool GameCommander::surrenderMonkey()
 {
-	if (!Config::Strategy::SurrenderWhenHopeIsLost)
+	if (!Config::Skills::SurrenderWhenHopeIsLost)
 	{
 		return false;
 	}
@@ -454,7 +483,7 @@ bool GameCommander::surrenderMonkey()
     }
 
     // We are playing against a human. Surrender earlier to reduce frustration.
-    if (Config::Strategy::HumanOpponent)
+    if (Config::Skills::HumanOpponent)
     {
         int mySupply = BWAPI::Broodwar->self()->supplyUsed();
         PlayerSnapshot enemySnap(BWAPI::Broodwar->enemy());

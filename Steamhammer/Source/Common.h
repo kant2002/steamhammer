@@ -54,21 +54,15 @@ struct v2
 	}
 };
 
-struct Rect
-{
-    int x, y;
-    int height, width;
-};
-
 double UCB1_bound(int tries, int total);
 double UCB1_bound(double tries, double total);
 
-// Used to return a reference to an empty set of units when a data structure
-// doesn't have an entry giving another set.
+// Used to return a reference to an empty set of units.
 const static BWAPI::Unitset EmptyUnitSet;
 
 BWAPI::Unitset Intersection(const BWAPI::Unitset & a, const BWAPI::Unitset & b);
 
+int Clip(int x, int lo, int hi);
 int GetIntFromString(const std::string & s);
 std::string TrimRaceName(const std::string & s);
 char RaceChar(BWAPI::Race race);

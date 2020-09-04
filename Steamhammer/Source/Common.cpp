@@ -33,6 +33,21 @@ BWAPI::Unitset Intersection(const BWAPI::Unitset & a, const BWAPI::Unitset & b)
 	return result;
 }
 
+// Clip an integer to a range.
+// Short for std::min(hi, std::max(lo, x)).
+int Clip(int x, int lo, int hi)
+{
+    if (x <= lo)
+    {
+        return lo;
+    }
+    if (x >= hi)
+    {
+        return hi;
+    }
+    return x;
+}
+
 int GetIntFromString(const std::string & s)
 {
 	std::stringstream ss(s);
@@ -105,12 +120,10 @@ std::string UnitTypeName(BWAPI::Unit unit)
 // Post a message to the game including the bot's name.
 void GameMessage(const char * message)
 {
-	BWAPI::Broodwar->sendText("%c%s: %c%s",
-		BWAPI::Broodwar->self()->getTextColor(), BWAPI::Broodwar->self()->getName().c_str(),
-		white, message);
-	BWAPI::Broodwar->printf("%c%s: %c%s",
-		BWAPI::Broodwar->self()->getTextColor(), BWAPI::Broodwar->self()->getName().c_str(),
-		white, message);
+	BWAPI::Broodwar->sendText("%c%s", white, message);
+	//BWAPI::Broodwar->printf("%c%s: %c%s",
+	//	BWAPI::Broodwar->self()->getTextColor(), BWAPI::Broodwar->self()->getName().c_str(),
+	//	white, message);
 }
 
 // Point b specifies a direction from point a.

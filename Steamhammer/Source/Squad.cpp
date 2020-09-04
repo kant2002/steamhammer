@@ -84,6 +84,15 @@ void Squad::update()
 		return;
 	}
 
+    if (_order.getType() == SquadOrderTypes::Watch)
+    {
+        if (maybeWatch())
+        {
+            return;
+        }
+        // Else fall through and act as usual.
+    }
+
 	// This is a non-empty combat squad, so it may have a meaningful vanguard unit.
 	_vanguard = unitClosestToEnemy(_units);
 
@@ -1076,12 +1085,37 @@ const std::string & Squad::getName() const
     return _name;
 }
 
+// This is a watch squad. Handle special cases.
+// 1. If a unit is at its assigned watch position, burrow it if possible.
+// 2. If a unit is burrowed and no detector is in view, leave it there.
+bool Squad::maybeWatch()
+{
+    for (BWAPI::Unit u : _units)
+    {
+        if (!u->isBurrowed() &&
+            u->getDistance(_order.getPosition()) < 8 &&
+            u->canBurrow())
+        {
+            the.micro.Burrow(u);
+            return true;
+        }
+        else if (u->isBurrowed() && !UnitUtil::EnemyDetectorInRange(u->getPosition()))
+        {
+            // Return true to indicate that no action is to be taken.
+            // In particilar, don't unburrow to retreat.
+            return true;
+        }
+    }
+
+    return false;
+}
+
 // The drop squad has been given a Load order. Load up the transports for a drop.
 // Unlike other code in the drop system, this supports any number of transports, including zero.
 // Called once per frame while a Load order is in effect.
 void Squad::loadTransport()
 {
-	for (const auto trooper : _units)
+	for (BWAPI::Unit trooper : _units)
 	{
 		// If it's not the transport itself, send it toward the order location,
 		// which is set to the transport's initial location.

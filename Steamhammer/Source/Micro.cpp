@@ -1,5 +1,6 @@
 #include "Micro.h"
 
+#include "Base.h"
 #include "GridDistances.h"
 #include "InformationManager.h"
 #include "MapGrid.h"
@@ -114,6 +115,8 @@ void MicroState::monitor(BWAPI::Unit u)
 // for purposes of orders which take a position.
 bool MicroState::positionsNearlyEqual(BWAPI::Unit u,  BWAPI::Position & pos1, const BWAPI::Position & pos2) const
 {
+    UAB_ASSERT(pos1.isValid() && pos2.isValid(), "bad position");
+
     int dist = u->getDistance(pos2);
     int tolerance = dist <= 12 * 32     // within tank range?
         ? 3                             // yes, tight tolerance
@@ -627,6 +630,14 @@ void Micro::MoveNear(BWAPI::Unit unit, const BWAPI::Position & targetPosition)
         }
         // Otherwise do nothing. It's close enough.
     }
+}
+
+void Micro::TransferWorker(BWAPI::Unit worker, const Base * base)
+{
+    UAB_ASSERT(worker && worker->getType().isWorker() && worker->getPlayer() == BWAPI::Broodwar->self(), "bad unit");
+    UAB_ASSERT(base && base->getOwner() == BWAPI::Broodwar->self(), "bad base");
+
+
 }
 
 void Micro::RightClick(BWAPI::Unit unit, BWAPI::Unit target)

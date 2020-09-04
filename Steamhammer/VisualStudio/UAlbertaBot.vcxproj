@@ -137,6 +137,7 @@
     <ClCompile Include="..\Source\GridDistances.cpp" />
     <ClCompile Include="..\Source\GridInset.cpp" />
     <ClCompile Include="..\Source\GridRoom.cpp" />
+    <ClCompile Include="..\Source\GridSafeAirPath.cpp" />
     <ClCompile Include="..\Source\GridTileRoom.cpp" />
     <ClCompile Include="..\Source\GridWalk.cpp" />
     <ClCompile Include="..\Source\GridZone.cpp" />
@@ -172,8 +173,6 @@
     <ClCompile Include="..\Source\ProductionGoal.cpp" />
     <ClCompile Include="..\source\ProductionManager.cpp" />
     <ClCompile Include="..\Source\Random.cpp" />
-    <ClCompile Include="..\Source\Region.cpp" />
-    <ClCompile Include="..\Source\Regions.cpp" />
     <ClCompile Include="..\source\ScoutManager.cpp" />
     <ClCompile Include="..\Source\Squad.cpp" />
     <ClCompile Include="..\Source\SquadData.cpp" />
@@ -210,6 +209,7 @@
     <ClInclude Include="..\Source\GridDistances.h" />
     <ClInclude Include="..\Source\GridInset.h" />
     <ClInclude Include="..\Source\GridRoom.h" />
+    <ClInclude Include="..\Source\GridSafeAirPath.h" />
     <ClInclude Include="..\Source\GridTileRoom.h" />
     <ClInclude Include="..\Source\GridWalk.h" />
     <ClInclude Include="..\Source\GridZone.h" />
@@ -246,8 +246,6 @@
     <ClInclude Include="..\Source\ProductionGoal.h" />
     <ClInclude Include="..\source\ProductionManager.h" />
     <ClInclude Include="..\Source\Random.h" />
-    <ClInclude Include="..\Source\Region.h" />
-    <ClInclude Include="..\Source\Regions.h" />
     <ClInclude Include="..\source\ScoutManager.h" />
     <ClInclude Include="..\Source\Squad.h" />
     <ClInclude Include="..\Source\SquadData.h" />

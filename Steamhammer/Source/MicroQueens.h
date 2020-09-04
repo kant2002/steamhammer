@@ -17,6 +17,8 @@ class MicroQueens : public MicroManager
     int broodlingScore(BWAPI::Unit queen, BWAPI::Unit u) const;
     bool maybeBroodling(BWAPI::Unit queen);
 
+    BWAPI::Position getQueenDestination(BWAPI::Unit queen, const BWAPI::Position & target) const;
+
     // The different updates are done on different frames to spread out the work.
 	void updateMovement(BWAPI::Unit vanguard);
     void updateAction();

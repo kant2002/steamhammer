@@ -15,6 +15,7 @@ UnitInfo::UnitInfo()
 	, lastPosition(BWAPI::Positions::None)
 	, goneFromLastPosition(false)
 	, burrowed(false)
+    , lifted(false)
 	, type(BWAPI::UnitTypes::None)
 	, completeBy(0)
 	, completed(false)
@@ -30,8 +31,9 @@ UnitInfo::UnitInfo(BWAPI::Unit unit)
 	, unit(unit)
 	, lastPosition(unit->getPosition())
 	, goneFromLastPosition(false)
-	, burrowed(false)
-	, type(unit->getType())
+    , burrowed(unit->isBurrowed() || unit->getOrder() == BWAPI::Orders::Burrowing)
+    , lifted(unit->isLifted() || unit->getOrder() == BWAPI::Orders::LiftingOff)
+    , type(unit->getType())
 	, completeBy(predictCompletion(unit))
 	, completed(unit->isCompleted())
 {
@@ -48,9 +50,9 @@ const int UnitInfo::predictCompletion(BWAPI::Unit building) const
 	{
 		// Interpolate the HP to predict the completion time.
 		// This only works for buildings.
-        // NOTE Buildings generally finish later than predicted.
+        // NOTE It's not right. Buildings generally finish later than predicted.
         //      The prediction approaches the truth as construction progresses.
-        // NOTE If the building was damanged by attack, the prediction will be even worse.
+        // NOTE If the building was damaged by attack, the prediction will be even worse.
 		double hpRatio = unit->getHitPoints() / double(unit->getType().maxHitPoints());
 		return BWAPI::Broodwar->getFrameCount() + int((1.0 - hpRatio) * unit->getType().buildTime());
 	}
@@ -205,6 +207,7 @@ void UnitData::updateUnit(BWAPI::Unit unit)
 		ui.lastPosition			= unit->getPosition();
 		ui.goneFromLastPosition	= false;
 		ui.burrowed				= unit->isBurrowed() || unit->getOrder() == BWAPI::Orders::Burrowing;
+        ui.lifted               = unit->isLifted() || unit->getOrder() == BWAPI::Orders::LiftingOff;
 		ui.type					= unit->getType();
 
         // Update ui.completeBy before ui.completed.
@@ -224,7 +227,7 @@ void UnitData::updateUnit(BWAPI::Unit unit)
                 ui.completeBy = ui.predictCompletion(unit);
             }
 		}
-		ui.completed			= unit->isCompleted();
+		ui.completed = unit->isCompleted();
 	}
 }
 
@@ -276,8 +279,13 @@ const bool UnitData::badUnitInfo(const UnitInfo & ui) const
         // The unit is a building and we can currently see its position and it is not there.
         // It may have burned down, or the enemy may have chosen to destroy it.
         // Or it may have been destroyed by splash damage while out of our sight.
-        // NOTE A terran building could have lifted off and moved away. In that case, we mistakenly drop it.
-        ui.type.isBuilding() && BWAPI::Broodwar->isVisible(BWAPI::TilePosition(ui.lastPosition)) && !ui.unit->isVisible();
+        // NOTE A terran building could have lifted off and moved away while out of our vision.
+        //      In that case, we mistakenly drop it.
+        //      Not a serious problem; we'll re-add it when we see it again.
+        ui.type.isBuilding() &&
+        BWAPI::Broodwar->isVisible(BWAPI::TilePosition(ui.lastPosition)) &&
+        !ui.unit->isVisible() &&
+        !ui.lifted;         // if we saw it lifted, assume it flaoted away
 }
 
 int UnitData::getGasLost() const 

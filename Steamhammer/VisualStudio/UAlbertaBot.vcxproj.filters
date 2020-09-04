@@ -159,8 +159,6 @@
     <ClCompile Include="..\Source\MicroDefilers.cpp" />
     <ClCompile Include="..\Source\OpsBoss.cpp" />
     <ClCompile Include="..\Source\MicroScourge.cpp" />
-    <ClCompile Include="..\Source\Region.cpp" />
-    <ClCompile Include="..\Source\Regions.cpp" />
     <ClCompile Include="..\Source\GridWalk.cpp" />
     <ClCompile Include="..\Source\GridRoom.cpp" />
     <ClCompile Include="..\Source\GridTileRoom.cpp" />
@@ -169,6 +167,7 @@
     <ClCompile Include="..\Source\MicroQueens.cpp" />
     <ClCompile Include="..\Source\BOSimulator.cpp" />
     <ClCompile Include="..\Source\GameRecordNow.cpp" />
+    <ClCompile Include="..\Source\GridSafeAirPath.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Source\CombatCommander.h">
@@ -296,8 +295,6 @@
     <ClInclude Include="..\Source\MicroDefilers.h" />
     <ClInclude Include="..\Source\OpsBoss.h" />
     <ClInclude Include="..\Source\MicroScourge.h" />
-    <ClInclude Include="..\Source\Region.h" />
-    <ClInclude Include="..\Source\Regions.h" />
     <ClInclude Include="..\Source\GridWalk.h" />
     <ClInclude Include="..\Source\GridRoom.h" />
     <ClInclude Include="..\Source\GridTileRoom.h" />
@@ -306,5 +303,6 @@
     <ClInclude Include="..\Source\MicroQueens.h" />
     <ClInclude Include="..\Source\BOSimulator.h" />
     <ClInclude Include="..\Source\GameRecordNow.h" />
+    <ClInclude Include="..\Source\GridSafeAirPath.h" />
   </ItemGroup>
 </Project>

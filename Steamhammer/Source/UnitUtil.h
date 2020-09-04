@@ -61,6 +61,7 @@ namespace UnitUtil
 	bool AttackOrder(BWAPI::Unit unit);
 
 	int GetDetectionRange(BWAPI::UnitType type);
+    bool EnemyDetectorInRange(BWAPI::Position pos);
 
 	int GetAllUnitCount(BWAPI::UnitType type);
 	int GetCompletedUnitCount(BWAPI::UnitType type);

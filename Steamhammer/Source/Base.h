@@ -40,6 +40,7 @@ public:
     BWAPI::Unit		getDepot()        const { return resourceDepot; };
     BWAPI::Player	getOwner()        const { return owner; };
     bool            isAStartingBase() const { return startingBase; };
+    bool            isIsland()        const;
 
     void findGeysers();
 

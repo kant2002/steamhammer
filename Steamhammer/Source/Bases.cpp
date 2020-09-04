@@ -388,11 +388,10 @@ void Bases::updateBaseOwners()
 				);
 			// Is one of the units a resource depot?
 			BWAPI::Unit depot = nullptr;
-			for (const auto unit : units)
+			for (BWAPI::Unit unit : units)
 			{
 				if (unit->getType().isResourceDepot() && !unit->isLifted())
 				{
-                    UAB_ASSERT(unit->getType() != BWAPI::UnitTypes::Zerg_Infested_Command_Center, "infested resource depot");
 					depot = unit;
 					break;
 				}
@@ -907,9 +906,9 @@ int Bases::geyserCount() const
 	return count;
 }
 
-// Current number of completed refineries at my completed bases,
+// Current number of my completed refineries at my completed bases,
 // and number of bare geysers available to be taken.
-// Not counted: The number of refineries currently under construction.
+// Not counted: Enemy stolen refineries; refineries under construction.
 void Bases::gasCounts(int & nRefineries, int & nFreeGeysers) const
 {
 	int refineries = 0;
@@ -921,25 +920,21 @@ void Bases::gasCounts(int & nRefineries, int & nFreeGeysers) const
 		{
 			// Recalculate the base's geysers every time.
 			// This is a slow but accurate way to work around the BWAPI geyser bug.
-			// To save cycles, call findGeysers() only when necessary (e.g. a refinery is destroyed).
 			base->findGeysers();
 
 			for (BWAPI::Unit geyser : base->getGeysers())
 			{
-				if (geyser && geyser->exists())
-				{
-					if (geyser->getPlayer() == BWAPI::Broodwar->self() &&
-						geyser->getType().isRefinery() &&
-						geyser->isCompleted())
-					{
-						++refineries;
-					}
-					else if (geyser->getPlayer() == BWAPI::Broodwar->neutral())
-					{
-						++geysers;
-					}
-				}
-			}
+                if (geyser->getPlayer() == BWAPI::Broodwar->self() &&
+                    geyser->getType().isRefinery() &&
+                    geyser->isCompleted())
+                {
+                    ++refineries;
+                }
+                else if (geyser->getType() == BWAPI::UnitTypes::Resource_Vespene_Geyser)
+                {
+                    ++geysers;
+                }
+            }
 		}
 	}
 

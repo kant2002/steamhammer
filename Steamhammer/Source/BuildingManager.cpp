@@ -612,6 +612,21 @@ bool BuildingManager::isGasStealInQueue() const
 	return false;
 }
 
+// We have queued an expansion to the given base.
+// (Or at least some building at the same location.)
+bool BuildingManager::isBasePlanned(const Base * base) const
+{
+    for (const Building & b : _buildings)
+    {
+        if (b.finalPosition == base->getTilePosition())
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 void BuildingManager::drawBuildingInformation(int x, int y)
 {
     if (!Config::Debug::DrawBuildingInfo)

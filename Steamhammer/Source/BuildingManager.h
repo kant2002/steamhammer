@@ -61,6 +61,7 @@ public:
 	size_t              getNumUnstarted() const;
 	size_t              getNumUnstarted(BWAPI::UnitType type) const;
 	bool				isGasStealInQueue() const;
+    bool                isBasePlanned(const Base * base) const;
 
     std::vector<BWAPI::UnitType> buildingsQueued();
 

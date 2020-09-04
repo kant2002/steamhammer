@@ -540,7 +540,7 @@ bool UnitUtil::AttackOrder(BWAPI::Unit unit)
 		order == BWAPI::Orders::ScarabAttack;
 }
 
-// Return the unit or building's detection range, 0 if it is not a detector.
+// Return the unit or building's detection range in tiles, 0 if it is not a detector.
 // Detection range is independent of sight range. To detect a cloaked enemy, you
 // need to see it also: Any unit in sight range of it, plus a detector in detection range.
 int UnitUtil::GetDetectionRange(BWAPI::UnitType type)
@@ -554,6 +554,24 @@ int UnitUtil::GetDetectionRange(BWAPI::UnitType type)
 		return 11;
 	}
 	return 0;
+}
+
+// Can the enemy detect a unit at this position?
+// This is nearly accurate for known enemy detectors, possibly off at the edges.
+// It doesn't try to check whether the enemy can see the unit, which is independent of detection.
+bool UnitUtil::EnemyDetectorInRange(BWAPI::Position pos)
+{
+    if (The::Root().airAttacks.at(pos))
+    {
+        // For turrets, cannons, spore colonies: attack range == detection range.
+        return true;
+    }
+
+    return nullptr != BWAPI::Broodwar->getClosestUnit(
+        pos,
+        BWAPI::Filter::IsDetector && BWAPI::Filter::IsEnemy && BWAPI::Filter::IsFlyer,
+        11 * 32
+    );
 }
 
 // All our units, whether completed or not.
