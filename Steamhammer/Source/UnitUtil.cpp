@@ -5,6 +5,29 @@
 
 using namespace UAlbertaBot;
 
+// A tech building: It allows technology rather than production or defense.
+// Every tech building can either upgrade or research something.
+// Exclude zerg hatchery/lair/hive because they are primarily production buildings.
+// Some terran addons are tech buildings.
+bool UnitUtil::IsTechBuildingType(BWAPI::UnitType type)
+{
+    return
+        type.isBuilding() &&
+        (!type.upgradesWhat().empty() || !type.researchesWhat().empty()) &&
+        type != BWAPI::UnitTypes::Zerg_Hatchery &&
+        type != BWAPI::UnitTypes::Zerg_Lair &&
+        type != BWAPI::UnitTypes::Zerg_Hive;
+}
+
+// A production building: It can produce units. E.g., terran nuclear silo.
+// Production buildings and tech buildings do not overlap; no building is both.
+bool UnitUtil::IsProductionBuildingType(BWAPI::UnitType type)
+{
+    return
+        type.isBuilding() &&    // carrier and reaver can produce but are not buildings
+        type.canProduce();
+}
+
 // Building morphed from another, not constructed.
 bool UnitUtil::IsMorphedBuildingType(BWAPI::UnitType type)
 {
@@ -641,48 +664,7 @@ bool UnitUtil::EnemyDetectorInRange(BWAPI::Unit unit)
 // Only our incomplete units.
 int UnitUtil::GetUncompletedUnitCount(BWAPI::UnitType type)
 {
-	int count = 0;
-	for (BWAPI::Unit unit : BWAPI::Broodwar->self()->getUnits())
-	{
-		// Units in the egg.
-		if (unit->getType() == BWAPI::UnitTypes::Zerg_Egg && unit->getBuildType() == type)
-		{
-			count += type.isTwoUnitsInOneEgg() ? 2 : 1;
-		}
-
-		// Lurkers in the egg.
-		else if (unit->getType() == BWAPI::UnitTypes::Zerg_Lurker_Egg && type == BWAPI::UnitTypes::Zerg_Lurker)
-		{
-			++count;
-		}
-
-		// Guardians or devourers in the cocoon.
-		else if (unit->getType() == BWAPI::UnitTypes::Zerg_Cocoon && unit->getBuildType() == type)
-		{
-			++count;
-		}
-
-		// case where a building has started constructing a unit but it doesn't yet have a unit associated with it
-		else if (unit->getRemainingTrainTime() > 0)
-		{
-			BWAPI::UnitType trainType = unit->getLastCommand().getUnitType();
-
-			// NOTE Comparing the time like this could lead to miscounts if units start simultaneously.
-			//      But the original UAlbertaBot production system does not start units simultaneously.
-			if (trainType == type && unit->getRemainingTrainTime() == trainType.buildTime())
-			{
-				++count;
-			}
-		}
-
-		// The basic case. Includes morphing buildings.
-		else if (unit->getType() == type && !unit->isCompleted())
-		{
-			++count;
-		}
-	}
-
-	return count;
+    return the.my.all.count(type) - the.my.completed.count(type);
 }
 
 // Mobilize the unit if it is immobile: A sieged tank or a burrowed zerg unit.

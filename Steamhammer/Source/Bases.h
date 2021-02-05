@@ -52,7 +52,6 @@ namespace UAlbertaBot
         bool checkIslandStart() const;
         bool checkIslandBases() const;
 		void rememberBaseBlockers();
-		void setNaturalBase();
 
 		void removeUsedResources(BWAPI::Unitset & resources, const Base * base) const;
 		void countResources(BWAPI::Unit resource, int & minerals, int & gas) const;
@@ -64,7 +63,7 @@ namespace UAlbertaBot
 			, const BWAPI::TilePosition & topLeftB
 			, const BWAPI::TilePosition & bottomRightB) const;
 
-		bool closeEnough(BWAPI::TilePosition a, BWAPI::TilePosition b);
+		bool closeEnough(BWAPI::TilePosition a, BWAPI::TilePosition b) const;
 
 		bool inferEnemyBaseFromOverlord();
 		void updateEnemyStart();
@@ -84,11 +83,12 @@ namespace UAlbertaBot
 		Base * myMain() const { return mainBase; }				// always set
 		Base * myNatural() const { return naturalBase; };		// may be null
 		Base * myFront() const;									// may be null
-		BWAPI::TilePosition frontPoint() const;
-		bool isIslandStart() const { return islandStart; };
+        BWAPI::Position front() const;
+		BWAPI::TilePosition frontTile() const;
+        bool isIslandStart() const { return islandStart; };
         bool hasIslandBases() const { return islandBases; };
 
-		Base * enemyStart() const { return enemyStartingBase; }		// may be null at first
+		Base * enemyStart() const { return enemyStartingBase; }		// null if unknown
 
 		bool connectedToStart(const BWAPI::Position & pos) const;
 		bool connectedToStart(const BWAPI::TilePosition & tile) const;
@@ -104,8 +104,6 @@ namespace UAlbertaBot
 		int mineralPatchCount() const;
         int geyserCount(BWAPI::Player player) const;
 		void gasCounts(int & nRefineries, int & nFreeGeysers) const;
-
-		bool getEnemyProxy() const;
 
 		void clearNeutral(BWAPI::Unit unit);
 

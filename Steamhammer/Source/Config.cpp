@@ -12,7 +12,7 @@ namespace Config
     {
         bool ConfigFileFound                = false;
         bool ConfigFileParsed               = false;
-        std::string ConfigFileLocation      = "bwapi-data/AI/Steamhammer_3.1.json";
+        std::string ConfigFileLocation      = "bwapi-data/AI/Steamhammer_3.2.19.json";
     }
 
 	namespace IO
@@ -124,12 +124,12 @@ namespace Config
     namespace Macro
     {
         int BOSSFrameLimit                  = 160;
+		int ProductionJamFrameLimit			= 360;
         int WorkersPerRefinery              = 3;
 		double WorkersPerPatch              = 3.0;
 		int AbsoluteMaxWorkers				= 75;
         int BuildingSpacing                 = 1;
         int PylonSpacing                    = 3;
-		int ProductionJamFrameLimit			= 360;
 		bool ExpandToIslands				= false;
     }
 

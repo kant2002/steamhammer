@@ -97,6 +97,7 @@ public:
 	bool					enemyHasStaticDetection();
 	bool					enemyHasMobileDetection();
 	bool					enemyHasSiegeMode();
+    bool                    enemyHasTransport() const;
     int                     enemyGasTiming() const { return _enemyGasTiming; };
 
     bool                    weHaveCloakTech() const;
@@ -118,6 +119,7 @@ public:
     void                    drawResourceAmounts() const;
 
     const UnitData &        getUnitData(BWAPI::Player player) const;
+    const UnitInfo *        getUnitInfo(BWAPI::Unit unit) const;        // enemy units only
 	const BWAPI::Unitset &	getEnemyFireteam(BWAPI::Unit ourUnit) const;
     int                     getResourceAmount(BWAPI::Unit resource) const;
     bool                    isMineralDestroyed(BWAPI::Unit resource) const;

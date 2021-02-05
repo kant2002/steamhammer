@@ -18,5 +18,6 @@ public:
 	int at(const BWAPI::TilePosition & pos) const;
 	int at(const BWAPI::WalkPosition & pos) const;
 	int at(const BWAPI::Position & pos) const;
+    int at(BWAPI::Unit unit) const;
 };
 }

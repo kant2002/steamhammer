@@ -9,38 +9,41 @@ class The;
 
 class ScoutManager 
 {
-	BWAPI::Unit						_overlordScout;
-	BWAPI::Unit						_workerScout;
-    std::string                     _scoutStatus;
-    std::string                     _gasStealStatus;
-	MacroCommandType				_scoutCommand;
-	BWAPI::TilePosition				_overlordScoutTarget;
-	BWAPI::TilePosition				_workerScoutTarget;    // only while still seeking the enemy base
-	bool							_overlordAtEnemyBase;
-	bool			                _scoutUnderAttack;
-	bool							_tryGasSteal;
-	BWAPI::Unit						_enemyGeyser;
-    bool                            _startedGasSteal;
-	bool							_queuedGasSteal;
-	bool							_gasStealOver;
-    int                             _previousScoutHP;
-	BWAPI::Position					_nextDestination;
+	BWAPI::Unit			_overlordScout;
+	BWAPI::Unit			_workerScout;
+    std::string         _scoutStatus;
+    std::string         _gasStealStatus;
+	MacroCommandType	_scoutCommand;
+    BWAPI::TilePosition	_overlordScoutTarget;   // only while still seeking the enemy base
+	BWAPI::TilePosition	_workerScoutTarget;     // only while still seeking the enemy base
+	bool				_overlordAtEnemyBase;
+    BWAPI::Position     _overlordAtBaseTarget;  // look around inside/near the enemy base
+	bool			    _scoutUnderAttack;
+	bool				_tryGasSteal;
+	BWAPI::Unit			_enemyGeyser;
+    bool                _startedGasSteal;
+	bool				_queuedGasSteal;
+	bool				_gasStealOver;
+    int                 _previousScoutHP;
+	BWAPI::Position		_nextDestination;
 
 	ScoutManager();
 
-	void							setScoutTargets();
+	void				setScoutTargets();
 
-	bool                            enemyWorkerInRadius();
-    bool                            gasSteal();
-	BWAPI::Unit						getAnyEnemyGeyser() const;
-	BWAPI::Unit						getTheEnemyGeyser() const;
-	BWAPI::Unit						enemyWorkerToHarass() const;
-	void                            moveGroundScout();
-	void                            followGroundPath();
-	void                            moveAirScout();
-	void                            drawScoutInformation(int x, int y);
+	bool                enemyWorkerInRadius();
+    bool                gasSteal();
+	BWAPI::Unit			getAnyEnemyGeyser() const;
+	BWAPI::Unit			getTheEnemyGeyser() const;
+	BWAPI::Unit			enemyWorkerToHarass() const;
+	void                moveGroundScout();
+	void                followGroundPath();
+	void                moveAirScout();
+    void                moveAirScoutAroundEnemyBase();
+	void                drawScoutInformation(int x, int y);
 
-	void                            releaseOverlordScout();
+    bool                overlordBlockedByAirDefense() const;
+	void                releaseOverlordScout();
 
 public:
 

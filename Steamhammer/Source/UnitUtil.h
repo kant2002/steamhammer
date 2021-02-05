@@ -9,6 +9,8 @@ struct UnitInfo;
 
 namespace UnitUtil
 {
+    bool IsTechBuildingType(BWAPI::UnitType type);
+    bool IsProductionBuildingType(BWAPI::UnitType type);
     bool IsMorphedBuildingType(BWAPI::UnitType type);
     bool IsMorphedUnitType(BWAPI::UnitType type);
     bool BuildingIsMorphedFrom(BWAPI::UnitType t2, BWAPI::UnitType t1);

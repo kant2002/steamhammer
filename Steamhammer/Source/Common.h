@@ -84,6 +84,7 @@ const char cyan    = '\x1F';
 
 void GameMessage(const char * message);
 
+int TileBoxDistance(const BWAPI::TilePosition & a, const BWAPI::TilePosition & b);
 BWAPI::Position RawDistanceAndDirection(const BWAPI::Position & a, const BWAPI::Position & b, int distance);
 BWAPI::Position DistanceAndDirection(const BWAPI::Position & a, const BWAPI::Position & b, int distance);
 double ApproachSpeed(const BWAPI::Position & pos, BWAPI::Unit u);

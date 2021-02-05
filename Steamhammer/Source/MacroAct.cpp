@@ -2,6 +2,7 @@
 
 #include "BuildingPlacer.h"
 #include "ProductionManager.h"
+#include "StrategyBossZerg.h"
 #include "The.h"
 #include "UnitUtil.h"
 
@@ -361,6 +362,10 @@ MacroCommand MacroAct::getCommandType() const
 
 MacroLocation MacroAct::getMacroLocation() const
 {
+    if (isBuilding() && getUnitType() == BWAPI::UnitTypes::Zerg_Hatchery && StrategyBossZerg::Instance().hiddenBaseNext())
+    {
+        return MacroLocation::Hidden;
+    }
 	return _macroLocation;
 }
 

@@ -8,11 +8,15 @@ class Base;
 
 class MicroOverlords : public MicroManager
 {
-	std::map<Base *, BWAPI::Unit> baseAssignments;      // base -> overlord, only 1 overlord is assigned
-	BWAPI::Unitset unassignedOverlords;
+    bool overlordHunters;                   // enemy will fly around to shoot us down?
+    bool mobileAntiAir;                     // enemy has units that shoot air
+    bool weHaveSpores;                      // do we have defensive spore colonies?
 
+    std::map<BWAPI::Unit, BWAPI::TilePosition> assignments;  // overlord -> location
+
+    BWAPI::Unit nearestOverlord(const BWAPI::Unitset & overlords, const BWAPI::TilePosition & tile) const;
 	BWAPI::Unit nearestSpore(BWAPI::Unit overlord) const;
-	void goToSpore(BWAPI::Unit overlord) const;
+    void assignOverlordsToSpores(const BWAPI::Unitset & overlords);
 	void assignOverlords();
 
 public:

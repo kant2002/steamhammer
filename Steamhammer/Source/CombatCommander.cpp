@@ -65,7 +65,7 @@ void CombatCommander::initializeSquads()
 		_squadData.createSquad("Overlord", emptyOrder, OverlordPriority);
 
 		// The scourge squad has all the scourge.
-		if (the.self()->getRace() == BWAPI::Races::Zerg)
+		if (the.selfRace() == BWAPI::Races::Zerg)
 		{
 			_squadData.createSquad("Scourge", emptyOrder, ScourgePriority);
 		}
@@ -270,12 +270,12 @@ bool compareFirst(const std::pair<int, Base *> & left, const std::pair<int, Base
 
 // Update the watch squads, which set a sentry in each free base to see enemy expansions
 // and possibly stop them. It also clears spider mines as a side effect.
-// A free base may get a watch squad with up to 1 zergling and 1 overlord.
+// A free base may get a watch squad with of 1 zergling.
 // For now, only zerg keeps watch squads, and only when units are available.
 void CombatCommander::updateWatchSquads()
 {
 	// Only if we're zerg. Not implemented for other races.
-	if (the.self()->getRace() != BWAPI::Races::Zerg)
+	if (the.selfRace() != BWAPI::Races::Zerg)
 	{
 		return;
 	}
@@ -304,14 +304,6 @@ void CombatCommander::updateWatchSquads()
     // When _isWatching is set, we ensure at least one watching zergling.
     // Otherwise we might disband the most important squad intermittently, losing its value.
     int nWatchers = std::min(nLings, Clip(groundStrength / perWatcher, _isWatching ? 1 : 0, hasBurrow ? 4 : 2));
-
-    // NOTE The detector assignments have little effect. Early in the game, we have no free overlords.
-    // Later in the game, we don't assign overlords because of the danger.
-    const bool wantIslandDetector = !the.info.enemyHasOverlordHunters();
-    const bool wantDetector = !the.info.enemyHasAntiAir();
-        // TODO when overlords get a little smarter, change it to this:
-        //!the.info.enemyHasOverlordHunters() &&
-        //(the.self()->getUpgradeLevel(BWAPI::UpgradeTypes::Pneumatized_Carapace) > 0 || !the.info.enemyHasAntiAir());
 
     // Sort free bases by nearness to enemy main, which must be known (we check above).
     // Distance scores for good bases, score -1 for others.
@@ -345,7 +337,7 @@ void CombatCommander::updateWatchSquads()
 		BWAPI::TilePosition tile(base->getTilePosition() + BWAPI::TilePosition(2, 1));
 		squadName << "Watch " << tile.x << "," << tile.y;
 
-        if (!wantIslandDetector && !wantDetector && score < 0 && !_squadData.squadExists(squadName.str()))
+        if (score < 0 && !_squadData.squadExists(squadName.str()))
 		{
 			continue;
 		}
@@ -402,10 +394,6 @@ void CombatCommander::updateWatchSquads()
                 }
             }
         }
-
-        // Possibly assign overlords to bases which are not being watched by zerglings.
-        maybeAssignDetector(watchSquad, !watchSquad.containsUnitType(BWAPI::UnitTypes::Zerg_Zergling) &&
-            (wantDetector || base->isIsland() && wantIslandDetector));
 
         // Drop the squad if it is no longer needed. Don't clutter the squad display.
         if (watchSquad.isEmpty())
@@ -972,8 +960,8 @@ void CombatCommander::updateScoutDefenseSquad()
 
 void CombatCommander::updateBaseDefenseSquads() 
 {
-	const int baseDefenseRadius = 600;
-	const int baseDefenseHysteresis = 200;
+	const int baseDefenseRadius = 608;
+	const int baseDefenseHysteresis = 304;
 	const int pullWorkerDistance = 256;
     const int pullWorkerVsBuildingDistance = baseDefenseRadius;
 	const int pullWorkerHysteresis = 128;
@@ -1031,7 +1019,15 @@ void CombatCommander::updateBaseDefenseSquads()
 			if (dist < defenseRadius ||
 				dist < defenseRadius + 300 && zone == the.zone.ptr(unit->getTilePosition()))
 			{
-				if (dist < closestEnemyDistance)
+                if (unit->getType() == BWAPI::UnitTypes::Protoss_Photon_Cannon &&
+                    the.selfRace() == BWAPI::Races::Zerg)
+                {
+                    // Do not assign defense against cannons. Let the defensive sunken hold them.
+                    // It's better to send the units to the enemy main.
+                    // NOTE We still assign defenders against pylons. That may defeat the purpose.
+                    continue;
+                }
+                if (dist < closestEnemyDistance)
 				{
 					closestEnemyDistance = dist;
 					closestEnemy = unit;
@@ -1048,9 +1044,10 @@ void CombatCommander::updateBaseDefenseSquads()
 						// NOTE Carriers don't need extra, they show interceptors.
 						nEnemyAir += 4;
 					}
-                    else if (unit->getType() == BWAPI::UnitTypes::Zerg_Devourer)
+                    else if (unit->getType() == BWAPI::UnitTypes::Zerg_Guardian ||
+                        unit->getType() == BWAPI::UnitTypes::Zerg_Devourer)
                     {
-                        nEnemyAir += 3;
+                        nEnemyAir += 2;
                     }
 					else
 					{
@@ -1369,6 +1366,7 @@ BWAPI::Unit CombatCommander::findClosestDefender(const Squad & defenseSquad, BWA
 }
 
 // NOTE This implementation is kind of cheesy. Orders ought to be delegated to a squad.
+//      It can cause double-commanding, which is bad.
 void CombatCommander::loadOrUnloadBunkers()
 {
 	if (the.self()->getRace() != BWAPI::Races::Terran)

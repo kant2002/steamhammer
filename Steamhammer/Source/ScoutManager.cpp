@@ -21,7 +21,8 @@ ScoutManager::ScoutManager()
 	, _gasStealStatus("None")
 	, _scoutCommand(MacroCommandType::None)
 	, _overlordAtEnemyBase(false)
-	, _scoutUnderAttack(false)
+    , _overlordAtBaseTarget(BWAPI::Positions::Invalid)
+    , _scoutUnderAttack(false)
 	, _tryGasSteal(false)
 	, _enemyGeyser(nullptr)
     , _startedGasSteal(false)
@@ -45,7 +46,7 @@ ScoutManager & ScoutManager::Instance()
 // Guarantee: We only set a target if the scout for the target is set.
 void ScoutManager::setScoutTargets()
 {
-	Base * enemyBase = Bases::Instance().enemyStart();
+	Base * enemyBase = the.bases.enemyStart();
 	if (enemyBase)
 	{
 		_overlordScoutTarget = BWAPI::TilePositions::Invalid;
@@ -103,7 +104,7 @@ void ScoutManager::setScoutTargets()
 // Should we send out a worker scout now?
 bool ScoutManager::shouldScout()
 {
-	// If we're stealing gas, it doesn't matter what the scout command is: We need to send a worker.
+    // If we're stealing gas, it doesn't matter what the scout command is: We need to send a worker.
 	if (wantGasSteal())
 	{
 		return true;
@@ -117,7 +118,7 @@ bool ScoutManager::shouldScout()
 	// If we only want to find the enemy base location and we already know it, don't send a worker.
 	if (_scoutCommand == MacroCommandType::ScoutIfNeeded || _scoutCommand == MacroCommandType::ScoutLocation)
 	{
-		return !Bases::Instance().enemyStart();
+		return !the.bases.enemyStart();
 	}
 
 	return true;
@@ -145,15 +146,15 @@ void ScoutManager::update()
 		_overlordScout = nullptr;
 	}
 
-    // Release the overlord scout if it is likely to meet trouble soon.
-	if (_overlordScout && InformationManager::Instance().enemyHasAntiAir())
-	{
-		releaseOverlordScout();
-	}
+    // Release the overlord scout if the enemy has mobile or static anti-air.
+    if (_overlordScout && (InformationManager::Instance().enemyHasAntiAir() || overlordBlockedByAirDefense()))
+    {
+        releaseOverlordScout();
+    }
 
     // If we only want to locate the enemy base and we have, release the scout worker.
     if (_scoutCommand == MacroCommandType::ScoutLocation &&
-		Bases::Instance().enemyStart() &&
+		the.bases.enemyStart() &&
 		!wantGasSteal())
 	{
 		releaseWorkerScout();
@@ -240,6 +241,23 @@ void ScoutManager::releaseWorkerScout()
 	}
 }
 
+// The scouting overlord is near enemy static air defense.
+bool ScoutManager::overlordBlockedByAirDefense() const
+{
+    if (the.now() % 3 != 0)     // check once each 3 frames
+    {
+        return false;
+    }
+
+    // Notice a turret, cannon, spore starting nearby.
+    BWAPI::Unit enemy = BWAPI::Broodwar->getClosestUnit(
+        _overlordScout->getPosition(),
+        BWAPI::Filter::IsEnemy && BWAPI::Filter::AirWeapon != BWAPI::WeaponTypes::None,
+        8 * 32
+    );
+    return enemy != nullptr;
+}
+
 // Send the overlord scout home.
 void ScoutManager::releaseOverlordScout()
 {
@@ -272,7 +290,7 @@ void ScoutManager::drawScoutInformation(int x, int y)
     BWAPI::Broodwar->drawTextScreen(x, y, "Scout info: %s", _scoutStatus.c_str());
     BWAPI::Broodwar->drawTextScreen(x, y+10, "Gas steal: %s", _gasStealStatus.c_str());
 	std::string more = "not yet";
-	if (_scoutCommand == MacroCommandType::Scout)
+    if (_scoutCommand == MacroCommandType::Scout)
 	{
 		more = "and stay";
 	}
@@ -310,11 +328,11 @@ void ScoutManager::moveGroundScout()
 	{
 		// The target is valid exactly when we are still looking for the enemy base.
 		_scoutStatus = "Seeking enemy base";
-		the.micro.Move(_workerScout, BWAPI::Position(_workerScoutTarget));
+		the.micro.MoveSafely(_workerScout, BWAPI::Position(_workerScoutTarget));
 	}
 	else
 	{
-		const Base * enemyBase = Bases::Instance().enemyStart();
+		const Base * enemyBase = the.bases.enemyStart();
 
 		UAB_ASSERT(enemyBase, "no enemy base");
 
@@ -379,12 +397,12 @@ void ScoutManager::moveGroundScout()
 void ScoutManager::followGroundPath()
 {
 	// Called only after the enemy base is found.
-	Base * enemyBase = Bases::Instance().enemyStart();
+	Base * enemyBase = the.bases.enemyStart();
 
 	if (the.zone.at(enemyBase->getTilePosition()) != the.zone.at(_workerScout->getTilePosition()))
 	{
 		// We're not there yet. Go there.
-		the.micro.Move(_workerScout, enemyBase->getCenter());
+		the.micro.MoveSafely(_workerScout, enemyBase->getCenter());
 		return;
 	}
 
@@ -397,17 +415,12 @@ void ScoutManager::followGroundPath()
 			BWAPI::Broodwar->drawCircleMap(_nextDestination, 3, BWAPI::Colors::Yellow, true);
 			BWAPI::Broodwar->drawLineMap(_workerScout->getPosition(), _nextDestination, BWAPI::Colors::Yellow);
 		}
-		the.micro.Move(_workerScout, _nextDestination);
+		the.micro.MoveSafely(_workerScout, _nextDestination);
 		return;
 	}
 
-	// We're at the enemy base and need another waypoint. 
-
-	BWAPI::Position destination = MapGrid::Instance().getLeastExplored(
-		true,
-		the.partitions.id(enemyBase->getTilePosition()),
-		the.zone.at(enemyBase->getTilePosition()));
-
+	// We're at the enemy base and need another waypoint.
+    BWAPI::Position destination = the.grid.getLeastExploredNear(enemyBase->getPosition(), true);
 	if (destination.isValid())
 	{
 		_nextDestination = destination;
@@ -422,19 +435,15 @@ void ScoutManager::followGroundPath()
 	}
 	else
 	{
-		// Try to avoid getting stuck on the edge of the building.
-		// In the worst case, the center is closer and we'll turn away sooner.
 		_nextDestination = enemyBase->getCenter();
 	}
-	the.micro.Move(_workerScout, _nextDestination);
+	the.micro.MoveSafely(_workerScout, _nextDestination);
 }
 
 // Move the overlord scout.
 void ScoutManager::moveAirScout()
 {
-	// get the enemy base location, if we have one
-	// Note: In case of an enemy proxy or weird map, this might be our own base. Roll with it.
-	const Base * enemyBase = Bases::Instance().enemyStart();
+	const Base * enemyBase = the.bases.enemyStart();
 
 	if (enemyBase)
 	{
@@ -446,7 +455,7 @@ void ScoutManager::moveAirScout()
 			{
 				_scoutStatus = "Overlord to enemy base";
 			}
-			the.micro.Move(_overlordScout, enemyBase->getCenter());
+			the.micro.MoveSafely(_overlordScout, enemyBase->getCenter());
 			if (_overlordScout->getDistance(enemyBase->getCenter()) < 8)
 			{
 				_overlordAtEnemyBase = true;
@@ -458,7 +467,7 @@ void ScoutManager::moveAirScout()
 			{
 				_scoutStatus = "Overlord at enemy base";
 			}
-			// TODO Probably should patrol around the enemy base to see more.
+            moveAirScoutAroundEnemyBase();
 		}
 	}
 	else
@@ -471,16 +480,64 @@ void ScoutManager::moveAirScout()
 
 		if (_overlordScoutTarget.isValid())
 		{
-			the.micro.Move(_overlordScout, BWAPI::Position(_overlordScoutTarget));
+			the.micro.MoveSafely(_overlordScout, BWAPI::Position(_overlordScoutTarget));
 		}
 	}
 }
+
+// Called after the overlord has reached the enemy resource depot,
+// or has been turned away from it by static defense.
+void ScoutManager::moveAirScoutAroundEnemyBase()
+{
+    const Base * enemyBase = the.bases.enemyStart();
+    //UAB_ASSERT(enemyBase, "no enemy base");
+    //UAB_ASSERT(_overlordAtEnemyBase, "not at enemy base");
+
+    if (!_overlordAtBaseTarget.isValid())
+    {
+        // Choose a new destination in or near the enemy base.
+        if (_overlordScout->getDistance(enemyBase->getCenter()) < 8)
+        {
+            // We're at the enemy resource depot. Choose somewhere else.
+            if (enemyBase->getNatural() && !enemyBase->getNatural()->isExplored())
+            {
+                enemyBase->getNatural()->getCenter();
+            }
+            else
+            {
+                _overlordAtBaseTarget = the.grid.getLeastExploredNear(enemyBase->getPosition(), false);
+            }
+        }
+        else
+        {
+            // We're somewhere else. Go back to the enemy resource depot.
+            _overlordAtBaseTarget = enemyBase->getCenter();
+        }
+    }
+    
+    if (_overlordAtBaseTarget.isValid())
+    {
+        the.micro.MoveSafely(_overlordScout, _overlordAtBaseTarget);
+
+        // If we arrived, choose somewhere else next time.
+        if (_overlordScout->getDistance(_overlordAtBaseTarget) < 8)
+        {
+            _overlordAtBaseTarget = BWAPI::Positions::Invalid;
+        }
+    }
+    else
+    {
+        // We apparently can't go anywhere. Let the overlord run free.
+        releaseOverlordScout();
+    }
+}
+
 // Called only when a gas steal is requested.
 // Return true to say that gas stealing controls the worker, and
 // false if the caller gets control.
 bool ScoutManager::gasSteal()
 {
-	Base * enemyBase = Bases::Instance().enemyStart();
+	Base * enemyBase = the.bases.enemyStart();
 	if (!enemyBase)
 	{
 		_gasStealStatus = "Enemy base not found";
@@ -488,7 +545,7 @@ bool ScoutManager::gasSteal()
 	}
 
 	_enemyGeyser = getTheEnemyGeyser();
-	if (!_enemyGeyser)
+	if (!_enemyGeyser || !_enemyGeyser->getInitialTilePosition().isValid())
 	{
 		// No need to set status. It will change on the next frame.
         _gasStealOver = true;
@@ -528,7 +585,7 @@ bool ScoutManager::gasSteal()
 	else
 	{
 		// We don't see the geyser yet. Move toward it.
-		the.micro.Move(_workerScout, _enemyGeyser->getInitialPosition());
+		the.micro.MoveSafely(_workerScout, _enemyGeyser->getInitialPosition());
 		_gasStealStatus = "Moving to steal gas";
 	}
 	return true;
@@ -575,7 +632,7 @@ BWAPI::Unit ScoutManager::enemyWorkerToHarass() const
 // Find an enemy geyser and return it, if there is one.
 BWAPI::Unit ScoutManager::getAnyEnemyGeyser() const
 {
-	Base * enemyBase = Bases::Instance().enemyStart();
+	Base * enemyBase = the.bases.enemyStart();
 
 	BWAPI::Unitset geysers = enemyBase->getGeysers();
 	if (geysers.size() > 0)
@@ -591,7 +648,7 @@ BWAPI::Unit ScoutManager::getAnyEnemyGeyser() const
 // If 0 we can't steal it, and if >1 then it's no use to steal one.
 BWAPI::Unit ScoutManager::getTheEnemyGeyser() const
 {
-	Base * enemyBase = Bases::Instance().enemyStart();
+	Base * enemyBase = the.bases.enemyStart();
 
 	BWAPI::Unitset geysers = enemyBase->getGeysers();
 	if (geysers.size() == 1)

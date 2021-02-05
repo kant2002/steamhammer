@@ -5,6 +5,11 @@
 
 using namespace UAlbertaBot;
 
+// MapGrid divides the map into large square cells (cells at the right or bottom may be cut off
+// by the edge of the map). It keeps track of friendly and visible enemy units in each cell,
+// updated each frame, as well as when the cell was last seen and whether there is a comsat scan
+// active there.
+
 MapGrid & MapGrid::Instance() 
 {
 	static MapGrid instance(BWAPI::Broodwar->mapWidth()*32, BWAPI::Broodwar->mapHeight()*32, Config::Tools::MAP_GRID_SIZE);
@@ -30,9 +35,10 @@ MapGrid::MapGrid(int mapWidth, int mapHeight, int cellSize)
 // Return the first of:
 // 1. Any starting base location that has not been explored.
 // 2. The least-recently explored accessible cell (with attention to byGround).
+// In either case, choose the cell farthest from our start.
 // Item 1 ensures that, if early game scouting failed, we scout with force.
 // If byGround, only locations that are accessible by ground from the given location.
-// If not byGround, the location fromHere is not used.
+// If not byGround, the partition is not used.
 // If zoneID is non-zero, require the position to be in the given zone.
 BWAPI::Position MapGrid::getLeastExplored(bool byGround, int partition, int zoneID) 
 {
@@ -48,7 +54,7 @@ BWAPI::Position MapGrid::getLeastExplored(bool byGround, int partition, int zone
 	}
 
 	// 2. The most distant of the least-recently explored tiles.
-	int minSeen = 1000000;
+    int minSeen = INT_MAX;
 	double minSeenDist = 0;
 	int leastRow(0), leastCol(0);
 
@@ -56,7 +62,6 @@ BWAPI::Position MapGrid::getLeastExplored(bool byGround, int partition, int zone
 	{
 		for (int c=0; c<cols; ++c)
 		{
-			// get the center of this cell
 			BWAPI::Position cellCenter = getCellCenter(r,c);
 
 			// Skip places that we can't get to.
@@ -71,14 +76,14 @@ BWAPI::Position MapGrid::getLeastExplored(bool byGround, int partition, int zone
 				continue;
 			}
 
-			BWAPI::Position home(BWAPI::Broodwar->self()->getStartLocation());
+			BWAPI::Position home(the.self()->getStartLocation());
 			double dist = home.getDistance(getCellByIndex(r, c).center);
             int lastVisited = getCellByIndex(r, c).timeLastVisited;
-			if (lastVisited < minSeen || ((lastVisited == minSeen) && (dist > minSeenDist)))
+			if (lastVisited < minSeen || (lastVisited == minSeen && dist > minSeenDist))
 			{
 				leastRow = r;
 				leastCol = c;
-				minSeen = getCellByIndex(r, c).timeLastVisited;
+                minSeen = lastVisited;
 				minSeenDist = dist;
 			}
 		}
@@ -87,54 +92,89 @@ BWAPI::Position MapGrid::getLeastExplored(bool byGround, int partition, int zone
 	return getCellCenter(leastRow, leastCol);
 }
 
+// Return the least-recently explored cell "near" the given position.
+// This one does not care about starting positions or distance from home.
+BWAPI::Position MapGrid::getLeastExploredNear(const BWAPI::Position & center, bool byGround)
+{
+    int minSeen = INT_MAX;
+    double minSeenDist = 0;
+    int leastRow(0), leastCol(0);
+
+    for (int r = 0; r<rows; ++r)
+    {
+        for (int c = 0; c<cols; ++c)
+        {
+            BWAPI::Position cellCenter = getCellCenter(r, c);
+
+            // Skip places that we can't get to.
+            if (byGround && the.partitions.id(center) != the.partitions.id(cellCenter))
+            {
+                continue;
+            }
+
+            if (center.getApproxDistance(cellCenter) <= 32 * 32 && the.zone.at(center) == the.zone.at(cellCenter))
+            {
+                int lastVisited = getCellByIndex(r, c).timeLastVisited;
+                if (lastVisited < minSeen)
+                {
+                    leastRow = r;
+                    leastCol = c;
+                    minSeen = lastVisited;
+                }
+            }
+        }
+    }
+
+    return getCellCenter(leastRow, leastCol);
+}
+
 void MapGrid::calculateCellCenters()
 {
-	for (int r=0; r < rows; ++r)
-	{
-		for (int c=0; c < cols; ++c)
-		{
-			GridCell & cell = getCellByIndex(r,c);
+    for (int r = 0; r < rows; ++r)
+    {
+        for (int c = 0; c < cols; ++c)
+        {
+            GridCell & cell = getCellByIndex(r, c);
 
-			int centerX = (c * cellSize) + (cellSize / 2);
-			int centerY = (r * cellSize) + (cellSize / 2);
+            int centerX = (c * cellSize) + (cellSize / 2);
+            int centerY = (r * cellSize) + (cellSize / 2);
 
-			// if the x position goes past the end of the map
-			if (centerX > mapWidth)
-			{
-				// when did the last cell start
-				int lastCellStart		= c * cellSize;
+            // if the x position goes past the end of the map
+            if (centerX > mapWidth)
+            {
+                // when did the last cell start
+                int lastCellStart = c * cellSize;
 
-				// how wide did we go
-				int tooWide				= mapWidth - lastCellStart;
-				
-				// go half the distance between the last start and how wide we were
-				centerX = lastCellStart + (tooWide / 2);
-			}
-			else if (centerX == mapWidth)
-			{
-				centerX -= 50;
-			}
+                // how wide did we go
+                int tooWide = mapWidth - lastCellStart;
 
-			if (centerY > mapHeight)
-			{
-				// when did the last cell start
-				int lastCellStart		= r * cellSize;
+                // go half the distance between the last start and how wide we were
+                centerX = lastCellStart + (tooWide / 2);
+            }
+            else if (centerX == mapWidth)
+            {
+                centerX -= 50;
+            }
 
-				// how wide did we go
-				int tooHigh				= mapHeight - lastCellStart;
-				
-				// go half the distance between the last start and how wide we were
-				centerY = lastCellStart + (tooHigh / 2);
-			}
-			else if (centerY == mapHeight)
-			{
-				centerY -= 50;
-			}
+            if (centerY > mapHeight)
+            {
+                // when did the last cell start
+                int lastCellStart = r * cellSize;
 
-			cell.center = BWAPI::Position(centerX, centerY);
-			assert(cell.center.isValid());
-		}
-	}
+                // how wide did we go
+                int tooHigh = mapHeight - lastCellStart;
+
+                // go half the distance between the last start and how wide we were
+                centerY = lastCellStart + (tooHigh / 2);
+            }
+            else if (centerY == mapHeight)
+            {
+                centerY -= 50;
+            }
+
+            cell.center = BWAPI::Position(centerX, centerY);
+        }
+    }
 }
 
 BWAPI::Position MapGrid::getCellCenter(int row, int col)
@@ -185,7 +225,7 @@ void MapGrid::update()
 
 	//BWAPI::Broodwar->printf("MapGrid info: WH(%d, %d)  CS(%d)  RC(%d, %d)  C(%d)", mapWidth, mapHeight, cellSize, rows, cols, cells.size());
 
-	for (BWAPI::Unit unit : BWAPI::Broodwar->self()->getUnits()) 
+	for (BWAPI::Unit unit : the.self()->getUnits()) 
 	{
 		if (unit->isCompleted() || unit->getType().isBuilding())
 		{
@@ -196,8 +236,7 @@ void MapGrid::update()
 
 	for (BWAPI::Unit unit : BWAPI::Broodwar->enemy()->getUnits()) 
 	{
-		if (unit->exists() &&
-			(unit->isCompleted() || unit->getType().isBuilding()) &&
+		if ((unit->isCompleted() || unit->getType().isBuilding()) &&
 			unit->getHitPoints() > 0 &&
 			unit->getType() != BWAPI::UnitTypes::Unknown) 
 		{

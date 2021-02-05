@@ -1,6 +1,9 @@
 #include "Base.h"
 
+#include "Bases.h"
 #include "InformationManager.h"
+#include "The.h"
+#include "UnitUtil.h"
 #include "WorkerManager.h"
 
 using namespace UAlbertaBot;
@@ -20,17 +23,77 @@ bool Base::findIsStartingBase() const
     return false;
 }
 
+// Figure out the "front" of the base where defenses against approach should go.
+// This is most important for natural bases, which usually have one line of approach.
+// (Defenses against raids may be elsewhere.)
+// Called once at startup.
+BWAPI::TilePosition Base::findFront() const
+{
+    // Seek a tile at the right distance from the base and as close as possible
+    // to an outside reference point that represents the enemy origin.
+    // That is, place the front toward the enemy.
+    BWAPI::TilePosition startTile = getCenterTile();
+    Base * outsideBase = nullptr;
+    for (Base * base : the.bases.getStarting())
+    {
+        if (base != this && base->getNatural() != this &&
+            base->getDistances().at(startTile) > 0)   // connected by ground
+        {
+            outsideBase = base;
+            break;
+        }
+    }
+    if (!outsideBase)
+    {
+        // Fallback method: The front is away from the minerals.
+        return BWAPI::TilePosition((getCenter() - getMineralOffset()).makeValid());
+    }
+    const GridDistances & outsideDistances = outsideBase->getDistances();
+
+    BWAPI::TilePosition tile = startTile;
+    int inDist = 0;                                 // box distance from start tile
+    int outDist = outsideDistances.at(startTile);   // tile distance from outside reference
+    while (1)
+    {
+loop:
+        for (int dx = -1; dx <= 1; ++dx)
+        {
+            for (int dy = -1; dy <= 1; ++dy)
+            {
+                BWAPI::TilePosition xy(tile.x + dx, tile.y + dy);
+                if (xy.isValid() && the.map.isBuildable(xy))
+                {
+                    int inD = TileBoxDistance(startTile, xy);
+                    int outD = outsideDistances.at(xy);
+                    if (outD < outDist && inD >= inDist && inD <= 7)
+                    {
+                        tile = xy;
+                        inDist = inD;
+                        outDist = outD;
+                        goto loop;
+                    }
+                }
+            }
+        }
+        // We went through all the neighbors without improvement. Stop.
+        break;
+    }
+    return tile;
+}
+
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
 // Create a base given its position and a set of resources that may belong to it.
 // The caller is responsible for eliminating resources which are too small to be worth it.
-Base::Base(BWAPI::TilePosition pos, const BWAPI::Unitset availableResources)
+Base::Base(BWAPI::TilePosition pos, const BWAPI::Unitset & availableResources)
     : id(-1)        // invalid value, will be reset after bases are sorted
     , tilePosition(pos)
     , distances(pos)
-    , reserved(false)
     , startingBase(findIsStartingBase())
-    , natural(nullptr)
+    , naturalBase(nullptr)
+    , mainBase(nullptr)
+    , front(BWAPI::Positions::Unknown)      // filled in by initializeFront() when all info is known
+    , reserved(false)
     , workerDanger(false)
     , failedPlacements(0)
     , resourceDepot(nullptr)
@@ -85,24 +148,46 @@ void Base::setID(int baseID)
     id = baseID;
 }
 
-// The closest non-starting base to this base is its natural.
+// The closest non-starting base to this base is its natural (with other conditions).
 // This is only called (by Bases) if this is a starting base. Other bases have no natural.
-// NOTE Some maps have mains with two naturals. This may give unhelpful results for them.
+// Also tell the natural that this is its main base.
+// NOTE If the map has two naturals for each main, this will pick the same one each time
+//      as "the" natural. We'd need a fancier analysis.
+// NOTE If the map has two mains sharing the same natural, this will give bad results.
+//      No competitive map should be laid out that way.
 void Base::initializeNatural(const std::vector<Base *> & bases)
 {
     int minDist = INT_MAX;
+    Base * bestNatural = nullptr;
     for (Base * base : bases)
     {
-        if (!base->isAStartingBase())
+        if (!base->isAStartingBase() && !base->getMain() && base->getInitialMinerals() > 0)
         {
             int dist = base->getTileDistance(tilePosition);     // -1 if not connected by ground
+            if (base->getInitialGas() == 0)
+            {
+                // If the base is mineral-only, accept it only if it is much closer.
+                dist *= 2;      // -1 goes to -2; that's OK
+            }
             if (dist > 0 && dist < minDist)
             {
                 minDist = dist;
-                natural = base;
+                bestNatural = base;
             }
         }
     }
+    if (bestNatural)
+    {
+        naturalBase = bestNatural;
+        naturalBase->mainBase = this;
+    }
+}
+
+// The "front line" of the base, where static defense and mobile defenders will go
+// if the base is the frontmost base.
+void Base::initializeFront()
+{
+    front = findFront();
 }
 
 // The base is on an island, unconnected by ground to any starting base.
@@ -117,6 +202,32 @@ bool Base::isIsland() const
     }
 
     return true;
+}
+
+// The base is completed, that is, its resource depot is completed.
+// For an enemy base, we rely on best information.
+bool Base::isCompleted() const
+{
+    if (resourceDepot)
+    {
+        if (resourceDepot->isVisible())
+        {
+            return UnitUtil::IsCompletedResourceDepot(resourceDepot);
+        }
+
+        // It's not visible. That implies that the base is enemy.
+        // This could give a wrong answer for a terran CC that burned down.
+        UAB_ASSERT(owner == the.enemy(), "unexpected base owner");
+        const UnitInfo * ui = the.info.getUnitInfo(resourceDepot);
+        if (ui)
+        {
+            return ui->isCompleted();
+        }
+    }
+
+    // No resource depot means the base is unowned or inferred to be enemy.
+    // We may know it's completed if we know it's the enemy start, but there are tricky cases.
+    return false;
 }
 
 // Recalculate the base's set of geysers, including refineries (completed or not).
@@ -143,7 +254,7 @@ const BWAPI::TilePosition Base::getCenterTile() const
     return tilePosition + BWAPI::TilePosition(1, 1);
 }
 
-// Return the center of the resource depot location=.
+// Return the center of the resource depot location.
 const BWAPI::Position Base::getCenter() const
 {
     return BWAPI::Position(tilePosition) + BWAPI::Position(64, 48);
@@ -253,13 +364,6 @@ BWAPI::Position Base::getMineralOffset() const
 	return BWAPI::Position(offset / getMinerals().size());
 }
 
-// The "front" of the base, where static defense should go.
-// For now, we use a simplified calculation that is only silly half the time.
-BWAPI::Position Base::getFrontPoint() const
-{
-	return (getCenter() - getMineralOffset()).makeValid();
-}
-
 // Return a pylon near the nexus, if any. Let's call 256 pixels "near".
 // This only makes a difference for protoss, of course.
 // NOTE The pylon may not be complete!
@@ -302,7 +406,18 @@ void Base::clearBlocker(BWAPI::Unit blocker)
 
 void Base::drawBaseInfo() const
 {
-	BWAPI::Position offset(-16, -6);
+    BWAPI::Position center = getCenter();
+    if (getNatural())
+    {
+        BWAPI::Position natural = getNatural()->getCenter();
+        BWAPI::Broodwar->drawLineMap(center, natural, BWAPI::Colors::Grey);
+        BWAPI::Broodwar->drawCircleMap(natural, 64, BWAPI::Colors::Grey);
+    }
+    BWAPI::Color color = this == the.bases.myFront() ? BWAPI::Colors::Red : BWAPI::Colors::Blue;
+    BWAPI::Broodwar->drawCircleMap(getFront(), 32, color);
+    BWAPI::Broodwar->drawLineMap(center, getFront(), color);
+    
+    BWAPI::Position offset(-16, -6);
 	for (BWAPI::Unit min : minerals)
 	{
 		BWAPI::Broodwar->drawTextMap(min->getInitialPosition() + offset, "%c%d", cyan, id);

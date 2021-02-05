@@ -91,13 +91,12 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
     {
         const rapidjson::Value & macro = doc["Macro"];
         JSONTools::ReadInt("BOSSFrameLimit", macro, Config::Macro::BOSSFrameLimit);
+        Config::Macro::ProductionJamFrameLimit = GetIntByRace("ProductionJamFrameLimit", macro);
+        Config::Macro::WorkersPerRefinery = GetIntByRace("WorkersPerRefinery", macro);
+        Config::Macro::WorkersPerPatch = GetDoubleByRace("WorkersPerPatch", macro);
+        Config::Macro::AbsoluteMaxWorkers = GetIntByRace("AbsoluteMaxWorkers", macro);
+        Config::Macro::BuildingSpacing = GetIntByRace("BuildingSpacing", macro);
         JSONTools::ReadInt("PylonSpacing", macro, Config::Macro::PylonSpacing);
-
-		Config::Macro::ProductionJamFrameLimit = GetIntByRace("ProductionJamFrameLimit", macro);
-		Config::Macro::BuildingSpacing = GetIntByRace("BuildingSpacing", macro);
-		Config::Macro::WorkersPerRefinery = GetIntByRace("WorkersPerRefinery", macro);
-		Config::Macro::WorkersPerPatch = GetDoubleByRace("WorkersPerPatch", macro);
-		// Config::Macro::ExpandToIslands = GetBoolByRace("ExpandToIslands", macro);
 	}
 
     // Parse the Debug Options

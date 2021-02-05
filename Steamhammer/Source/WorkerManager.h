@@ -11,6 +11,16 @@ class WorkerManager
     WorkerData  workerData;
     BWAPI::Unit previousClosestWorker;
 	bool		_collectGas;
+    BWAPI::Unitset busy;    // units with special orders this frame
+    std::map<BWAPI::Unit, int> burrowedForSafety;
+
+    // Used in calls to maybeFleeDanger() and inWeaponsDanger().
+    static const int weaponsMargin = 2 * 32;
+    static const int weaponsMarginPlus = weaponsMargin + 2 * 32;    // for hysteresis
+
+    bool        isBusy(BWAPI::Unit worker) const;
+    void        makeBusy(BWAPI::Unit worker);
+    void        burrowForSafety(BWAPI::Unit worker);
 
 	void        setMineralWorker(BWAPI::Unit unit);
 	void        setReturnCargoWorker(BWAPI::Unit unit);
@@ -26,6 +36,9 @@ class WorkerManager
 	void		handleMineralWorkers();
     void        handleUnblockWorkers();
     void		handlePostedWorkers();
+
+    bool        maybeFleeDanger(BWAPI::Unit worker, int margin = weaponsMargin);
+    void        maybeUnburrow();
 
     // A worker within this distance of a target location is considered to be
     // "in the same base" as the target. Used by worker selection routines to avoid
@@ -67,6 +80,7 @@ public:
 	int         getNumReturnCargoWorkers() const;
 	int			getNumCombatWorkers() const;
 	int         getNumIdleWorkers() const;
+    int         getNumPostedWorkers() const;
 	int			getMaxWorkers() const;
 
 	int			getNumWorkers(BWAPI::Unit jobUnit) const;
@@ -83,7 +97,7 @@ public:
     bool        isBuilder(BWAPI::Unit worker);
 
     BWAPI::Unit getBuilder(const Building & b);
-	void setBuildWorker(BWAPI::Unit worker, BWAPI::UnitType buildingType);
+	void        setBuildWorker(BWAPI::Unit worker);
     BWAPI::Unit getGasWorker(BWAPI::Unit refinery);
     BWAPI::Unit getClosestMineralWorkerTo(BWAPI::Unit enemyUnit);
     BWAPI::Unit getWorkerScout();
@@ -91,7 +105,8 @@ public:
     void        setRepairWorker(BWAPI::Unit worker,BWAPI::Unit unitToRepair);
     void        stopRepairing(BWAPI::Unit worker);
     void        setCombatWorker(BWAPI::Unit worker);
-    void        postWorker(MacroLocation loc);
+    void        postGivenWorker(BWAPI::Unit worker, MacroLocation loc);
+    BWAPI::Unit postWorker(MacroLocation loc);
     void        unpostWorkers(MacroLocation loc);
 
     bool        willHaveResources(int mineralsRequired,int gasRequired,double distance);

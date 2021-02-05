@@ -1152,6 +1152,15 @@ bool InformationManager::enemyHasSiegeMode()
 	return false;
 }
 
+// The enemy may use drop.
+// NOTE We ignore zerg drop tech, which is rare and harder to detect.
+bool InformationManager::enemyHasTransport() const
+{
+    return
+        the.your.ever.count(BWAPI::UnitTypes::Terran_Dropship) > 0 ||
+        the.your.ever.count(BWAPI::UnitTypes::Protoss_Shuttle) > 0;
+}
+
 bool InformationManager::weHaveCloakTech() const
 {
     return
@@ -1268,6 +1277,18 @@ int InformationManager::nScourgeNeeded()
 const UnitData & InformationManager::getUnitData(BWAPI::Player player) const
 {
 	return _unitData.find(player)->second;
+}
+
+// Enemy units only. Return null if the enemy unit is not found.
+const UnitInfo * InformationManager::getUnitInfo(BWAPI::Unit unit) const
+{
+    const auto & enemies = getUnitData(_enemy).getUnits();
+    const auto it = enemies.find(unit);
+    if (it != enemies.end())
+    {
+        return & (*it).second;
+    }
+    return nullptr;
 }
 
 // Return the set of enemy units targeting a given one of our units.

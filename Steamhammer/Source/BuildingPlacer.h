@@ -50,11 +50,11 @@ public:
     BuildingPlacer();
     void initialize();
 
-    // returns a build location near a building's desired location
+    // Return a build location near a building's desired location, with the given margin of space.
     BWAPI::TilePosition	getBuildLocationNear(const Building & b, int extraSpace) const;
 
 	void				reserveTiles(const BWAPI::TilePosition & position, int width, int height);
-    void				freeTiles(const BWAPI::TilePosition & position, int width,int height);
+    void				freeTiles(const BWAPI::TilePosition & position, int width, int height);
     bool				isReserved(int x, int y) const;
     bool                isReserved(const BWAPI::TilePosition & tile) const { return isReserved(tile.x, tile.y); };
 
@@ -69,5 +69,7 @@ public:
     BWAPI::TilePosition getInBaseProxyPosition(const Base * base) const;
     BWAPI::TilePosition getProxyPosition(const Base * base) const;
 
+    BWAPI::TilePosition getAntiBunkerSunkenPosition(const Base * base, BWAPI::Unit bunker) const;
+    BWAPI::TilePosition getAntiCannonSunkenPosition(const Base * base, BWAPI::Unit cannon) const;
 };
 }

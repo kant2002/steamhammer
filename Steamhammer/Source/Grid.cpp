@@ -22,7 +22,15 @@ int Grid::get(int x, int y) const
 {
 	UAB_ASSERT(grid.size() == width && width > 0 && x >= 0 && y >= 0 && x < width && y < height,
 		"bad at(%d,%d) limit(%d,%d) size %dx%d", x, y, width, height, grid.size(), grid[0].size());
-	return grid[x][y];
+
+    // TODO temporary for testing
+    if (!(grid.size() == width && width > 0 && grid[0].size() == height && height > 0 && x >= 0 && y >= 0 && x < width && y < height))
+    {
+        return -1;
+    }
+    // TODO end
+
+    return grid[x][y];
 }
 
 int Grid::at(int x, int y) const
@@ -45,6 +53,10 @@ int Grid::at(const BWAPI::Position & pos) const
 	return at(BWAPI::TilePosition(pos));
 }
 
+int Grid::at(BWAPI::Unit unit) const
+{
+    return at(unit->getTilePosition());
+}
 
 // Draw a number in each tile.
 // This default method is overridden in some subclasses.

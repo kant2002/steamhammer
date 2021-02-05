@@ -457,7 +457,7 @@ BWAPI::TilePosition BuildingPlacer::findPylonlessBaseLocation(const Building & b
 		if (base->getOwner() == the.self() && !base->getPylon())
 		{
 			Building pylon = b;
-			pylon.desiredPosition = BWAPI::TilePosition(base->getFrontPoint());
+			pylon.desiredPosition = BWAPI::TilePosition(base->getFrontTile());
 			return findAnyLocation(pylon, 0);
 		}
 	}
@@ -636,6 +636,7 @@ void BuildingPlacer::initialize()
     _buildable.compute();
 }
 
+// Place a building other than an expansion.
 // The minimum distance between buildings is extraSpace, the extra space we check
 // for accessibility around each potential building location.
 BWAPI::TilePosition BuildingPlacer::getBuildLocationNear(const Building & b, int extraSpace) const
@@ -745,7 +746,7 @@ BWAPI::TilePosition BuildingPlacer::getMacroLocationTile(MacroLocation loc) cons
     }
     else if (loc == MacroLocation::Front)
     {
-        BWAPI::TilePosition front = the.bases.frontPoint();
+        BWAPI::TilePosition front = the.bases.frontTile();
         if (front.isValid())
         {
             return front;
@@ -987,8 +988,78 @@ BWAPI::TilePosition BuildingPlacer::getProxyPosition(const Base * base) const
     }
     if (!tile.isValid())
     {
-        // In a far corner of the enemy main.
+        // In a far corner of th::ce enemy main.
         tile = getInBaseProxyPosition(base);
+    }
+
+    return tile;
+}
+
+// A zerg base has been bunkered by a terran opponent.
+// Figure out where a sunk can be placed out of bunker range but in range to hit the bunker.
+// Return an invalid tile on failure.
+BWAPI::TilePosition BuildingPlacer::getAntiBunkerSunkenPosition(const Base * base, BWAPI::Unit bunker) const
+{
+    UAB_ASSERT(base, "bad base");
+    UAB_ASSERT(bunker, "bad unit");
+
+    Building creep(BWAPI::UnitTypes::Zerg_Creep_Colony, BWAPI::TilePositions::None);
+
+    for (int x = base->getCenterTile().x - 7; x <= base->getCenterTile().x + 7; ++x)
+    {
+        for (int y = base->getCenterTile().y - 7; y <= base->getCenterTile().y + 7; ++y)
+        {
+            BWAPI::TilePosition xy(x, y);
+            if (xy.isValid())
+            {
+                int dist = bunker->getDistance(BWAPI::Position(xy));
+                if (dist > 5 * 32 &&        // sunken is out of bunker range
+                    dist < 7 * 32 &&        // bunker is in sunken range
+                    canBuildHere(xy, creep))
+                {
+                    return xy;
+                }
+            }
+        }
+    }
+
+    return BWAPI::TilePositions::Invalid;
+}
+
+// A zerg base has cannons nearby.
+// Figure out where a sunk can be placed to prevent cannons from creeping closer.
+// Return an invalid tile on failure.
+BWAPI::TilePosition BuildingPlacer::getAntiCannonSunkenPosition(const Base * base, BWAPI::Unit cannon) const
+{
+    UAB_ASSERT(base, "bad base");
+    UAB_ASSERT(cannon, "bad unit");
+
+    Building creep(BWAPI::UnitTypes::Zerg_Creep_Colony, BWAPI::TilePositions::None);
+
+    int totalDist = cannon->getDistance(base->getCenter());
+    UAB_ASSERT(totalDist <= 16 * 32, "too distant");
+    int bestDist = totalDist;
+    BWAPI::TilePosition tile = BWAPI::TilePositions::Invalid;
+
+    // As close to the cannons as possible without being in their range.
+    int offset = (totalDist + 31)/32 - 7;
+    for (int x = base->getCenterTile().x - offset; x <= base->getCenterTile().x + offset; ++x)
+    {
+        for (int y = base->getCenterTile().y - offset; y <= base->getCenterTile().y + offset; ++y)
+        {
+            BWAPI::TilePosition xy(x, y);
+            if (xy.isValid())
+            {
+                int dist = cannon->getDistance(BWAPI::Position(xy));
+                if (dist < bestDist &&
+                    dist >= 8 * 32 &&
+                    canBuildHere(xy, creep))
+                {
+                    bestDist = dist;
+                    tile = xy;
+                }
+            }
+        }
     }
 
     return tile;

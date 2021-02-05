@@ -75,7 +75,7 @@ public:
 	}
 
 	// Return the center of the planned building, under the assumption that the finalPosition is valid.
-	// This is used for moving a worker toward the intended building location.
+	// This is used for moving a worker toward the intended building location, so it needn't be exact.
 	BWAPI::Position getCenter()
 	{
 		return

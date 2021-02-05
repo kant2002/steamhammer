@@ -38,6 +38,7 @@ class ProductionManager
 	BWAPI::Unit         getClosestUnitToPosition(const std::vector<BWAPI::Unit> & units, BWAPI::Position closestTo) const;
 	BWAPI::Unit         getFarthestUnitFromPosition(const std::vector<BWAPI::Unit> & units, BWAPI::Position farthest) const;
 	BWAPI::Unit         getClosestLarvaToPosition(BWAPI::Position closestTo) const;
+    BWAPI::Unit         getBestHatcheryForLair(const std::vector<BWAPI::Unit> & hatcheries) const;
 	
 	void				executeCommand(const MacroAct & act);
 	void				updateGoals();

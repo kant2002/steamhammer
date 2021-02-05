@@ -61,7 +61,6 @@ class Micro
 	std::map<BWAPI::Unit, MicroState> orders;
 
 	bool AlwaysKite(BWAPI::UnitType type) const;
-	BWAPI::Position GetKiteVector(BWAPI::Unit unit, BWAPI::Unit target) const;
 
 public:
 	Micro();
@@ -71,7 +70,13 @@ public:
 
 	bool alreadyCommanded(BWAPI::Unit unit) const;
 
-	bool fleeDT(BWAPI::Unit unit);
+    BWAPI::Unit inWeaponsDanger(BWAPI::Unit unit, int margin) const;
+    bool canFleeTo(BWAPI::Unit unit, const BWAPI::Position & destination) const;
+    bool kiteBack(BWAPI::Unit unit, BWAPI::Unit enemy);
+    BWAPI::Position fleeTo(BWAPI::Unit unit, const BWAPI::Position & danger, int distance) const;
+    void fleePosition(BWAPI::Unit unit, const BWAPI::Position & danger, int distance = 8 * 32);
+    void fleeEnemy(BWAPI::Unit unit, BWAPI::Unit enemy, int distance = 8 * 32);
+    bool fleeDT(BWAPI::Unit unit);
 
 	void Stop(BWAPI::Unit unit);
 	void HoldPosition(BWAPI::Unit unit);
@@ -80,10 +85,10 @@ public:
     void AttackMove(BWAPI::Unit attacker, const BWAPI::Position & targetPosition);
     void Move(BWAPI::Unit attacker, const BWAPI::Position & targetPosition);
 	void MoveNear(BWAPI::Unit attacker, const BWAPI::Position & targetPosition);
-    void TransferWorker(BWAPI::Unit worker, const Base * base);
+    bool MoveSafely(BWAPI::Unit unit, const BWAPI::Position & destination);
 	void RightClick(BWAPI::Unit unit, BWAPI::Unit target);
 	void MineMinerals(BWAPI::Unit unit, BWAPI::Unit mineralPatch);
-	void LaySpiderMine(BWAPI::Unit unit, BWAPI::Position pos);
+	void LaySpiderMine(BWAPI::Unit unit, const BWAPI::Position & pos);
     void Repair(BWAPI::Unit unit, BWAPI::Unit target);
 	void ReturnCargo(BWAPI::Unit worker);
 

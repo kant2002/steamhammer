@@ -45,17 +45,17 @@ class MapGrid
 
 public:
 
-	// yay for singletons!
 	static MapGrid &	Instance();
 
 	void				update();
 	void				getUnits(BWAPI::Unitset & units, BWAPI::Position center, int radius, bool ourUnits, bool oppUnits);
 	BWAPI::Position		getLeastExplored() { return getLeastExplored(false, 1); };
 	BWAPI::Position		getLeastExplored(bool byGround, int mapPartition, int zoneID = 0);
+    BWAPI::Position     getLeastExploredNear(const BWAPI::Position & center, bool byGround);
 
-	GridCell & getCellByIndex(int r, int c)		{ return cells[r*cols + c]; }
-	GridCell & getCell(BWAPI::Position pos)		{ return getCellByIndex(pos.y / cellSize, pos.x / cellSize); }
-	GridCell & getCell(BWAPI::Unit unit)		{ return getCell(unit->getPosition()); }
+	GridCell & getCellByIndex(int r, int c) { return cells[r*cols + c]; }
+	GridCell & getCell(BWAPI::Position pos) { return getCellByIndex(pos.y / cellSize, pos.x / cellSize); }
+	GridCell & getCell(BWAPI::Unit unit)    { return getCell(unit->getPosition()); }
 
 	// Track comsat scans so we don't scan the same place again too soon.
 	void				scanAtPosition(const BWAPI::Position & pos);

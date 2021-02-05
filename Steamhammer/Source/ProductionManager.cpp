@@ -3,6 +3,7 @@
 #include "Bases.h"
 #include "BuildingPlacer.h"
 #include "CombatCommander.h"
+#include "Random.h"
 #include "ScoutManager.h"
 #include "StrategyBossZerg.h"
 #include "The.h"
@@ -463,8 +464,9 @@ BWAPI::Unit ProductionManager::getProducer(MacroAct act) const
         {
             return _assignedWorkerForThisBuilding;
         }
-        Building b(act.getUnitType(), the.placer.getMacroLocationTile(act.getMacroLocation()));
-        b.macroLocation = act.getMacroLocation();
+        MacroLocation loc = act.getMacroLocation();
+        Building b(act.getUnitType(), the.placer.getMacroLocationTile(loc));
+        b.macroLocation = loc;
         b.isGasSteal = act.isGasSteal();
         return WorkerManager::Instance().getBuilder(b);
     }
@@ -501,6 +503,12 @@ BWAPI::Unit ProductionManager::getProducer(MacroAct act) const
         {
             return getFarthestUnitFromPosition(candidateProducers,
                 the.bases.myMain()->getPosition());
+        }
+
+        // If we're morphing a lair, do it out of enemy vision if possible.
+        if (act.isUnit() && act.getUnitType() == BWAPI::UnitTypes::Zerg_Lair)
+        {
+            return getBestHatcheryForLair(candidateProducers);
         }
     }
 
@@ -657,6 +665,38 @@ BWAPI::Unit ProductionManager::getClosestLarvaToPosition(BWAPI::Position closest
 	return getClosestUnitToPosition(larvas, closestTo);
 }
 
+// We want to morph a lair. Try to do it in a safe place out of enemy vision.
+BWAPI::Unit ProductionManager::getBestHatcheryForLair(const std::vector<BWAPI::Unit> & hatcheries) const
+{
+    int bestScore = INT_MIN;      // higher is better
+    BWAPI::Unit bestHatch = nullptr;
+
+    for (BWAPI::Unit hatchery : hatcheries)
+    {
+        BWAPI::Unit nearestEnemy = BWAPI::Broodwar->getClosestUnit(
+            hatchery->getPosition(),
+            BWAPI::Filter::IsEnemy,
+            14 * 32);
+        int score = 16 * 32;
+        if (nearestEnemy)
+        {
+           score = hatchery->getDistance(nearestEnemy);
+        }
+        if (the.bases.myStart()->getOwner() == the.self() &&
+            the.zone.at(hatchery) == the.zone.at(the.bases.myStart()->getTilePosition()))
+        {
+            score += 8 * 32 + int(the.random.range(5.0));   // a little jitter for variety
+        }
+        if (score > bestScore)
+        {
+            bestScore = score;
+            bestHatch = hatchery;
+        }
+    }
+
+    return bestHatch;
+}
+
 // Create a unit, start research, etc.
 void ProductionManager::create(BWAPI::Unit producer, const BuildOrderItem & item) 
 {
@@ -719,9 +759,10 @@ void ProductionManager::predictWorkerMovement(Building & b)
 	{
 		if (!_assignedWorkerForThisBuilding->exists() ||					// it's dead
 			_assignedWorkerForThisBuilding->getPlayer() != the.self() ||	// it was mind controlled
-			_assignedWorkerForThisBuilding->isStasised() ||
+            _assignedWorkerForThisBuilding->isLockedDown() ||
+            _assignedWorkerForThisBuilding->isStasised() ||
             _assignedWorkerForThisBuilding->isMaelstrommed() ||
-            _assignedWorkerForThisBuilding->isLockedDown())
+            _assignedWorkerForThisBuilding->isBurrowed())
 		{
 			// BWAPI::Broodwar->printf("missing assigned worker cleared");
 			_assignedWorkerForThisBuilding = nullptr;
@@ -750,7 +791,7 @@ void ProductionManager::predictWorkerMovement(Building & b)
 		{
 			// Assign the worker.
 			_assignedWorkerForThisBuilding = builder;
-			WorkerManager::Instance().setBuildWorker(builder, b.type);
+			WorkerManager::Instance().setBuildWorker(builder);
 
 			// Forget about any queue modification that happened. We're beyond it.
 			_queue.resetModified();

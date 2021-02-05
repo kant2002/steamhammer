@@ -4,6 +4,7 @@
 #include "BuildingPlacer.h"
 #include "InformationManager.h"
 #include "The.h"
+#include "UnitUtil.h"
 
 using namespace UAlbertaBot;
 
@@ -210,9 +211,6 @@ void MapTools::drawHomeDistances()
 	{
         the.bases.myMain()->getDistances().draw();
 	}
-
-    BWAPI::TilePosition homePosition = the.bases.myMain()->getTilePosition();
-    BWAPI::Broodwar->drawBoxMap(homePosition.x, homePosition.y, homePosition.x + 33, homePosition.y + 33, BWAPI::Colors::Yellow);
 }
 
 // Make the assumption that we are looking for a mineral-only base.
@@ -231,7 +229,7 @@ Base * MapTools::nextExpansion(bool hidden, bool wantMinerals, bool wantGas) con
 	// Abbreviations.
 	BWAPI::Player player = BWAPI::Broodwar->self();
 	BWAPI::Player enemy = BWAPI::Broodwar->enemy();
-    BWAPI::Position offset(-32, -8);
+    BWAPI::Position offset(-24, -20);
 
 	// We'll go through the bases and pick the one with the best score.
 	Base * bestBase = nullptr;
@@ -275,6 +273,15 @@ Base * MapTools::nextExpansion(bool hidden, bool wantMinerals, bool wantGas) con
             continue;
 		}
 
+        // If this is to be a hidden base, and the enemy is not found yet, avoid mains and naturals.
+        if (hidden && the.bases.enemyStart() == nullptr)
+        {
+            if (base->isAStartingBase() || base->getMain())
+            {
+                continue;
+            }
+        }
+
         BWAPI::TilePosition topLeft = base->getTilePosition();
         BWAPI::TilePosition bottomRight = topLeft + BWAPI::TilePosition(4, 3);
 
@@ -289,7 +296,8 @@ Base * MapTools::nextExpansion(bool hidden, bool wantMinerals, bool wantGas) con
         }
 
         // No good if an enemy building or burrowed unit is in the way (even if out of sight).
-        bool buildingInTheWay = false;
+        // No good if an enemy combat unit is nearby.
+        bool somethingInTheWay = false;
         for (const auto & kv : InformationManager::Instance().getUnitData(BWAPI::Broodwar->enemy()).getUnits())
         {
             const UnitInfo & ui(kv.second);
@@ -308,9 +316,23 @@ Base * MapTools::nextExpansion(bool hidden, bool wantMinerals, bool wantGas) con
                         {
                             BWAPI::Broodwar->drawTextMap(base->getCenter()+offset, "%cblocked (known)", red);
                         }
-                        buildingInTheWay = true;
+                        somethingInTheWay = true;
                         goto buildingLoopExit;
                     }
+                }
+                if (the.now() - ui.updateFrame < 60 * 24 &&
+                    UnitUtil::TypeCanAttackGround(ui.type) &&
+                    base->getCenter().getApproxDistance(ui.lastPosition) <= 7 * 32 &&
+                    !ui.type.isWorker() &&
+                    ui.type != BWAPI::UnitTypes::Terran_Vulture_Spider_Mine)
+                {
+                    if (Config::Debug::DrawExpoScores)
+                    {
+                        BWAPI::Broodwar->drawTextMap(base->getCenter() + offset, "%cguarded by enemy", red);
+                    }
+                    somethingInTheWay = true;
+                    goto buildingLoopExit;
+
                 }
             }
         }
@@ -327,7 +349,7 @@ Base * MapTools::nextExpansion(bool hidden, bool wantMinerals, bool wantGas) con
                         BWAPI::Broodwar->drawTextMap(base->getCenter()+offset, "%creserved tiles", yellow);
                     }
                     // This happens if we were already planning to expand here. Try somewhere else.
-					buildingInTheWay = true;
+					somethingInTheWay = true;
                     goto buildingLoopExit;
 				}
 
@@ -344,14 +366,14 @@ Base * MapTools::nextExpansion(bool hidden, bool wantMinerals, bool wantGas) con
                         {
                             BWAPI::Broodwar->drawTextMap(base->getCenter()+offset, "%cblocked (tile)a", red);
                         }
-                        buildingInTheWay = true;
+                        somethingInTheWay = true;
                         goto buildingLoopExit;
                     }
                 }
             }
         }
 buildingLoopExit:
-        if (buildingInTheWay)
+        if (somethingInTheWay)
         {
             continue;
         }
@@ -415,13 +437,13 @@ buildingLoopExit:
         int edgeXdist = std::min(topLeft.x, BWAPI::Broodwar->mapWidth() - topLeft.x);
         int edgeYdist = std::min(topLeft.y, BWAPI::Broodwar->mapHeight() - topLeft.y);
 		int edgeDistance = std::min(edgeXdist, edgeYdist);  // tile distance
-        edgeDistance = std::max(0, edgeDistance - 12);      // within this distance is always OK
-        if (edgeDistance > std::min(BWAPI::Broodwar->mapWidth(), BWAPI::Broodwar->mapHeight()) / 3)
+        edgeDistance = std::max(0, edgeDistance - 10);      // within this distance is always OK
+        if (edgeDistance > std::min(BWAPI::Broodwar->mapWidth(), BWAPI::Broodwar->mapHeight()) / 4)
         {
             // If we're very far from the edge, it's worse.
             edgeDistance *= 4;
         }
-		score -= 12.0 * edgeDistance;
+		score -= 15.0 * edgeDistance;
 
 		// More resources -> better.
         // NOTE The number of mineral patchers/geysers controls how fast we can mine.

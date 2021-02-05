@@ -488,7 +488,7 @@ void MicroQueens::updateMovement(BWAPI::Unit vanguard)
         {
             // No vanguard, but we have energy. Move to the front defense line and try to be useful.
             // This can happen when all units are assigned to defense squads.
-            destination = BWAPI::Position(the.bases.frontPoint());
+            destination = the.bases.front();
         }
 
         if (destination.isValid())

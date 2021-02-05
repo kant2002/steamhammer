@@ -2,12 +2,14 @@
 
 #include "Bases.h"
 #include "InformationManager.h"
+#include "MapGrid.h"
 #include "Random.h"
 
 using namespace UAlbertaBot;
 
 The::The()
     : bases(Bases::Instance())
+    , grid(MapGrid::Instance())
     , info(InformationManager::Instance())
     , random(Random::Instance())
 {
@@ -33,6 +35,20 @@ void The::initialize()
     info.initialize();              // depends on bases
     placer.initialize();
 	ops.initialize();
+}
+
+int The::attacks(BWAPI::Unit unit, const BWAPI::TilePosition & tile) const
+{
+    return unit->isFlying()
+        ? airAttacks.at(tile)
+        : groundAttacks.at(tile);
+}
+
+int The::attacks(BWAPI::Unit unit) const
+{
+    return unit->isFlying()
+        ? airAttacks.at(unit->getTilePosition())
+        : groundAttacks.at(unit->getTilePosition());
 }
 
 void The::update()

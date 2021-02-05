@@ -129,9 +129,15 @@ void GameMessage(const char * message)
 	//	white, message);
 }
 
+// Tiles at the same box distance from a point form a hollow square box.
+int TileBoxDistance(const BWAPI::TilePosition & a, const BWAPI::TilePosition & b)
+{
+    return std::max(abs(a.x - b.x), abs(a.y - b.y));
+}
+
 // Point b specifies a direction from point a.
 // Return a position at the given distance and direction from a.
-// The result may be off the map.
+// CAUTION The result may be off the map. See DistanceAndDirection() below.
 // The distance can be negative.
 BWAPI::Position RawDistanceAndDirection(const BWAPI::Position & a, const BWAPI::Position & b, int distance)
 {

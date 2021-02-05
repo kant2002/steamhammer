@@ -296,14 +296,6 @@ bool Micro::AlwaysKite(BWAPI::UnitType type) const
 		type == BWAPI::UnitTypes::Zerg_Guardian;
 }
 
-BWAPI::Position Micro::GetKiteVector(BWAPI::Unit unit, BWAPI::Unit target) const
-{
-	BWAPI::Position fleeVec(target->getPosition() - unit->getPosition());
-	double fleeAngle = atan2(fleeVec.y, fleeVec.x);
-	fleeVec = BWAPI::Position(static_cast<int>(64 * cos(fleeAngle)), static_cast<int>(64 * sin(fleeAngle)));
-	return fleeVec.makeValid();
-}
-
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
 Micro::Micro()
@@ -323,11 +315,162 @@ bool Micro::alreadyCommanded(BWAPI::Unit unit) const
 	return (*it).second.getOrderFrame() >= the.now();
 }
 
+// Is the given unit in danger of enemy weapons fire, with the given safety margin?
+// If so, return the nearest enemy that puts the unit in danger.
+// NOTE The check is quick and dirty, not exact. It will make mistakes.
+BWAPI::Unit Micro::inWeaponsDanger(BWAPI::Unit unit, int margin) const
+{
+    BWAPI::Unit enemy;
+    if (unit->isFlying())
+    {
+        // Flying unit.
+        enemy = BWAPI::Broodwar->getClosestUnit(
+            unit->getPosition(),
+            BWAPI::Filter::GetPlayer == the.enemy() &&
+            (BWAPI::Filter::AirWeapon != BWAPI::WeaponTypes::None || BWAPI::Filter::GetType == BWAPI::UnitTypes::Terran_Bunker || BWAPI::Filter::GetType == BWAPI::UnitTypes::Protoss_Carrier) &&
+            BWAPI::Filter::IsCompleted,
+            margin + 7 * 32
+        );
+    }
+    else
+    {
+        // Ground unit.
+        enemy = BWAPI::Broodwar->getClosestUnit(
+            unit->getPosition(),
+            BWAPI::Filter::GetPlayer == the.enemy() &&
+            !BWAPI::Filter::IsWorker &&
+            (BWAPI::Filter::GroundWeapon != BWAPI::WeaponTypes::None || BWAPI::Filter::GetType == BWAPI::UnitTypes::Terran_Bunker || BWAPI::Filter::GetType == BWAPI::UnitTypes::Protoss_Reaver) &&
+            BWAPI::Filter::IsCompleted,
+            margin + (the.info.enemyHasSiegeMode() ? 12 * 32 : 8 * 32)
+        );
+    }
+
+    if (enemy && unit->getDistance(enemy) < margin + UnitUtil::GetAttackRangeAssumingUpgrades(enemy->getType(), unit->getType()))
+    {
+        return enemy;
+    }
+    return nullptr;
+}
+
+// Is this a safe spot for the given unit to flee to? Useful for nearby spots only.
+// "Safe" mostly means that we should not get stuck on terrain, etc.
+bool Micro::canFleeTo(BWAPI::Unit unit, const BWAPI::Position & destination) const
+{
+    // Don't flee off the map.
+    if (!destination.isValid())
+    {
+        return false;
+    }
+
+    // Don't flee into enemy static defense, unless we're already in its range.
+    BWAPI::TilePosition tile(destination);
+    if (the.attacks(unit, tile) > the.attacks(unit))
+    {
+        return false;
+    }
+
+    // For a flying unit, that's all we want to check.
+    if (unit->isFlying())
+    {
+        return true;
+    }
+
+    // Don't flee somewhere we can't walk on the terrain.
+    if (!the.map.isWalkable(tile))
+    {
+        return false;
+    }
+
+    // Don't flee to a tile blocked by a building or unit.
+    // The check conservatively assumes that any other ground unit may block us.
+    BWAPI::Unitset blocks = BWAPI::Broodwar->getUnitsOnTile(tile, !BWAPI::Filter::IsFlying);
+    for (BWAPI::Unit u : blocks)
+    {
+        if (u != unit)      // no way to check this with a filter, apparently
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+// Kite backward a short distance, in a direction away from the danger point.
+// If that's impossible (something is in the way), return false instead.
+bool Micro::kiteBack(BWAPI::Unit unit, BWAPI::Unit enemy)
+{
+    BWAPI::Position destination = RawDistanceAndDirection(unit->getPosition(), enemy->getPosition(), -48);
+
+    //BWAPI::Broodwar->drawLineMap(unit->getPosition(), destination, BWAPI::Colors::Grey);
+
+    if (canFleeTo(unit, destination))
+    {
+        Move(unit, destination);
+        //BWAPI::Broodwar->drawLineMap(unit->getPosition(), destination, BWAPI::Colors::Green);
+        return true;
+    }
+    else
+    {
+        // The direct retreat does not work. Let's see if we can sidestep.
+        if (!unit->isFlying() && !enemy->isFlying())
+        {
+            int range = UnitUtil::GetAttackRange(enemy, unit);
+            if (range > 0 && range <= 32)
+            {
+                int enemyDist = unit->getDistance(enemy);
+                for (int dx = -32; dx <= 32; dx += 32)
+                {
+                    for (int dy = -32; dy <= 32; dy += 32)
+                    {
+                        if (dx != 0 || dy != 0)
+                        {
+                            destination = unit->getPosition() + BWAPI::Position(dx, dy);
+                            if (canFleeTo(unit, destination) && enemy->getDistance(destination) > enemyDist)
+                            {
+                                Move(unit, destination);
+                                //BWAPI::Broodwar->drawLineMap(unit->getPosition(), destination, BWAPI::Colors::Blue);
+                                return true;
+                            }
+                            else
+                            {
+                                //BWAPI::Broodwar->drawLineMap(unit->getPosition(), destination, BWAPI::Colors::Purple);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        //BWAPI::Broodwar->drawCircleMap(unit->getPosition(), 3, BWAPI::Colors::Green);
+    }
+
+    return false;
+}
+
+BWAPI::Position Micro::fleeTo(BWAPI::Unit unit, const BWAPI::Position & danger, int distance) const
+{
+    return DistanceAndDirection(unit->getPosition(), danger, -distance);
+}
+
+void Micro::fleePosition(BWAPI::Unit unit, const BWAPI::Position & danger, int distance)
+{
+    BWAPI::Position destination = fleeTo(unit, danger, distance);
+    the.micro.MoveNear(unit, destination);
+    if (Config::Debug::DrawUnitTargets)
+    {
+        BWAPI::Broodwar->drawLineMap(unit->getPosition(), destination, BWAPI::Colors::Green);
+    }
+}
+
+void Micro::fleeEnemy(BWAPI::Unit unit, BWAPI::Unit enemy, int distance)
+{
+    fleePosition(unit, enemy->getPosition(), distance);
+}
+
 // If our ground unit is next to an undetected dark templar, run it away and return true.
 // Otherwise return false.
 bool Micro::fleeDT(BWAPI::Unit unit)
 {
-	if (!unit || !unit->exists() || unit->getPlayer() != BWAPI::Broodwar->self() || !unit->getPosition().isValid())
+	if (!unit || !unit->exists() || unit->getPlayer() != the.self() || !unit->getPosition().isValid())
 	{
 		UAB_ASSERT(false, "bad arg");
 		return false;
@@ -341,22 +484,11 @@ bool Micro::fleeDT(BWAPI::Unit unit)
 			BWAPI::Filter::IsEnemy &&
 			!BWAPI::Filter::IsDetected,
 			64);
-		if (dt)
+
+        if (dt)
 		{
-			BWAPI::Position fleePosition = RawDistanceAndDirection(unit->getPosition(), dt->getPosition(), -96);
-			if (fleePosition.isValid())
-			{
-				/*
-				BWAPI::Broodwar->printf("%s flees dt dist=%d, fleedist=%d",
-					UnitTypeName(unit).c_str(),
-					unit->getDistance(dt),
-					unit->getDistance(fleePosition));
-				BWAPI::Broodwar->drawLineMap(unit->getPosition(), fleePosition, BWAPI::Colors::Yellow);
-				BWAPI::Broodwar->drawCircleMap(dt->getPosition(), 6, BWAPI::Colors::Yellow);
-				*/
-				Move(unit, fleePosition);
-				return true;
-			}
+            fleeEnemy(unit, dt);
+            return true;
 		}
 	}
 
@@ -365,7 +497,7 @@ bool Micro::fleeDT(BWAPI::Unit unit)
 
 void Micro::Stop(BWAPI::Unit unit)
 {
-	if (!unit || !unit->exists() || unit->getPlayer() != BWAPI::Broodwar->self())
+	if (!unit || !unit->exists() || unit->getPlayer() != the.self())
 	{
 		UAB_ASSERT(false, "bad arg");
 		return;
@@ -392,7 +524,7 @@ void Micro::Stop(BWAPI::Unit unit)
 
 void Micro::HoldPosition(BWAPI::Unit unit)
 {
-	if (!unit || !unit->exists() || unit->getPlayer() != BWAPI::Broodwar->self())
+	if (!unit || !unit->exists() || unit->getPlayer() != the.self())
 	{
 		UAB_ASSERT(false, "bad arg");
 		return;
@@ -421,7 +553,7 @@ void Micro::HoldPosition(BWAPI::Unit unit)
 // If it's not moving or we're in range and ready, attack it.
 void Micro::CatchAndAttackUnit(BWAPI::Unit attacker, BWAPI::Unit target)
 {
-	if (!attacker || !attacker->exists() || attacker->getPlayer() != BWAPI::Broodwar->self() ||
+	if (!attacker || !attacker->exists() || attacker->getPlayer() != the.self() ||
 		!target || !target->exists())
 	{
 		UAB_ASSERT(false, "bad arg");
@@ -463,7 +595,7 @@ void Micro::CatchAndAttackUnit(BWAPI::Unit attacker, BWAPI::Unit target)
 
 void Micro::AttackUnit(BWAPI::Unit attacker, BWAPI::Unit target)
 {
-	if (!attacker || !attacker->exists() || attacker->getPlayer() != BWAPI::Broodwar->self() ||
+	if (!attacker || !attacker->exists() || attacker->getPlayer() != the.self() ||
 		!target || !target->exists())
     {
 		UAB_ASSERT(false, "bad arg");
@@ -504,7 +636,7 @@ void Micro::AttackUnit(BWAPI::Unit attacker, BWAPI::Unit target)
 
 void Micro::AttackMove(BWAPI::Unit attacker, const BWAPI::Position & targetPosition)
 {
-	if (!attacker || !attacker->exists() || attacker->getPlayer() != BWAPI::Broodwar->self() || !targetPosition.isValid())
+	if (!attacker || !attacker->exists() || attacker->getPlayer() != the.self() || !targetPosition.isValid())
     {
 		UAB_ASSERT(false, "bad arg");
 		return;
@@ -541,33 +673,12 @@ void Micro::AttackMove(BWAPI::Unit attacker, const BWAPI::Position & targetPosit
 
 void Micro::Move(BWAPI::Unit attacker, const BWAPI::Position & targetPosition)
 {
-	// -- -- TODO temporary extra debugging to solve 2 bugs
-	/*
-	if (!attacker->exists())
+    if (!attacker || !attacker->exists() || attacker->getPlayer() != the.self() || !targetPosition.isValid())
 	{
-		UAB_ASSERT(false, "SmartMove: nonexistent");
-		BWAPI::Broodwar->`("SM: non-exist %s @ %d, %d", attacker->getType().getName().c_str(), targetPosition.x, targetPosition.y);
+		UAB_ASSERT(false, "bad arg");  // TODO restore this after the bugs are solved; can make too many beeps
 		return;
 	}
-	if (attacker->getPlayer() != BWAPI::Broodwar->self())
-	{
-		UAB_ASSERT(false, "SmartMove: not my unit");
-		return;
-	}
-	if (!targetPosition.isValid())
-	{
-		UAB_ASSERT(false, "SmartMove: bad position");
-		return;
-	}
-	// -- -- TODO end
-	*/
-
-	if (!attacker || !attacker->exists() || attacker->getPlayer() != BWAPI::Broodwar->self() || !targetPosition.isValid())
-	{
-		// UAB_ASSERT(false, "bad arg");  // TODO restore this after the bugs are solved; can make too many beeps
-		return;
-	}
-
+    
     // if we have issued a command to this unit already this frame, ignore this one
     if (attacker->getLastCommandFrame() >= the.now() ||
 		attacker->isAttackFrame() && !Micro::AlwaysKite(attacker->getType()))
@@ -632,17 +743,34 @@ void Micro::MoveNear(BWAPI::Unit unit, const BWAPI::Position & targetPosition)
     }
 }
 
-void Micro::TransferWorker(BWAPI::Unit worker, const Base * base)
+// Move toward the given destination, unless danger is visible, in which case move
+// away from the danger. Call this every frame (or every n frames) to attempt to
+// follow a safe path toward the destination.
+// Suitable for units which never want to come under fire, such as scouting units.
+// Return true if we fled danger, otherwise false.
+bool Micro::MoveSafely(BWAPI::Unit unit, const BWAPI::Position & destination)
 {
-    UAB_ASSERT(worker && worker->getType().isWorker() && worker->getPlayer() == BWAPI::Broodwar->self(), "bad unit");
-    UAB_ASSERT(base && base->getOwner() == BWAPI::Broodwar->self(), "bad base");
+    if (!unit || !unit->exists() || unit->getPlayer() != the.self() || !unit->getPosition().isValid() ||
+        !destination.isValid())
+    {
+        UAB_ASSERT(false, "bad arg");
+        return false;
+    }
 
-    // TODO
+    BWAPI::Unit enemy = inWeaponsDanger(unit, 0);
+    if (enemy)
+    {
+        fleeEnemy(unit, enemy);
+        return true;
+    }
+
+    MoveNear(unit, destination);
+    return false;
 }
 
 void Micro::RightClick(BWAPI::Unit unit, BWAPI::Unit target)
 {
-	if (!unit || !unit->exists() || unit->getPlayer() != BWAPI::Broodwar->self() ||
+	if (!unit || !unit->exists() || unit->getPlayer() != the.self() ||
 		!target || !target->exists())
 	{
 		UAB_ASSERT(false, "bad arg");
@@ -692,7 +820,7 @@ void Micro::RightClick(BWAPI::Unit unit, BWAPI::Unit target)
 // To mine out blocking minerals with zero resources, or to mineral walk, use RightClick() instead.
 void Micro::MineMinerals(BWAPI::Unit unit, BWAPI::Unit mineralPatch)
 {
-	if (!unit || !unit->exists() || unit->getPlayer() != BWAPI::Broodwar->self() ||
+	if (!unit || !unit->exists() || unit->getPlayer() != the.self() ||
 		!mineralPatch || !mineralPatch->exists() || !mineralPatch->getType().isMineralField())
 	{
 		UAB_ASSERT(false, "bad arg");
@@ -716,9 +844,9 @@ void Micro::MineMinerals(BWAPI::Unit unit, BWAPI::Unit mineralPatch)
 	}
 }
 
-void Micro::LaySpiderMine(BWAPI::Unit unit, BWAPI::Position pos)
+void Micro::LaySpiderMine(BWAPI::Unit unit, const BWAPI::Position & pos)
 {
-	if (!unit || !unit->exists() || unit->getPlayer() != BWAPI::Broodwar->self() || !pos.isValid())
+	if (!unit || !unit->exists() || unit->getPlayer() != the.self() || !pos.isValid())
 	{
 		UAB_ASSERT(false, "bad arg");
 		return;
@@ -744,7 +872,7 @@ void Micro::LaySpiderMine(BWAPI::Unit unit, BWAPI::Position pos)
 
 void Micro::Repair(BWAPI::Unit unit, BWAPI::Unit target)
 {
-	if (!unit || !unit->exists() || unit->getPlayer() != BWAPI::Broodwar->self() ||
+	if (!unit || !unit->exists() || unit->getPlayer() != the.self() ||
 		!target || !target->exists())
 	{
 		UAB_ASSERT(false, "bad arg");
@@ -782,7 +910,7 @@ void Micro::Repair(BWAPI::Unit unit, BWAPI::Unit target)
 
 void Micro::ReturnCargo(BWAPI::Unit worker)
 {
-	if (!worker || !worker->exists() || worker->getPlayer() != BWAPI::Broodwar->self() ||
+	if (!worker || !worker->exists() || worker->getPlayer() != the.self() ||
 		!worker->getType().isWorker())
 	{
 		UAB_ASSERT(false, "bad arg");
@@ -818,15 +946,25 @@ void Micro::ReturnCargo(BWAPI::Unit worker)
 // Order construction of a building.
 bool Micro::Build(BWAPI::Unit builder, BWAPI::UnitType building, const BWAPI::TilePosition & location)
 {
+    /*
     if (!builder || !builder->exists() || !builder->getType().isWorker() ||
         !builder->getPosition().isValid() || builder->isBurrowed() ||
-        builder->getPlayer() != BWAPI::Broodwar->self() ||
+        builder->getPlayer() != the.self() ||
 		!building.isBuilding() || !location.isValid())
 	{
         // TODO this error happens sometimes - fix it
 		UAB_ASSERT(false, "bad building");
 		return false;
 	}
+    */
+    if (!builder) { UAB_ASSERT(false, "no builder"); return false; }
+    if (!builder->exists()) { UAB_ASSERT(false, "dead builder"); return false; }
+    if (!builder->getType().isWorker()) { UAB_ASSERT(false, "builder is not a worker"); return false; }
+    if (!builder->getPosition().isValid()) { UAB_ASSERT(false, "builder is nowhere"); return false; }
+    if (builder->isBurrowed()) { UAB_ASSERT(false, "builder is burrowed"); return false; }
+    if (builder->getPlayer() != the.self()) { UAB_ASSERT(false, "builder mind-controlled"); return false; }
+    if (!building.isBuilding()) { UAB_ASSERT(false, "not a building"); return false; }
+    if (!location.isValid()) { UAB_ASSERT(false, "bad building location"); return false; }
 
 	// NOTE This order does not set the type or location.
 	//      The purpose is only to remind MicroState that the unit has this order.
@@ -1020,7 +1158,7 @@ bool Micro::Scan(const BWAPI::Position & targetPosition)
 	// If we're not terran, we're unlikely to have any comsats....
 	int maxEnergy = 49;      // anything greater is enough energy for a scan
 	BWAPI::Unit comsat = nullptr;
-	for (BWAPI::Unit unit : BWAPI::Broodwar->self()->getUnits())
+	for (BWAPI::Unit unit : the.self()->getUnits())
 	{
 		if (unit->getType() == BWAPI::UnitTypes::Terran_Comsat_Station &&
 			unit->getEnergy() > maxEnergy &&
@@ -1047,7 +1185,7 @@ bool Micro::Stim(BWAPI::Unit unit)
 {
 	if (!unit ||
 		unit->getType() != BWAPI::UnitTypes::Terran_Marine && unit->getType() != BWAPI::UnitTypes::Terran_Firebat ||
-		unit->getPlayer() != BWAPI::Broodwar->self())
+		unit->getPlayer() != the.self())
 	{
 		UAB_ASSERT(false, "bad unit");
 		return false;
@@ -1081,8 +1219,8 @@ bool Micro::Stim(BWAPI::Unit unit)
 bool Micro::MergeArchon(BWAPI::Unit templar1, BWAPI::Unit templar2)
 {
 	if (!templar1 || !templar2 ||
-		templar1->getPlayer() != BWAPI::Broodwar->self() ||
-		templar2->getPlayer() != BWAPI::Broodwar->self() ||
+		templar1->getPlayer() != the.self() ||
+		templar2->getPlayer() != the.self() ||
 		templar1->getType() != BWAPI::UnitTypes::Protoss_High_Templar && templar1->getType() != BWAPI::UnitTypes::Protoss_Dark_Templar ||
 		templar2->getType() != templar1->getType() ||
 		templar1 == templar2)
@@ -1123,7 +1261,7 @@ bool Micro::LarvaTrick(const BWAPI::Unitset & larvas)
 // NOTE The order is set correctly only for techs that Steamhammer already implements.
 bool Micro::UseTech(BWAPI::Unit unit, BWAPI::TechType tech, BWAPI::Unit target)
 {
-	if (!unit || !unit->exists() || !unit->getPosition().isValid() || unit->getPlayer() != BWAPI::Broodwar->self() ||
+	if (!unit || !unit->exists() || !unit->getPosition().isValid() || unit->getPlayer() != the.self() ||
 		!target || !target->exists() || !target->getPosition().isValid())
 	{
 		UAB_ASSERT(false, "bad unit");
@@ -1157,7 +1295,7 @@ bool Micro::UseTech(BWAPI::Unit unit, BWAPI::TechType tech, BWAPI::Unit target)
 // NOTE The order is set correctly only for techs that Steamhammer already implements.
 bool Micro::UseTech(BWAPI::Unit unit, BWAPI::TechType tech, const BWAPI::Position & target)
 {
-	if (!unit || !unit->exists() || !unit->getPosition().isValid() || unit->getPlayer() != BWAPI::Broodwar->self() ||
+	if (!unit || !unit->exists() || !unit->getPosition().isValid() || unit->getPlayer() != the.self() ||
 		!target.isValid())
 	{
 		UAB_ASSERT(false, "bad unit");
@@ -1192,11 +1330,11 @@ void Micro::KiteTarget(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 	// The always-kite units have their own micro.
 	if (AlwaysKite(rangedUnit->getType()))
 	{
-		Micro::MutaDanceTarget(rangedUnit, target);
+		MutaDanceTarget(rangedUnit, target);
 		return;
 	}
 
-	if (!rangedUnit || !rangedUnit->exists() || rangedUnit->getPlayer() != BWAPI::Broodwar->self() ||
+	if (!rangedUnit || !rangedUnit->exists() || rangedUnit->getPlayer() != the.self() ||
 		!target || !target->exists())
 	{
 		UAB_ASSERT(false, "bad arg");
@@ -1214,14 +1352,6 @@ void Micro::KiteTarget(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 		kite = false;
 	}
 
-	// If the target can't attack back, then don't kite.
-	// Don't kite if the enemy's range is at least as long as ours.
-	//if (!UnitUtil::CanAttack(target, rangedUnit) ||
-	//	range <= target->getPlayer()->weaponMaxRange(UnitUtil::GetWeapon(target, rangedUnit)))
-	//{
-	//	kite = false;
-	//}
-
 	// Kite if we're not ready yet: Wait for the weapon.
 	double dist(rangedUnit->getDistance(target));
 	double speed(rangedUnit->getPlayer()->topSpeed(rangedUnit->getType()));
@@ -1238,25 +1368,23 @@ void Micro::KiteTarget(BWAPI::Unit rangedUnit, BWAPI::Unit target)
 
 	if (kite)
 	{
-		// Run away.
-		BWAPI::Position fleePosition(rangedUnit->getPosition() - target->getPosition() + rangedUnit->getPosition());
-		if (Config::Debug::DrawUnitTargets)
-		{
-			BWAPI::Broodwar->drawLineMap(rangedUnit->getPosition(), fleePosition, BWAPI::Colors::Cyan);
-		}
-		Micro::Move(rangedUnit, fleePosition);
+		// Run away if we can. If we can't, then kite becomes false.
+        kite = kiteBack(rangedUnit, target);
 	}
-	else
+	
+    if (!kite)
 	{
 		// Shoot.
 		Micro::CatchAndAttackUnit(rangedUnit, target);
-	}
+        //BWAPI::Broodwar->drawLineMap(rangedUnit->getPosition(), target->getPosition(), BWAPI::Colors::Orange);
+    }
 }
 
 // Used for fast units with no delay in making turns--not necessarily mutalisks.
+// See AlwaysKite() for the set of units this is used for.
 void Micro::MutaDanceTarget(BWAPI::Unit muta, BWAPI::Unit target)
 {
-	if (!muta || !muta->exists() || muta->getPlayer() != BWAPI::Broodwar->self() ||
+	if (!muta || !muta->exists() || muta->getPlayer() != the.self() ||
 		!target || !target->exists())
 	{
 		UAB_ASSERT(false, "bad arg");
@@ -1266,14 +1394,13 @@ void Micro::MutaDanceTarget(BWAPI::Unit muta, BWAPI::Unit target)
 	const int latency					= BWAPI::Broodwar->getRemainingLatencyFrames();
 
 	const int framesToEnterFiringRange	= UnitUtil::FramesToReachAttackRange(muta, target);
-	BWAPI::Position destination			= PredictMovement(target, std::min(framesToEnterFiringRange, 12));
 	const int framesToAttack			= framesToEnterFiringRange + 2 * latency;
 
 	// How many frames are left before we should order the attack?
 	const int cooldownNow =
-		muta->isFlying() ? muta->getAirWeaponCooldown() : muta->getGroundWeaponCooldown();
+		target->isFlying() ? muta->getAirWeaponCooldown() : muta->getGroundWeaponCooldown();
 	const int staticCooldown =
-		muta->isFlying() ? muta->getType().airWeapon().damageCooldown() : muta->getType().groundWeapon().damageCooldown();
+		target->isFlying() ? muta->getType().airWeapon().damageCooldown() : muta->getType().groundWeapon().damageCooldown();
 	const int cooldown =
 		muta->isStartingAttack() ? staticCooldown : cooldownNow;
 
@@ -1282,24 +1409,22 @@ void Micro::MutaDanceTarget(BWAPI::Unit muta, BWAPI::Unit target)
 		// Attack.
 		// This is functionally equivalent to Micro::CatchAndAttackUnit(muta, target) .
 
-		if (!target->isMoving() || !muta->canMove() || muta->isInWeaponRange(target))
+		if (!target->isMoving() || muta->isInWeaponRange(target))
 		{
 			//BWAPI::Broodwar->drawLineMap(muta->getPosition(), target->getPosition(), BWAPI::Colors::Orange);
 			AttackUnit(muta, target);
 		}
 		else
 		{
-			//BWAPI::Broodwar->drawLineMap(target->getPosition(), destination, BWAPI::Colors::Blue);
-			//BWAPI::Broodwar->drawLineMap(muta->getPosition(), destination, BWAPI::Colors::Blue);
-			Move(muta, destination);
+            BWAPI::Position destination = PredictMovement(target, std::min(framesToEnterFiringRange, 12));
+            //BWAPI::Broodwar->drawLineMap(target->getPosition(), destination, BWAPI::Colors::Grey);
+			//BWAPI::Broodwar->drawLineMap(muta->getPosition(), destination, BWAPI::Colors::Yellow);
+			MoveNear(muta, destination);
 		}
 	}
 	else
 	{
 		// Kite backward.
-		BWAPI::Position fleeVector = GetKiteVector(target, muta);
-		BWAPI::Position moveToPosition(muta->getPosition() + fleeVector);
-		//BWAPI::Broodwar->drawLineMap(muta->getPosition(), moveToPosition, BWAPI::Colors::Purple);
-		Micro::MoveNear(muta, moveToPosition);
+        fleeEnemy(muta, target, 64);
 	}
 }

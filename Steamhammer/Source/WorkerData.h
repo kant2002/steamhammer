@@ -6,9 +6,21 @@ namespace UAlbertaBot
 {
 enum class MacroLocation;
 
-class WorkerData 
+class WorkerData
 {
 public:
+
+// Keep track of where workers are posted.
+// The map position of a given macro location may change, so remember the original postion too.
+class WorkerPost
+{
+public:
+    WorkerPost();
+    WorkerPost(MacroLocation loc);
+
+    MacroLocation location;
+    BWAPI::Position position;
+};
 
 enum WorkerJob
     { Minerals
@@ -34,7 +46,7 @@ private:
 	std::map<BWAPI::Unit, BWAPI::Unit>		workerRefineryMap;      // worker -> refinery
 	std::map<BWAPI::Unit, BWAPI::Unit>		workerRepairMap;        // worker -> unit to repair
     std::map<BWAPI::Unit, BWAPI::TilePosition> workerUnblockMap;    // worker -> blocking mineral to mine out
-    std::map<BWAPI::Unit, MacroLocation>	workerPostMap;          // worker -> assigned post
+    std::map<BWAPI::Unit, WorkerPost>       workerPostMap;          // worker -> assigned post
 
 	std::map<BWAPI::Unit, int>				depotWorkerCount;       // mineral workers per depot
 	std::map<BWAPI::Unit, int>				refineryWorkerCount;    // gas workers per refinery
@@ -57,7 +69,9 @@ public:
 	void			setWorkerJob(BWAPI::Unit unit, WorkerJob job, BWAPI::Unit jobUnit);
 	void			setWorkerJob(BWAPI::Unit unit, WorkerJob job);
     void			setWorkerJob(BWAPI::Unit unit, const BWAPI::TilePosition & tile);
-    void			setWorkerJob(BWAPI::Unit unit, WorkerJob job, MacroLocation loc);
+
+    void			setWorkerPost(BWAPI::Unit unit, MacroLocation loc);
+    void            resetWorkerPost(BWAPI::Unit unit, WorkerJob job);
 
 	int				getNumWorkers() const;
 	int				getNumMineralWorkers() const;
@@ -66,6 +80,7 @@ public:
 	int				getNumCombatWorkers() const;
     int             getNumRepairWorkers() const;
     int				getNumIdleWorkers() const;
+    int				getNumPostedWorkers() const;
     bool            anyUnblocker() const;
 
 	void			getMineralWorkers(std::set<BWAPI::Unit> & mw);
@@ -83,7 +98,9 @@ public:
 	BWAPI::Unit		getWorkerDepot(BWAPI::Unit unit);
 	BWAPI::Unit		getWorkerRepairUnit(BWAPI::Unit unit);
     BWAPI::TilePosition getWorkerTile(BWAPI::Unit unit);
-    MacroLocation   getWorkerPost(BWAPI::Unit unit);
+
+    MacroLocation   getWorkerPostLocation(BWAPI::Unit unit);
+    BWAPI::Position getWorkerPostPosition(BWAPI::Unit unit);
 
     BWAPI::Unitset  getMineralPatchesNearDepot(BWAPI::Unit depot);
     void            addToMineralPatch(BWAPI::Unit unit, int num);

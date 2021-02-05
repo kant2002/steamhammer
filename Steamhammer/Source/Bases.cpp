@@ -3,7 +3,6 @@
 #include "MapTools.h"
 #include "InformationManager.h"
 #include "The.h"
-#include "UnitUtil.h"
 
 using namespace UAlbertaBot;
 
@@ -97,48 +96,6 @@ void Bases::rememberBaseBlockers()
 			baseBlockers[blocker] = base;
 		}
 	}
-}
-
-// During initialization, look for a base to be our natural and remember it.
-// startingBase has already been set (of course we need to know that first).
-// Make sure it's null if we don't find a natural.
-void Bases::setNaturalBase()
-{
-	Base * bestBase = nullptr;
-	double bestScore = 0.0;
-
-	for (Base * base : bases)
-	{
-        if (base->isAStartingBase())
-		{
-            // We or the enemy may already own it.
-			continue;
-		}
-
-		if (!connectedToStart(base->getTilePosition()))
-		{
-			continue;
-		}
-
-		int tileDistance = base->getTileDistance(startingBase->getTilePosition());
-
-		if (tileDistance < 0)
-		{
-			continue;
-		}
-
-		// NOTE If there are not enough resources to bring the score above 0.0,
-		//      then this base will not become our natural.
-		double score = -tileDistance + 0.01 * base->getInitialMinerals() + 0.025 * base->getInitialGas();
-
-		if (score > bestScore)
-		{
-			bestBase = base;
-			bestScore = score;
-		}
-	}
-
-	naturalBase = bestBase;
 }
 
 // Given a set of resources, remove any that are used in the base.
@@ -271,7 +228,7 @@ int Bases::tilesBetweenBoxes
 
 // The two possible base positions are close enough together
 // that we can say they are "the same place" as a base.
-bool Bases::closeEnough(BWAPI::TilePosition a, BWAPI::TilePosition b)
+bool Bases::closeEnough(BWAPI::TilePosition a, BWAPI::TilePosition b) const
 {
 	return abs(a.x - b.x) <= 8 && abs(a.y - b.y) <= 8;
 }
@@ -283,14 +240,14 @@ bool Bases::closeEnough(BWAPI::TilePosition a, BWAPI::TilePosition b)
 //      the enemy base. Steamhammer doesn't provide a way to exclude bases.
 bool Bases::inferEnemyBaseFromOverlord()
 {
-	const int now = BWAPI::Broodwar->getFrameCount();
+	const int now = the.now();
 
 	if (the.enemy()->getRace() != BWAPI::Races::Zerg || now > 5 * 60 * 24)
 	{
 		return false;
 	}
 
-	for (const BWAPI::Unit unit : the.enemy()->getUnits())
+	for (BWAPI::Unit unit : the.enemy()->getUnits())
 	{
 		if (unit->getType() != BWAPI::UnitTypes::Zerg_Overlord)
 		{
@@ -488,6 +445,12 @@ void Bases::updateMainBase()
 		if (newMain)
 		{
 			mainBase = newMain;
+            // If we changed mains to a new starting base and our original starting base is gone,
+            // it makes sense to declare a new natural.
+            if (newMain->getNatural() && startingBase->getOwner() != the.self())
+            {
+                naturalBase = newMain->getNatural();
+            }
 		}
 	}
 }
@@ -637,12 +600,19 @@ void Bases::initialize()
     islandBases = checkIslandBases();       // the map includes islands
     rememberBaseBlockers();
 
-    // Simple method to pick a natural for each starting base.
+    // Pick a natural for each starting base.
+    // Other bases have null for the natural pointer.
     for (Base * start : startingBases)
     {
         start->initializeNatural(bases);
     }
-    setNaturalBase();       // fancy method to pick our natural
+    naturalBase = startingBase->getNatural();  // may be null, rarely is
+
+    // The "front line" position for each base has dependencies set above.
+    for (Base * base : bases)
+    {
+        base->initializeFront();
+    }
 }
 
 void Bases::update()
@@ -680,7 +650,7 @@ void Bases::checkBuildingPosition(const BWAPI::TilePosition & desired, const BWA
 				BWAPI::Unit pylon;
 				if (base->getOwner() == the.self() &&
 					(the.self()->getRace() != BWAPI::Races::Protoss || (pylon = base->getPylon()) && pylon->isCompleted()) &&
-					(the.self()->getRace() != BWAPI::Races::Zerg || base->getDepot() && base->getDepot()->isCompleted()))
+					(the.self()->getRace() != BWAPI::Races::Zerg || base->isCompleted()))
 				{
 					int fails = base->getFailedPlacements();
 					if (fails < bestFails)
@@ -699,7 +669,7 @@ void Bases::drawBaseInfo() const
 {
 	//the.partitions.drawWalkable();
 	//the.partitions.drawPartition(
-	//	the.partitions.id(InformationManager::Instance().getMyMainBaseLocation()->getPosition()),
+	//	the.partitions.id(the.bases.myMain()->getPosition()),
 	//	BWAPI::Colors::Teal);
 
 	//the.inset.draw();
@@ -715,19 +685,6 @@ void Bases::drawBaseInfo() const
 	for (const Base * base : bases)
 	{
 		base->drawBaseInfo();
-        BWAPI::Position center = base->getCenter();
-        if (base->getNatural())
-        {
-            BWAPI::Position natural = base->getNatural()->getCenter();
-            BWAPI::Broodwar->drawLineMap(center, natural, BWAPI::Colors::Grey);
-            BWAPI::Broodwar->drawCircleMap(natural, 64, BWAPI::Colors::Grey);
-        }
-        if (base == myFront())
-		{
-			BWAPI::Position defend = BWAPI::Position(frontPoint());
-			BWAPI::Broodwar->drawCircleMap(defend, 32, BWAPI::Colors::Red);
-			BWAPI::Broodwar->drawLineMap(center, defend, BWAPI::Colors::Red);
-		}
 	}
 
 	for (BWAPI::Unit small : smallMinerals)
@@ -814,59 +771,95 @@ void Bases::drawBaseOwnership(int x, int y) const
 // May be null if we do not own any bases!
 Base * Bases::myFront() const
 {
-    if (enemyStart() && enemyStart()->getNatural() && enemyStart()->getNatural()->getOwner() == the.self())
+    if (the.selfRace() == BWAPI::Races::Zerg)
     {
-        // We took the enemy natural. That's definitely our front base.
-        return enemyStart()->getNatural();
+        // We're zerg. We can only build at a completed base.
+        if (enemyStart() && enemyStart()->getNatural() &&
+            enemyStart()->getNatural()->getOwner() == the.self() &&
+            enemyStart()->getNatural()->isCompleted())
+        {
+            // We took the enemy natural. That's definitely our front base.
+            return enemyStart()->getNatural();
+        }
+        if (naturalBase && naturalBase->getOwner() == the.self() && naturalBase->isCompleted())
+        {
+            return naturalBase;
+        }
+        if (startingBase->getOwner() == the.self() && startingBase->isCompleted())
+        {
+            return startingBase;
+        }
+        if (mainBase->getOwner() == the.self() && mainBase->isCompleted())
+        {
+            return mainBase;
+        }
+
+        // Otherwise look for any base we own.
+        for (Base * base : bases)
+        {
+            if (base->getOwner() == the.self() && base->isCompleted())
+            {
+                return base;
+            }
+        }
     }
-	if (naturalBase && naturalBase->getOwner() == the.self())
-	{
-		return naturalBase;
-	}
-	if (startingBase->getOwner() == the.self())
-	{
-		return startingBase;
-	}
-	if (mainBase->getOwner() == the.self())
-	{
-		return mainBase;
-	}
+    else
+    {
+        // We're not zerg. We may be able to build at any base.
+        if (enemyStart() && enemyStart()->getNatural() && enemyStart()->getNatural()->getOwner() == the.self())
+        {
+            // We took the enemy natural. That's definitely our front base.
+            return enemyStart()->getNatural();
+        }
+        if (naturalBase && naturalBase->getOwner() == the.self())
+        {
+            return naturalBase;
+        }
+        if (startingBase->getOwner() == the.self())
+        {
+            return startingBase;
+        }
+        if (mainBase->getOwner() == the.self())
+        {
+            return mainBase;
+        }
 
-    // Otherwise look for any base we own.
-	for (Base * base : bases)
-	{
-		if (base->getOwner() == the.self())
-		{
-			return base;
-		}
-	}
+        // Otherwise look for any base we own.
+        for (Base * base : bases)
+        {
+            if (base->getOwner() == the.self())
+            {
+                return base;
+            }
+        }
+    }
 
-    // We have no bases. Ouch.
+    // We have no buildable bases. Ouch.
 	return nullptr;
 }
 
 // Return a position to place static defense or deploy a defensive force.
 // If we can't figure out such a place, return no position.
 // Not too smart, so far.
-BWAPI::TilePosition Bases::frontPoint() const
+BWAPI::Position Bases::front() const
 {
-	Base * front = myFront();
-	if (!front)
-	{
-		return BWAPI::TilePositions::None;
-	}
+    Base * frontBase = myFront();
+    if (frontBase)
+    {
+        return frontBase->getFront();
+    }
+    return BWAPI::Positions::None;
+}
 
-    // The main base: Choose a point toward the natural, if it exists.
-	if (front == startingBase && naturalBase)
-	{
-		BWAPI::Position here = startingBase->getCenter();
-		BWAPI::Position there = naturalBase->getCenter();
-		BWAPI::Position offset = there - here;
-		return BWAPI::TilePosition(here + (offset * (6 * 32) / int(std::trunc(there.getDistance(here)))));
-	}
-
-	// Otherwise choose a point opposite the minerals (ignoring the gas).
-	return BWAPI::TilePosition(front->getFrontPoint());
+// Return a position to place static defense or deploy a defensive force.
+BWAPI::TilePosition Bases::frontTile() const
+{
+    Base * frontBase = myFront();
+    if (frontBase)
+    {
+        return frontBase->getFrontTile();
+    }
+    return BWAPI::TilePositions::None;
 }
 
 // The given position is reachable by ground from our starting base.
@@ -920,7 +913,7 @@ int Bases::completedBaseCount(BWAPI::Player player) const
 
 	for (const Base * base : bases)
 	{
-		if (base->getOwner() == player && UnitUtil::IsCompletedResourceDepot(base->getDepot()))
+        if (base->getOwner() == player && base->isCompleted())
 		{
 			++count;
 		}
@@ -988,7 +981,7 @@ void Bases::gasCounts(int & nRefineries, int & nFreeGeysers) const
 
 	for (Base * base : bases)
 	{
-        if (base->getOwner() == the.self() && UnitUtil::IsCompletedResourceDepot(base->getDepot()))
+        if (base->getOwner() == the.self() && base->isCompleted())
 		{
 			// Recalculate the base's geysers every time.
 			// This is a slow but accurate way to work around the BWAPI geyser bug.
@@ -1012,46 +1005,6 @@ void Bases::gasCounts(int & nRefineries, int & nFreeGeysers) const
 
 	nRefineries = refineries;
 	nFreeGeysers = geysers;
-}
-
-// Return whether the enemy has a building in our main or natural base.
-bool Bases::getEnemyProxy() const
-{
-	int mainZone = the.zone.at(myStart()->getTilePosition());
-	int naturalZone = myNatural() ? the.zone.at(myNatural()->getTilePosition()) : 0;
-
-	for (const auto & kv : InformationManager::Instance().getUnitData(the.enemy()).getUnits())
-	{
-		const UnitInfo & ui(kv.second);
-
-		if (ui.type.isBuilding() &&
-            !ui.goneFromLastPosition &&
-            ui.type != BWAPI::UnitTypes::Terran_Engineering_Bay &&
-            ui.type != BWAPI::UnitTypes::Terran_Supply_Depot &&
-            ui.type != BWAPI::UnitTypes::Protoss_Pylon)
-		{
-			int zone = the.zone.at(ui.lastPosition);
-			if (zone > 0)
-			{
-				const int mainDist = ui.lastPosition.getApproxDistance(myStart()->getCenter());
-				if (zone == mainZone && mainDist <= 24 * 32 || mainDist <= 13 * 32)
-				{
-					return true;
-				}
-
-				if (myNatural())
-				{
-					const int natDist = ui.lastPosition.getApproxDistance(myNatural()->getCenter());
-                    if (zone == naturalZone && natDist <= 24 * 32 || natDist <= 13 * 32)
-					{
-						return true;
-					}
-				}
-			}
-		}
-	}
-
-	return false;
 }
 
 // A neutral building has been destroyed.

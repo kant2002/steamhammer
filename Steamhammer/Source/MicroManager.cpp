@@ -275,7 +275,7 @@ void MicroManager::regroup(const BWAPI::Position & regroupPosition, const UnitCl
 			unit->getType() == BWAPI::UnitTypes::Zerg_Lurker && BWAPI::Broodwar->self()->deadUnitCount(BWAPI::UnitTypes::Zerg_Lurker) == 0 ||
 			(BWAPI::Broodwar->enemy()->getRace() == BWAPI::Races::Terran &&
 			!unit->isFlying() &&
-			 BWAPI::Broodwar->getClosestUnit(unit->getPosition(),
+			BWAPI::Broodwar->getClosestUnit(unit->getPosition(),
 				BWAPI::Filter::IsEnemy &&
 					(BWAPI::Filter::GetType == BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode ||
 					BWAPI::Filter::CurrentOrder == BWAPI::Orders::Sieging ||

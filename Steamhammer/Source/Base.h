@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Common.h"
 #include "GridDistances.h"
 
 namespace UAlbertaBot
@@ -20,13 +21,16 @@ private:
 	BWAPI::Unitset		blockers;			// destructible neutral units that may be in the way
 	GridDistances		distances;			// ground distances from tilePosition
 	bool				startingBase;		// one of the map's starting bases?
-    Base *              natural;            // if a starting base, the base's natural if any; else null
+    Base *              naturalBase;        // if a starting base, the base's natural if any; else null
+    Base *              mainBase;           // if the natural of a starting base, the corresponding main; else null
+    BWAPI::TilePosition front;              // the front line: place approach defenses near here
 
 	bool				reserved;			// if this is a planned expansion
 	bool				workerDanger;		// for our own bases only; false for others
 	int					failedPlacements;	// count building placements that failed
 
     bool                findIsStartingBase() const;	// to initialize the startingBase flag
+    BWAPI::TilePosition findFront() const;
 
 public:
 
@@ -35,17 +39,23 @@ public:
     BWAPI::Unit		resourceDepot;			// hatchery, etc., or null if none
 	BWAPI::Player	owner;					// self, enemy, neutral
 
-    Base(BWAPI::TilePosition pos, const BWAPI::Unitset availableResources);
+    Base(BWAPI::TilePosition pos, const BWAPI::Unitset & availableResources);
     void setID(int baseID);                 // called exactly once at startup
 
     void initializeNatural(const std::vector<Base *> & bases);
+    void initializeFront();
 
     int				getID()           const { return id; };
     BWAPI::Unit		getDepot()        const { return resourceDepot; };
     BWAPI::Player	getOwner()        const { return owner; };
     bool            isAStartingBase() const { return startingBase; };
     bool            isIsland()        const;
-    Base *          getNatural()      const { return natural; };
+    Base *          getNatural()      const { return naturalBase; };
+    Base *          getMain()         const { return mainBase; };
+    bool            isCompleted()     const;
+
+    BWAPI::Position getFront()         const { return TileCenter(front); };
+    BWAPI::TilePosition getFrontTile() const { return front; };
 
     void updateGeysers();
 
@@ -85,7 +95,6 @@ public:
 	int getNumWorkers() const;
 
 	BWAPI::Position getMineralOffset() const;	// mean offset of minerals from base center
-	BWAPI::Position getFrontPoint() const;		// the "front" of the base, where static defense should go
 
 	BWAPI::Unit getPylon() const;
 

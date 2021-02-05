@@ -28,8 +28,7 @@ Squad::Squad()
 	int a = 10;		// work around linker error
 }
 
-// A "combat" squad is any squad except the Idle squad, which is full of workers
-// (and possibly unused units like unassigned overlords).
+// A "combat" squad is any squad except the Idle squad and Overlord squad.
 // The usual work of workers is managed by WorkerManager. If we put workers into
 // another squad, we have to notify WorkerManager.
 Squad::Squad(const std::string & name, SquadOrder order, size_t priority)
@@ -69,7 +68,7 @@ void Squad::update()
 	}
 	
 	// This is for the Overlord squad.
-	// Overlords as combat squad detectors are managed by _microDetectors.
+	// Overlords as combat squad detectors are managed by _microDetectors instead.
 	_microOverlords.update();
 
 	// If this is a worker squad, there is nothing more to do.
@@ -747,7 +746,7 @@ BWAPI::Position Squad::calcRegroupPosition(const UnitCluster & cluster) const
 		BWAPI::Unit nearest = nearbyStaticDefense(vanguard->getPosition());
 		if (nearest)
 		{
-			BWAPI::Position behind = DistanceAndDirection(nearest->getPosition(), cluster.center, -128);
+			BWAPI::Position behind = DistanceAndDirection(nearest->getPosition(), vanguard->getPosition(), -128);
 			return behind;
 		}
 	}
@@ -836,7 +835,7 @@ BWAPI::Position Squad::finalRegroupPosition() const
 
 	// If the natural has been taken, retreat there instead.
 	Base * natural = the.bases.myNatural();
-	if (natural && natural->getOwner() == BWAPI::Broodwar->self())
+	if (natural && natural->getOwner() == the.self())
 	{
 		base = natural;
 	}

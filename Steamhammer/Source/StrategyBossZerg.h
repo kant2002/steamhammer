@@ -64,6 +64,7 @@ class StrategyBossZerg
 	int _emergencyStartFrame;
 	bool _emergencyNow;				// we are under immediate attack
 	bool _wantAirArmor;				// to keep overlords alive vs. corsairs, valkyries
+    BWAPI::Unit _droneToHide;       // a drone to try to escape containment to make an outside base
 
 	int _existingSupply;
 	int _pendingSupply;
@@ -141,7 +142,7 @@ class StrategyBossZerg
     int _recommendEnsnare;
     int _recommendBroodling;
     int _recommendQueens;       // max of the above 3
-    int _recommendSunkens;      // at each base
+    bool _recommendSunkens;     // at each base
 
 	// For choosing the tech target and the unit mix.
 	std::array<int, int(TechUnit::Size)> techScores;
@@ -153,6 +154,7 @@ class StrategyBossZerg
 	bool enoughArmy() const;
 	bool enoughGroundArmy() const;
     bool enemyIsAllAir() const;
+    bool enemyIsUnreachable() const;
     bool enemySeemsToBeDead() const;
     bool canSafelyMineGas() const;
     int nFreeEvo() const;
@@ -225,7 +227,9 @@ public:
 	void setUnitMix(BWAPI::UnitType minUnit, BWAPI::UnitType gasUnit);
 	void setEconomyRatio(double ratio);
 
-	// Called once per frame for emergencies and other urgent needs.
+    bool hiddenBaseNext() const;
+
+    // Called once per frame for emergencies and other urgent needs.
 	void handleUrgentProductionIssues(BuildOrderQueue & queue);
 
 	// Called when the production queue is empty.

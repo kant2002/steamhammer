@@ -29,10 +29,11 @@ void MicroScourge::assignTargets(const BWAPI::Unitset & scourge, const BWAPI::Un
 	BWAPI::Unitset scourgeTargets;
 	for (BWAPI::Unit target : targets)
 	{
-		if (target->isVisible() &&
-			target->isFlying() &&
+        if (target->isFlying() &&
+            target->isVisible() &&
             target->getType() != BWAPI::UnitTypes::Protoss_Interceptor &&
             target->getType() != BWAPI::UnitTypes::Zerg_Overlord &&
+            !target->getType().isBuilding() &&
             !the.airAttacks.inRange(target->getTilePosition()) &&	// skip defended targets
 			target->isDetected() &&
 			!target->isInvincible())
@@ -41,7 +42,7 @@ void MicroScourge::assignTargets(const BWAPI::Unitset & scourge, const BWAPI::Un
 		}
 	}
 
-	for (const auto scourgeUnit : scourge)
+	for (BWAPI::Unit scourgeUnit : scourge)
 	{
 		BWAPI::Unit target = getTarget(scourgeUnit, scourgeTargets);
 		if (target)
@@ -75,7 +76,7 @@ BWAPI::Unit MicroScourge::getTarget(BWAPI::Unit scourge, const BWAPI::Unitset & 
     int bestScore = INT_MIN;
 	BWAPI::Unit bestTarget = nullptr;
 
-	for (const auto target : targets)
+	for (BWAPI::Unit target : targets)
 	{
 		const int priority = getAttackPriority(target->getType());	// 0..12
 		const int range = scourge->getDistance(target);				// 0..map diameter in pixels
@@ -137,6 +138,6 @@ int MicroScourge::getAttackPriority(BWAPI::UnitType targetType)
                 : 5;
 	}
 
-	// Overlords, scourge, interceptors.
+	// Overlords, scourge, interceptors, floating buildings.
 	return 0;
 }

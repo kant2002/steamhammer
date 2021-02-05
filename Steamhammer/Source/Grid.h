@@ -26,6 +26,7 @@ public:
 	virtual int at(const BWAPI::TilePosition & pos) const;
 	virtual int at(const BWAPI::WalkPosition & pos) const;
 	virtual int at(const BWAPI::Position & pos) const;
+    virtual int at(BWAPI::Unit unit) const;
 
 	virtual void draw() const;
 };

@@ -5,6 +5,20 @@
 
 using namespace UAlbertaBot;
 
+WorkerData::WorkerPost::WorkerPost()
+    : location(MacroLocation::Anywhere)
+    , position(the.placer.getMacroLocationPos(MacroLocation::Anywhere))
+{
+}
+
+WorkerData::WorkerPost::WorkerPost(MacroLocation loc)
+    : location(loc)
+    , position(the.placer.getMacroLocationPos(loc))
+{
+}
+
+// -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
 WorkerData::WorkerData()
 {
     for (BWAPI::Unit unit : BWAPI::Broodwar->getAllUnits())
@@ -162,17 +176,29 @@ void WorkerData::setWorkerJob(BWAPI::Unit unit, const BWAPI::TilePosition & tile
     workerUnblockMap[unit] = tile;
 }
 
-// Give the worker a Posted or PostedBuild job.
-void WorkerData::setWorkerJob(BWAPI::Unit unit, WorkerJob job, MacroLocation loc)
+// Post the worker: Give it a Posted job.
+// Calculate the map position from the macro location and remember it.
+void WorkerData::setWorkerPost(BWAPI::Unit unit, MacroLocation loc)
 {
     if (!unit) { return; }
-    UAB_ASSERT(job == Posted || job == PostedBuild, "bad job");
 
     // BWAPI::Broodwar->printf("Posting worker to location");
 
     clearPreviousJob(unit);
+    workerJobMap[unit] = Posted;
+    workerPostMap[unit] = WorkerData::WorkerPost(loc);
+}
+
+// Give it a Posted or BuildPosted job without updating the map position.
+void WorkerData::resetWorkerPost(BWAPI::Unit unit, WorkerJob job)
+{
+    if (!unit) { return; }
+
+    UAB_ASSERT(job == Posted || job == PostedBuild, "bad job");
+    UAB_ASSERT(workerJobMap[unit] == Posted || workerJobMap[unit] == PostedBuild, "bad job");
+
     workerJobMap[unit] = job;
-    workerPostMap[unit] = loc;
+    // Do not update the worker post map. It stays the same.
 }
 
 void WorkerData::clearPreviousJob(BWAPI::Unit unit)
@@ -295,6 +321,11 @@ int WorkerData::getNumIdleWorkers() const
 		}
 	}
 	return num;
+}
+
+int WorkerData::getNumPostedWorkers() const
+{
+    return workerPostMap.size();
 }
 
 bool WorkerData::anyUnblocker() const
@@ -468,16 +499,29 @@ BWAPI::TilePosition WorkerData::getWorkerTile(BWAPI::Unit unit)
 
     return BWAPI::TilePositions::None;
 }
-MacroLocation WorkerData::getWorkerPost(BWAPI::Unit unit)
+
+MacroLocation WorkerData::getWorkerPostLocation(BWAPI::Unit unit)
 {
-    std::map<BWAPI::Unit, MacroLocation>::iterator it = workerPostMap.find(unit);
+    std::map<BWAPI::Unit, WorkerData::WorkerPost>::iterator it = workerPostMap.find(unit);
 
     if (it != workerPostMap.end())
     {
-        return it->second;
+        return it->second.location;
     }
 
     return MacroLocation::Anywhere;
+}
+
+BWAPI::Position WorkerData::getWorkerPostPosition(BWAPI::Unit unit)
+{
+    std::map<BWAPI::Unit, WorkerData::WorkerPost>::iterator it = workerPostMap.find(unit);
+
+    if (it != workerPostMap.end())
+    {
+        return it->second.position;
+    }
+
+    return BWAPI::Positions::None;
 }
 
 BWAPI::Unit WorkerData::getWorkerDepot(BWAPI::Unit unit)

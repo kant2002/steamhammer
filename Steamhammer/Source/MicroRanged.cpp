@@ -96,7 +96,7 @@ void MicroRanged::assignTargets(const BWAPI::Unitset & rangedUnits, const BWAPI:
 				}
 				else
 				{
-					the.micro.Move(rangedUnit, order.getPosition());
+					the.micro.MoveNear(rangedUnit, order.getPosition());
 				}
 				continue;
 			}
@@ -144,7 +144,7 @@ void MicroRanged::assignTargets(const BWAPI::Unitset & rangedUnits, const BWAPI:
 				// No target found. If we're not near the order position, go there.
 				if (rangedUnit->getDistance(order.getPosition()) > 100)
 				{
-					the.micro.Move(rangedUnit, order.getPosition());
+					the.micro.MoveNear(rangedUnit, order.getPosition());
 				}
 			}
 		}

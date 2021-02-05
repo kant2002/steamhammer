@@ -19,6 +19,7 @@
 namespace UAlbertaBot
 {
     class Bases;
+    class MapGrid;
     class InformationManager;
     class Random;
 
@@ -63,6 +64,8 @@ namespace UAlbertaBot
 
         // Information about bases and resources.
         Bases & bases;
+        // Large cells laid over the map.
+        MapGrid & grid;
         // Game state information, especially stored information about the enemy.
         InformationManager & info;
         // Perform unit control actions ("unit micro").
@@ -84,6 +87,9 @@ namespace UAlbertaBot
 		GroundAttacks groundAttacks;
         // What tiles does enemy static defense hit in the air?
         AirAttacks airAttacks;
+        // What tiles does enemy static defense hit for this unit?
+        int attacks(BWAPI::Unit unit, const BWAPI::TilePosition & tile) const;
+        int attacks(BWAPI::Unit unit) const;
 
 		// Update the varying values.
 		void update();

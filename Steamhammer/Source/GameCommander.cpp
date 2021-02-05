@@ -71,19 +71,21 @@ void GameCommander::update()
 	BOSSManager::Instance().update(35 - _timerManager.getMilliseconds());
 	_timerManager.stopTimer(TimerManager::Search);
 
-	_timerManager.startTimer(TimerManager::Worker);
-	WorkerManager::Instance().update();
-	_timerManager.stopTimer(TimerManager::Worker);
-
+    // May steal workers from WorkerManager, so run it first.
 	_timerManager.startTimer(TimerManager::Production);
 	ProductionManager::Instance().update();
 	_timerManager.stopTimer(TimerManager::Production);
 
+    // May steal workers from WorkerManager, so run it first.
 	_timerManager.startTimer(TimerManager::Building);
 	BuildingManager::Instance().update();
 	_timerManager.stopTimer(TimerManager::Building);
 
-	_timerManager.startTimer(TimerManager::Combat);
+    _timerManager.startTimer(TimerManager::Worker);
+    WorkerManager::Instance().update();
+    _timerManager.stopTimer(TimerManager::Worker);
+
+    _timerManager.startTimer(TimerManager::Combat);
 	_combatCommander.update(_combatUnits);
 	_timerManager.stopTimer(TimerManager::Combat);
 
@@ -335,7 +337,7 @@ void GameCommander::handleUnitAssignments()
     _combatUnits.clear();
 	// Don't clear the scout units.
 
-	// filter our units for those which are valid and usable
+	// Only keep units which are completed and usable.
 	setValidUnits();
 
 	// set each type of unit
@@ -380,10 +382,12 @@ void GameCommander::setValidUnits()
             /*
             // TODO testing
             static bool firstTime1 = false;
-            if (!firstTime1 && unit->getType() == BWAPI::UnitTypes::Zerg_Zergling)
+            static BWAPI::Unitset reported;
+            if (unit->getType() == BWAPI::UnitTypes::Protoss_Gateway && !reported.contains(unit))
             {
                 BWAPI::Broodwar->printf("unit timing %d", BWAPI::Broodwar->getFrameCount());
                 firstTime1 = true;
+                reported.insert(unit);
             }
             */
 		}

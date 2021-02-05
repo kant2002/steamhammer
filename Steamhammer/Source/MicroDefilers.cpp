@@ -424,7 +424,7 @@ void MicroDefilers::updateMovement(const UnitCluster & cluster, BWAPI::Unit vang
 			else
 			{
                 // Default destination if all else fails: The front defense line.
-                destination = BWAPI::Position(Bases::Instance().frontPoint());
+                destination = the.bases.front();
 			}
 
 			if (destination.isValid())

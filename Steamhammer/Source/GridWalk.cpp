@@ -36,3 +36,8 @@ int GridWalk::at(const BWAPI::Position & pos) const
 {
 	return at(BWAPI::WalkPosition(pos));
 }
+
+int GridWalk::at(BWAPI::Unit unit) const
+{
+    return at(unit->getPosition());
+}

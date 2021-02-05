@@ -31,8 +31,8 @@ class BuildingManager
 	void			checkReservedResources();				// error check
 
 	bool			buildingTimedOut(const Building & b) const;
-    char            getBuildingWorkerCode(const Building & b) const;
 
+    bool            validBuilder(const Building & b) const;
 	void			setBuilderUnit(Building & b);
 	void			releaseBuilderUnit(Building & b);
     
