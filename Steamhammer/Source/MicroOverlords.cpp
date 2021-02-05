@@ -57,6 +57,7 @@ void MicroOverlords::assignOverlords()
     std::vector<BWAPI::TilePosition> destinations;
 
     // Add destinations in priority order.
+
     if (the.now() < 7 * 24 * 60)
     {
         // Early in the game, explore for proxies in our starting base.
@@ -108,16 +109,34 @@ void MicroOverlords::assignOverlords()
             }
         }
     }
-    // Or if there are no overlord hunters, try to see the base we may want to take next.
+    // Or if there are no overlord hunters:
     else if (!overlordHunters)
     {
+        // Try to see the base we may want to take next.
         BWAPI::TilePosition nextBasePos = the.map.getNextExpansion(false, true, true);
         if (nextBasePos.isValid())
         {
             // The next mineral + gas expansion.
             destinations.push_back(nextBasePos);
         }
+
+        // Observe any small minerals which are not reachable by ground.
+        // This will keep an eye on island bases, for most maps that have them.
+        const BWAPI::Unitset & smallMinerals = the.bases.getSmallMinerals();
+        std::set<BWAPI::TilePosition> tiles;
+        for (BWAPI::Unit patch : smallMinerals)
+        {
+            BWAPI::TilePosition tile = patch->getInitialTilePosition();
+            if (tile.isValid() && !the.bases.connectedToStart(tile) && tiles.find(tile) == tiles.end())
+            {
+                destinations.push_back(tile);
+                tiles.insert(tile);
+            }
+        }
     }
+
+    // One overlord at the front line.
+    destinations.push_back(the.bases.frontTile());
 
     // Assign one overlord to each destination while possible.
     BWAPI::Unitset unassigned = getUnits();
@@ -143,10 +162,10 @@ void MicroOverlords::assignOverlords()
     }
     else
     {
-        // Otherwise send them all to the front base.
+        // Otherwise send them all to the main base.
         for (BWAPI::Unit overlord : unassigned)
         {
-            assignments[overlord] = the.bases.frontTile();
+            assignments[overlord] = the.bases.myMain()->getTilePosition();
         }
     }
 }
@@ -194,7 +213,7 @@ void MicroOverlords::update()
         // Every overlord we were given should have an assignment.
         UAB_ASSERT(assignments.size() == getUnits().size(), "bad assignments");
     }
-
+        
     // 2. Move overlords often, so that they can avoid dangers in time.
     if (BWAPI::Broodwar->getFrameCount() % 4 == 0)
 	{

@@ -13,6 +13,7 @@ namespace UnitUtil
     bool IsProductionBuildingType(BWAPI::UnitType type);
     bool IsMorphedBuildingType(BWAPI::UnitType type);
     bool IsMorphedUnitType(BWAPI::UnitType type);
+    bool NeedsWorkerBuildingType(BWAPI::UnitType type);
     bool BuildingIsMorphedFrom(BWAPI::UnitType t2, BWAPI::UnitType t1);
 	bool IsCompletedResourceDepot(BWAPI::Unit unit);
     bool IsNearlyCompletedResourceDepot(BWAPI::Unit unit, int framesLeft);

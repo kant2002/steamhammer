@@ -94,7 +94,7 @@ void BuildingManager::assignWorkersToUnassignedBuildings()
 			continue;
 		}
 
-		if (b.buildersSent > 0 &&
+		if (b.buildersSent > 1 &&
 			b.type == BWAPI::UnitTypes::Zerg_Hatchery &&
 			b.macroLocation != MacroLocation::Main &&
 			the.my.all.count(BWAPI::UnitTypes::Zerg_Larva) == 0)	// yes, we may need more production
@@ -102,7 +102,9 @@ void BuildingManager::assignWorkersToUnassignedBuildings()
 			// This is a zerg expansion which failed--we sent a builder and it never built.
 			// The builder was most likely killed along the way.
 			// Conclude that we need more production and change it to a macro hatchery.
+            //BWAPI::Broodwar->printf("change to macro hatch %d,%d", b.desiredPosition.x, b.desiredPosition.y);
 			b.macroLocation = MacroLocation::Main;
+            b.desiredPosition = the.bases.myMain()->getTilePosition();  // all macro hatches in main TODO for now
 		}
 
 		// The builder may have already been decided before we got this far.
@@ -145,6 +147,7 @@ void BuildingManager::assignWorkersToUnassignedBuildings()
 			}
             if (b.builderUnit && b.buildersSent > 0)
             {
+                //BWAPI::Broodwar->printf("bad location, clear builder %d of %s", b.builderUnit->getID(), UnitTypeName(b.type).c_str());
                 --b.buildersSent;
             }
 			releaseBuilderUnit(b);
@@ -204,7 +207,7 @@ void BuildingManager::constructAssignedBuildings()
 				// This mainly prevents over-frequent retrying.
 				if (the.now() > b.placeBuildingDeadline)
 				{
-				    //BWAPI::Broodwar->printf("release and redo builder %d for %s", b.builderUnit->getID(), UnitTypeName(b.type).c_str());
+                    //BWAPI::Broodwar->printf("deadline passed, clear builder %d of %s", b.builderUnit->getID(), UnitTypeName(b.type).c_str());
 
 					// tell worker manager the unit we had is not needed now, since we might not be able
 					// to get a valid location soon enough
@@ -215,7 +218,7 @@ void BuildingManager::constructAssignedBuildings()
 
 					// This is a normal event that may happen repeatedly before the building starts.
 					// Don't count it as a failure.
-					--b.buildersSent;
+                    --b.buildersSent;
 
 					// Unreserve the building location. The building will mark its own location.
 					the.placer.freeTiles(b.finalPosition, b.type.tileWidth(), b.type.tileHeight());
@@ -223,9 +226,16 @@ void BuildingManager::constructAssignedBuildings()
 			}
             else
             {
-				// Issue the build order and record whether it succeeded.
+                // Special case for sunkens and spores: Build the creep colony then morph it.
+                BWAPI::UnitType t = b.type;
+                if (t == BWAPI::UnitTypes::Zerg_Sunken_Colony || t == BWAPI::UnitTypes::Zerg_Spore_Colony)
+                {
+                    t = BWAPI::UnitTypes::Zerg_Creep_Colony;
+                }
+                
+                // Issue the build order and record whether it succeeded.
 				// If the builderUnit is zerg, it changes to !exists() when it builds.
-				b.buildCommandGiven = the.micro.Build(b.builderUnit, b.type, b.finalPosition);
+				b.buildCommandGiven = the.micro.Build(b.builderUnit, t, b.finalPosition);
 
 				if (b.buildCommandGiven)
 				{
@@ -355,8 +365,19 @@ void BuildingManager::checkForCompletedBuildings()
 				releaseBuilderUnit(b);
 			}
 
-            // And we don't want to keep the building record any more.
-            toRemove.push_back(b);
+            if ((b.type == BWAPI::UnitTypes::Zerg_Sunken_Colony || b.type == BWAPI::UnitTypes::Zerg_Spore_Colony) &&
+                b.buildingUnit->getType() == BWAPI::UnitTypes::Zerg_Creep_Colony)
+            {
+                if (b.buildingUnit->canMorph(b.type))
+                {
+                    b.buildingUnit->morph(b.type);
+                }
+            }
+            else
+            {
+                // Done with the building record.
+                toRemove.push_back(b);
+            }
         }
 		else
 		{
@@ -462,7 +483,7 @@ Building & BuildingManager::addTrackedBuildingTask(const MacroAct & act, BWAPI::
 	// The builder, if provided, may have been killed, or be otherwise unavailable.
 	if (validBuilder(builder))
 	{
-		//BWAPI::Broodwar->printf("build man receives worker %d for %s", builder->getID(), UnitTypeName(type).c_str());
+        //BWAPI::Broodwar->printf("build man receives worker %d for %s", builder->getID(), UnitTypeName(type).c_str());
 		b.builderUnit = builder;
         b.buildersSent = 1;
         // Ensure that our builder is assigned to be a builder. The caller may not have done it.
@@ -835,13 +856,15 @@ BWAPI::TilePosition BuildingManager::getBuildingLocation(const Building & b)
         {
             return pos;
         }
-	}
+    }
 
     int distance = Config::Macro::BuildingSpacing;
 	if (b.type == BWAPI::UnitTypes::Terran_Bunker ||
 		b.type == BWAPI::UnitTypes::Terran_Missile_Turret ||
 		b.type == BWAPI::UnitTypes::Protoss_Photon_Cannon ||
-		b.type == BWAPI::UnitTypes::Zerg_Creep_Colony)
+        b.type == BWAPI::UnitTypes::Zerg_Sunken_Colony ||
+        b.type == BWAPI::UnitTypes::Zerg_Spore_Colony ||
+        b.type == BWAPI::UnitTypes::Zerg_Creep_Colony)
 	{
 		// Pack defenses tightly together.
 		distance = 0;
@@ -860,7 +883,7 @@ BWAPI::TilePosition BuildingManager::getBuildingLocation(const Building & b)
 		}
 	}
 
-	// Get a position within our region.
+	// The building placer does the rest.
 	return the.placer.getBuildLocationNear(b, distance);
 }
 

@@ -112,7 +112,8 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
         JSONTools::ReadBool("DrawScoutInfo", debug, Config::Debug::DrawScoutInfo);
         JSONTools::ReadBool("DrawSquadInfo", debug, Config::Debug::DrawSquadInfo);
 		JSONTools::ReadBool("DrawClusters", debug, Config::Debug::DrawClusters);
-		JSONTools::ReadBool("DrawCombatSimInfo", debug, Config::Debug::DrawCombatSimulationInfo);
+        JSONTools::ReadBool("DrawDefenseClusters", debug, Config::Debug::DrawDefenseClusters);
+        JSONTools::ReadBool("DrawCombatSimInfo", debug, Config::Debug::DrawCombatSimulationInfo);
         JSONTools::ReadBool("DrawBuildingInfo", debug, Config::Debug::DrawBuildingInfo);
         JSONTools::ReadBool("DrawModuleTimers", debug, Config::Debug::DrawModuleTimers);
         JSONTools::ReadBool("DrawEnemyUnitInfo", debug, Config::Debug::DrawEnemyUnitInfo);
@@ -174,6 +175,7 @@ void ParseUtils::ParseConfigFile(const std::string & filename)
         JSONTools::ReadBool("Burrow", skills, Config::Skills::Burrow);
         JSONTools::ReadInt("MaxQueens", skills, Config::Skills::MaxQueens);
         JSONTools::ReadInt("MaxInfestedTerrans", skills, Config::Skills::MaxInfestedTerrans);
+        JSONTools::ReadInt("MaxDefilers", skills, Config::Skills::MaxDefilers);
     }
 
     // Are we running under SCHNAIL?
@@ -471,7 +473,8 @@ void ParseUtils::ParseTextCommand(const std::string & commandString)
         else if (variableName == "drawstrategybossinfo") { Config::Debug::DrawStrategyBossInfo = GetBoolFromString(val); }
 		else if (variableName == "drawsquadinfo") { Config::Debug::DrawSquadInfo = GetBoolFromString(val); }
 		else if (variableName == "drawclusters") { Config::Debug::DrawClusters = GetBoolFromString(val); }
-		else if (variableName == "drawworkerinfo") { Config::Debug::DrawWorkerInfo = GetBoolFromString(val); }
+        else if (variableName == "drawdefenseclusters") { Config::Debug::DrawDefenseClusters = GetBoolFromString(val); }
+        else if (variableName == "drawworkerinfo") { Config::Debug::DrawWorkerInfo = GetBoolFromString(val); }
         else if (variableName == "drawbuildinginfo") { Config::Debug::DrawBuildingInfo = GetBoolFromString(val); }
         else if (variableName == "drawreservedbuildingtiles") { Config::Debug::DrawReservedBuildingTiles = GetBoolFromString(val); }
         else if (variableName == "drawresourceamounts") { Config::Debug::DrawResourceAmounts = GetBoolFromString(val); }

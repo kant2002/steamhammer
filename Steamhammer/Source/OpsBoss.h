@@ -26,11 +26,11 @@ namespace UAlbertaBot
 		int radius;
 		ClusterStatus status;
 
-		bool air;
-		double speed;
+		bool air;               // any air units?
+		double speed;           // minimum speed, ignoring static defense
 
-		size_t count;
-		int hp;
+		size_t count;           // number of units
+		int hp;                 // total HP + shields
 		double groundDPF;		// DPF = damage per frame
 		double airDPF;
 
@@ -49,11 +49,17 @@ namespace UAlbertaBot
 		const int clusterStart = 5 * 32;
 		const int clusterRange = 3 * 32;
 
-		std::vector<UnitCluster> yourClusters;
+		std::vector<UnitCluster> yourClusters;  // currently unused
 
-		void locateCluster(const std::vector<BWAPI::Position> & points, UnitCluster & cluster);
+        int defenderUpdateFrame;
+        std::vector<UnitCluster> groundDefenseClusters;
+        std::vector<UnitCluster> airDefenseClusters;
+
+        void locateCluster(const std::vector<BWAPI::Position> & points, UnitCluster & cluster);
 		void formCluster(const UnitInfo & seed, const UIMap & theUI, BWAPI::Unitset & units, UnitCluster & cluster);
 		void clusterUnits(BWAPI::Unitset & units, std::vector<UnitCluster> & clusters);
+
+        void updateDefenders();
 
 	public:
 		OpsBoss();
@@ -63,6 +69,9 @@ namespace UAlbertaBot
 		void cluster(const BWAPI::Unitset & units, std::vector<UnitCluster> & clusters);
 
 		void update();
+
+        const std::vector<UnitCluster> & getGroundDefenseClusters();
+        const std::vector<UnitCluster> & getAirDefenseClusters();
 
 		void drawClusters() const;
 	};

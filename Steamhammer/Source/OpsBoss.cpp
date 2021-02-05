@@ -47,6 +47,7 @@ void UnitCluster::add(const UnitInfo & ui)
 		double topSpeed = BWAPI::Broodwar->enemy()->topSpeed(ui.type);
 		if (topSpeed > 0.0)
 		{
+            // NOTE A static defense building added to the cluster will not affect the cluster's speed.
 			speed = std::min(speed, topSpeed);
 		}
 	}
@@ -164,9 +165,37 @@ void OpsBoss::clusterUnits(BWAPI::Unitset & units, std::vector<UnitCluster> & cl
 	}
 }
 
+// Cluster units that can perform ground and/or air defense,
+// so that our fleeing units can find safe places to flee to.
+// Include static defense.
+void OpsBoss::updateDefenders()
+{
+    BWAPI::Unitset groundDefenders;
+    BWAPI::Unitset airDefenders;
+
+    for (BWAPI::Unit u : the.self()->getUnits())
+    {
+        if (u->isCompleted() && u->getPosition().isValid())
+        {
+            if (UnitUtil::CanAttackGround(u) && !u->getType().isWorker() && u->getType() != BWAPI::UnitTypes::Zerg_Broodling)
+            {
+                groundDefenders.insert(u);
+            }
+            if (UnitUtil::CanAttackAir(u))
+            {
+                airDefenders.insert(u);
+            }
+        }
+    }
+
+    clusterUnits(groundDefenders, groundDefenseClusters);
+    clusterUnits(airDefenders, airDefenseClusters);
+}
+
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
 OpsBoss::OpsBoss()
+    : defenderUpdateFrame(0)
 {
 }
 
@@ -181,7 +210,7 @@ void OpsBoss::cluster(BWAPI::Player player, std::vector<UnitCluster> & clusters)
 
 	// Step 1: Gather units that should be put into clusters.
 
-	int now = BWAPI::Broodwar->getFrameCount();
+	int now = the.now();
 	BWAPI::Unitset units;
 
 	for (const auto & kv : theUI)
@@ -212,6 +241,7 @@ void OpsBoss::cluster(const BWAPI::Unitset & units, std::vector<UnitCluster> & c
 
 void OpsBoss::update()
 {
+/*
 	int phase = BWAPI::Broodwar->getFrameCount() % 5;
 
 	if (phase == 0)
@@ -220,6 +250,31 @@ void OpsBoss::update()
 	}
 
 	drawClusters();
+*/
+}
+
+// Return the clusters of ground defenders, from cache when available.
+const std::vector<UnitCluster> & OpsBoss::getGroundDefenseClusters()
+{
+    if (defenderUpdateFrame != the.now())
+    {
+        updateDefenders();
+        defenderUpdateFrame = the.now();
+    }
+
+    return groundDefenseClusters;
+}
+
+// Return the clusters of air defenders, from cache when available.
+const std::vector<UnitCluster> & OpsBoss::getAirDefenseClusters()
+{
+    if (defenderUpdateFrame != the.now())
+    {
+        updateDefenders();
+        defenderUpdateFrame = the.now();
+    }
+
+    return airDefenseClusters;
 }
 
 // Draw enemy clusters.

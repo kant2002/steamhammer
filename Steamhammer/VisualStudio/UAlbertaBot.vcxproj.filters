@@ -320,4 +320,7 @@
     <ClInclude Include="..\Source\SkillUnitTimings.h" />
     <ClInclude Include="..\Source\GridBuildable.h" />
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="..\..\to-do.txt" />
+  </ItemGroup>
 </Project>

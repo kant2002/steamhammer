@@ -409,7 +409,14 @@ int MacroAct::mineralPrice() const
 	}
 	if (isUnit())
 	{
-		return _unitType.mineralPrice();
+        // Special case for sunks and spores, which are built from drones by Building Manager:
+        // Return the price of the creep colony, not the total price (125) and not the final morph price (50).
+        if (getUnitType() == BWAPI::UnitTypes::Zerg_Sunken_Colony || getUnitType() == BWAPI::UnitTypes::Zerg_Spore_Colony)
+        {
+            return 75;
+        }
+
+        return _unitType.mineralPrice();
 	}
 	if (isTech())
 	{
@@ -459,6 +466,12 @@ BWAPI::UnitType MacroAct::whatBuilds() const
 {
     if (isUnit())
     {
+        // Special case for sunks and spores, which are built from drones by Building Manager.
+        if (isUnit() && (getUnitType() == BWAPI::UnitTypes::Zerg_Sunken_Colony || getUnitType() == BWAPI::UnitTypes::Zerg_Spore_Colony))
+        {
+            return BWAPI::UnitTypes::Zerg_Drone;
+        }
+
         return _unitType.whatBuilds().first;
     }
     if (isTech())
@@ -506,23 +519,17 @@ bool MacroAct::isProducer(BWAPI::Unit unit) const
 {
     BWAPI::UnitType producerType = whatBuilds();
 
-    if (producerType != unit->getType()) { return false; }
-
-    // TODO Due to a BWAPI 4.1.2 bug, lair research can't be done in a hive.
-    //      Also spire upgrades can't be done in a greater spire.
-    //      The bug is fixed in the next version, 4.2.0.
-    //      When switching to a fixed version, change the above line to the following:
-    // If the producerType is a lair, a hive will do as well.
+    // If the producerType is a lair, a hive will do as well. Ditto spire and greater spire.
     // Note: Burrow research in a hatchery can also be done in a lair or hive, but we rarely want to.
     // Ignore the possibility so that we don't accidentally waste lair time.
-    //if (!(
-    //	producerType == unit->getType() ||
-    //	producerType == BWAPI::UnitTypes::Zerg_Lair && unit->getType() == BWAPI::UnitTypes::Zerg_Hive ||
-    //  producerType == BWAPI::UnitTypes::Zerg_Spire && unit->getType() == BWAPI::UnitTypes::Zerg_Greater_Spire
-    //	))
-    //{
-    //	return false;
-    //}
+    if (!(
+    	producerType == unit->getType() ||
+    	producerType == BWAPI::UnitTypes::Zerg_Lair && unit->getType() == BWAPI::UnitTypes::Zerg_Hive ||
+        producerType == BWAPI::UnitTypes::Zerg_Spire && unit->getType() == BWAPI::UnitTypes::Zerg_Greater_Spire
+    	))
+    {
+    	return false;
+    }
 
     if (!unit->isCompleted())  { return false; }
     if (unit->isTraining())    { return false; }
@@ -620,7 +627,7 @@ bool MacroAct::hasPotentialProducer() const
 		// A producer is good if it is the right type and doesn't suffer from
 		// any condition that makes it unable to produce for a long time.
 		// Producing something else only makes it busy for a short time,
-		// but research takes a long time.
+		// except that research takes a long time.
 		if (unit->getType() == producerType &&
 			unit->isPowered() &&     // replacing a pylon is a separate queue item
 			!unit->isLifted() &&     // lifting/landing a building will be a separate queue item when implemented
@@ -679,7 +686,7 @@ bool MacroAct::canProduce(BWAPI::Unit producer) const
 {
     if (isCommand())
     {
-        // NOTE Not always correct for an extractor trick.
+        // NOTE Not always correct for an extractor trick (it may execute but do nothing).
         return true;
     }
 
@@ -689,6 +696,12 @@ bool MacroAct::canProduce(BWAPI::Unit producer) const
     {
         if (isUnit())
         {
+            // Special case for sunks and spores, which are built from drones by Building Manager.
+            if (getUnitType() == BWAPI::UnitTypes::Zerg_Sunken_Colony || getUnitType() == BWAPI::UnitTypes::Zerg_Spore_Colony)
+            {
+                return BWAPI::Broodwar->canMake(BWAPI::UnitTypes::Zerg_Creep_Colony, producer);
+            }
+
             return BWAPI::Broodwar->canMake(getUnitType(), producer);
         }
         if (isTech())
@@ -716,10 +729,10 @@ void MacroAct::produce(BWAPI::Unit producer) const
 	{
 		the.micro.Make(producer, getUnitType());
 	}
-	// A building other than a morphed zerg building.
-	else if (isBuilding()                                   // implies isUnit()
-		&& !UnitUtil::IsMorphedBuildingType(getUnitType())) // not morphed from another zerg building
-	{
+	// A building that the building manager is responsible for.
+    // The building manager handles sunkens and spores.
+	else if (isBuilding() && UnitUtil::NeedsWorkerBuildingType(getUnitType()))
+    {
         BWAPI::TilePosition desiredPosition = the.placer.getMacroLocationTile(getMacroLocation());
         BuildingManager::Instance().addBuildingTask(*this, desiredPosition, producer, isGasSteal());
 	}

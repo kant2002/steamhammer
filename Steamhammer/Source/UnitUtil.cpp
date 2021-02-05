@@ -39,6 +39,18 @@ bool UnitUtil::IsMorphedBuildingType(BWAPI::UnitType type)
 		type == BWAPI::UnitTypes::Zerg_Greater_Spire;
 }
 
+// We need to assign a worker to construct these buildings types. Only call for buildings.
+// An ordered sunken or spore is constructed from scratch starting with a drone.
+// Other zerg morphed buildings are morphed from existing buildings.
+bool UnitUtil::NeedsWorkerBuildingType(BWAPI::UnitType type)
+{
+    return
+        !type.isAddon() &&
+        type != BWAPI::UnitTypes::Zerg_Lair &&
+        type != BWAPI::UnitTypes::Zerg_Hive &&
+        type != BWAPI::UnitTypes::Zerg_Greater_Spire;
+}
+
 // Zerg unit morphed from another, not spawned from a larva.
 bool UnitUtil::IsMorphedUnitType(BWAPI::UnitType type)
 {

@@ -12,7 +12,7 @@ namespace Config
     {
         bool ConfigFileFound                = false;
         bool ConfigFileParsed               = false;
-        std::string ConfigFileLocation      = "bwapi-data/AI/Steamhammer_3.3.json";
+        std::string ConfigFileLocation      = "bwapi-data/AI/Steamhammer_3.3.5.json";
     }
 
 	namespace IO
@@ -42,6 +42,7 @@ namespace Config
         bool Burrow                         = true;
         int MaxQueens                       = 0;
         int MaxInfestedTerrans              = 0;
+        int MaxDefilers                     = 0;
     }
 
 	namespace Strategy
@@ -103,6 +104,7 @@ namespace Config
 		bool DrawMicroState					= false;
         bool DrawSquadInfo                  = false;
 		bool DrawClusters					= false;
+        bool DrawDefenseClusters			= false;
         bool DrawResourceAmounts            = false;
 
         BWAPI::Color ColorLineTarget        = BWAPI::Colors::White;

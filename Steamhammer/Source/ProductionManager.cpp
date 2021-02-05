@@ -457,7 +457,7 @@ void ProductionManager::maybeReorderQueue()
 // Return null if no producer is found.
 BWAPI::Unit ProductionManager::getProducer(MacroAct act) const
 {
-    if (act.isBuilding() && !UnitUtil::IsMorphedBuildingType(act.getUnitType()))
+    if (act.isBuilding() && UnitUtil::NeedsWorkerBuildingType(act.getUnitType()))
     {
         if (_assignedWorkerForThisBuilding)
         {
@@ -488,8 +488,7 @@ BWAPI::Unit ProductionManager::getProducer(MacroAct act) const
         // We can produce from anywhere. But try the best places first when we can tell.
 
         // If we're producing from a larva, seek an appropriate one.
-        if (act.isUnit() &&
-            act.getUnitType().whatBuilds().first == BWAPI::UnitTypes::Zerg_Larva)
+        if (act.isUnit() && act.whatBuilds() == BWAPI::UnitTypes::Zerg_Larva)
         {
             return getBestLarva(act, candidateProducers);
         }
@@ -982,7 +981,7 @@ void ProductionManager::drawProductionInformation(int x, int y)
 		BWAPI::Broodwar->drawTextScreen(x, y, " %cgoal %c%s", white, orange, NiceMacroActName(goal.act.getName()).c_str());
 	}
 
-	for (const auto & unit : prod)
+	for (BWAPI::Unit unit : prod)
     {
 		y += 10;
 
@@ -1182,8 +1181,7 @@ bool ProductionManager::nextIsBuilding() const
 
 	return
 		next.isBuilding() &&
-		!next.getUnitType().isAddon() &&
-		!UnitUtil::IsMorphedBuildingType(next.getUnitType());
+		UnitUtil::NeedsWorkerBuildingType(next.getUnitType());
 }
 
 // We have finished our book line, or are breaking out of it early.

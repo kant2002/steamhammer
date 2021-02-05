@@ -31,6 +31,7 @@ class ScoutManager
 
 	void				setScoutTargets();
 
+    bool                friendlyUnitNear(BWAPI::Unit unit) const;
 	bool                enemyWorkerInRadius();
     bool                gasSteal();
 	BWAPI::Unit			getAnyEnemyGeyser() const;

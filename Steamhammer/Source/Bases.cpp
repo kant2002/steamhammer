@@ -863,12 +863,14 @@ BWAPI::TilePosition Bases::frontTile() const
 }
 
 // The given position is reachable by ground from our starting base.
+// The caller must ensure that the position passed in is valid.
 bool Bases::connectedToStart(const BWAPI::Position & pos) const
 {
 	return the.partitions.id(pos) == the.partitions.id(startingBase->getTilePosition());
 }
 
 // The given tile is reachable by ground from our starting base.
+// The caller must ensure that the position passed in is valid.
 bool Bases::connectedToStart(const BWAPI::TilePosition & tile) const
 {
 	return the.partitions.id(tile) == the.partitions.id(startingBase->getTilePosition());

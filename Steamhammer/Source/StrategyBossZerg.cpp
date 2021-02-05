@@ -46,6 +46,7 @@ StrategyBossZerg::StrategyBossZerg()
     , _recommendBroodling(0)
     , _recommendQueens(0)
     , _recommendSunkens(false)
+    , _recommendSpores(0)
 {
 	resetTechScores();
 	setUnitMix(BWAPI::UnitTypes::Zerg_Drone, BWAPI::UnitTypes::None);
@@ -342,8 +343,6 @@ bool StrategyBossZerg::enemyIsAllAir() const
         // NOTE A floating command center does not establish a base.
         return false;
     }
-
-    // TODO check for comsat scan - the.info.getEnemyScans().empty()
 
     for (const auto & kv : the.info.getUnitData(_enemy).getUnits())
     {
@@ -936,13 +935,11 @@ bool StrategyBossZerg::nextInQueueIsUseless(BuildOrderQueue & queue) const
 		}
 		if (nextInQueue == BWAPI::UnitTypes::Zerg_Sunken_Colony)
 		{
-			return !hasPool && the.my.all.count(BWAPI::UnitTypes::Zerg_Spawning_Pool) == 0 ||
-				the.my.all.count(BWAPI::UnitTypes::Zerg_Creep_Colony) == 0 && !isBeingBuilt(BWAPI::UnitTypes::Zerg_Creep_Colony);
+			return !hasPool && the.my.all.count(BWAPI::UnitTypes::Zerg_Spawning_Pool) == 0 && !isBeingBuilt(BWAPI::UnitTypes::Zerg_Spawning_Pool);
 		}
 		if (nextInQueue == BWAPI::UnitTypes::Zerg_Spore_Colony)
 		{
-			return nEvo == 0 && the.my.all.count(BWAPI::UnitTypes::Zerg_Evolution_Chamber) == 0 && !isBeingBuilt(BWAPI::UnitTypes::Zerg_Evolution_Chamber) ||
-				the.my.all.count(BWAPI::UnitTypes::Zerg_Creep_Colony) == 0 && !isBeingBuilt(BWAPI::UnitTypes::Zerg_Creep_Colony);
+			return nEvo == 0 && the.my.all.count(BWAPI::UnitTypes::Zerg_Evolution_Chamber) == 0 && !isBeingBuilt(BWAPI::UnitTypes::Zerg_Evolution_Chamber);
 		}
 		if (nextInQueue == BWAPI::UnitTypes::Zerg_Extractor)
 		{
@@ -1312,13 +1309,12 @@ bool StrategyBossZerg::takeUrgentAction(BuildOrderQueue & queue)
 			nDrones >= 4)
 		{
 			if (plan != OpeningPlan::Proxy &&		// sunken is usually an overreaction to a proxy
-				nextInQueue != BWAPI::UnitTypes::Zerg_Creep_Colony &&
-				the.my.all.count(BWAPI::UnitTypes::Zerg_Creep_Colony) == 0 &&
-				!isBeingBuilt(BWAPI::UnitTypes::Zerg_Creep_Colony) &&
-				the.my.all.count(BWAPI::UnitTypes::Zerg_Sunken_Colony) == 0)
+				nextInQueue != BWAPI::UnitTypes::Zerg_Sunken_Colony &&
+				the.my.all.count(BWAPI::UnitTypes::Zerg_Sunken_Colony) == 0 &&
+				!isBeingBuilt(BWAPI::UnitTypes::Zerg_Sunken_Colony))
 			{
 				// BWAPI::Broodwar->printf("anti rush/proxy sunken");
-				queue.queueAsHighestPriority(MacroAct(BWAPI::UnitTypes::Zerg_Creep_Colony, MacroLocation::Front));
+				queue.queueAsHighestPriority(MacroAct(BWAPI::UnitTypes::Zerg_Sunken_Colony, MacroLocation::Front));
 				return true;
 			}
 		}
@@ -1482,12 +1478,11 @@ void StrategyBossZerg::makeUrgentReaction(BuildOrderQueue & queue)
 
     // Anti-bunker: If the enemy has bunkered one of our bases, maybe defend with a sunken.
     if (the.enemyRace() == BWAPI::Races::Terran &&
-        nextInQueue != BWAPI::UnitTypes::Zerg_Creep_Colony &&
-        the.my.all.count(BWAPI::UnitTypes::Zerg_Creep_Colony) == 0 &&
+        nextInQueue != BWAPI::UnitTypes::Zerg_Sunken_Colony &&
         the.my.all.count(BWAPI::UnitTypes::Zerg_Sunken_Colony) == the.my.completed.count(BWAPI::UnitTypes::Zerg_Sunken_Colony) &&
-        !isBeingBuilt(BWAPI::UnitTypes::Zerg_Creep_Colony) &&
+        !isBeingBuilt(BWAPI::UnitTypes::Zerg_Sunken_Colony) &&
         (hasPool || findRemainingBuildTime(BWAPI::UnitTypes::Zerg_Spawning_Pool) <= 324) &&
-        nDrones >= 4)
+        nDrones >= 5)
     {
         for (Base * base : the.bases.getAll())
         {
@@ -1500,7 +1495,7 @@ void StrategyBossZerg::makeUrgentReaction(BuildOrderQueue & queue)
                 if (bunkers.size() == 1)
                 {
                     BWAPI::Unit bunker = *bunkers.begin();
-                    // If we already made a sunken here, we're done. We checked above for creep colonies.
+                    // If we already made a sunken here, we're done.
                     if (nullptr == BWAPI::Broodwar->getClosestUnit(
                         bunker->getPosition(),
                         BWAPI::Filter::GetType == BWAPI::UnitTypes::Zerg_Sunken_Colony && BWAPI::Filter::GetPlayer == the.self(),
@@ -1510,7 +1505,7 @@ void StrategyBossZerg::makeUrgentReaction(BuildOrderQueue & queue)
                         if (tile.isValid())
                         {
                             // Post directly to building manager so we can control the position.
-                            MacroAct act(BWAPI::UnitTypes::Zerg_Creep_Colony);
+                            MacroAct act(BWAPI::UnitTypes::Zerg_Sunken_Colony);
                             BuildingManager::Instance().addBuildingTask(act, tile, nullptr, false);
                         }
                     }
@@ -1522,10 +1517,9 @@ void StrategyBossZerg::makeUrgentReaction(BuildOrderQueue & queue)
     // Anti-cannon: If the enemy has us cannoned, place one sunken to prevent a cannon push.
     // This is usually not a big hurry, so we can wait for the spawning pool if necessary.
     if (the.enemyRace() == BWAPI::Races::Protoss &&
-        nextInQueue != BWAPI::UnitTypes::Zerg_Creep_Colony &&
-        the.my.all.count(BWAPI::UnitTypes::Zerg_Creep_Colony) == 0 &&
+        nextInQueue != BWAPI::UnitTypes::Zerg_Sunken_Colony &&
         the.my.all.count(BWAPI::UnitTypes::Zerg_Sunken_Colony) == the.my.completed.count(BWAPI::UnitTypes::Zerg_Sunken_Colony) &&
-        !isBeingBuilt(BWAPI::UnitTypes::Zerg_Creep_Colony) &&
+        !isBeingBuilt(BWAPI::UnitTypes::Zerg_Sunken_Colony) &&
         hasPool &&
         nDrones >= 6)
     {
@@ -1542,14 +1536,14 @@ void StrategyBossZerg::makeUrgentReaction(BuildOrderQueue & queue)
                     BWAPI::TilePosition tile = the.placer.getAntiCannonSunkenPosition(base, cannon);
                     if (tile.isValid())
                     {
-                        // If we already made a sunken here, we're done. We checked above for creep colonies.
+                        // If we already made a sunken here, we're done.
                         if (nullptr == BWAPI::Broodwar->getClosestUnit(
                             TileCenter(tile),
                             BWAPI::Filter::GetType == BWAPI::UnitTypes::Zerg_Sunken_Colony && BWAPI::Filter::GetPlayer == the.self(),
                             8 * 32))
                         {
                             // Post directly to building manager so we can control the position.
-                            MacroAct act(BWAPI::UnitTypes::Zerg_Creep_Colony);
+                            MacroAct act(BWAPI::UnitTypes::Zerg_Sunken_Colony);
                             BuildingManager::Instance().addBuildingTask(act, tile, nullptr, false);
                         }
                     }
@@ -1595,9 +1589,9 @@ void StrategyBossZerg::makeUrgentReaction(BuildOrderQueue & queue)
 		WorkerManager::Instance().isCollectingGas() &&
 		gas > 300 &&
 		gas > 3 * _self->minerals() &&              // raw mineral count, not adjusted for building reserve
-		gas >= queueGas &&
-		nDrones <= maxDrones - nGasDrones &&        // no drones will become idle TODO this apparently doesn't work right
-		WorkerManager::Instance().getNumIdleWorkers() == 0) // no drones are already idle (redundant double-check)
+		gas >= queueGas) // &&
+		// nDrones <= maxDrones - nGasDrones &&        // no drones will become idle TODO this apparently doesn't work right
+		// WorkerManager::Instance().getNumIdleWorkers() == 0) // no drones are already idle (redundant double-check)
 	{
 		//BWAPI::Broodwar->printf("excess gas");
 		WorkerManager::Instance().setCollectGas(false);
@@ -1681,6 +1675,7 @@ void StrategyBossZerg::makeUrgentReaction(BuildOrderQueue & queue)
 		// And keep going.
 	}
 	
+    /*
 	// Auto-morph a creep colony into a sunken, if appropriate.
 	if (nDrones >= 3 &&
 		hasPool &&
@@ -1689,7 +1684,7 @@ void StrategyBossZerg::makeUrgentReaction(BuildOrderQueue & queue)
 	{
 		for (BWAPI::Unit unit : _self->getUnits())
 		{
-			if (unit->getType() == BWAPI::UnitTypes::Zerg_Creep_Colony &&
+			if (unit->getType() == BWAPI::UnitTypes::Zerg_Sunken_Colony &&
 				unit->isCompleted() &&
                 // Don't morph a sunken during an attack if it will end up weak.
                 (unit->getHitPoints() >= 140 || !_emergencyGroundDefense && !_emergencyNow))
@@ -1699,6 +1694,7 @@ void StrategyBossZerg::makeUrgentReaction(BuildOrderQueue & queue)
 			}
 		}
 	}
+    */
 
 	// We need a macro hatchery.
 	// Division of labor: Macro hatcheries are here, expansions are regular production.
@@ -1800,150 +1796,6 @@ void StrategyBossZerg::makeUrgentReaction(BuildOrderQueue & queue)
         }
     }
 
-	// If the enemy has overlord hunters such as corsairs, prepare appropriately.
-    // We make up to two spores and no more, so if we already have that many, we're done.
-	if (the.info.enemyHasOverlordHunters() && nSpores < 2)
-	{
-		// Do we want spores, and if so, how many and where?
-		int sporesWanted = 0;
-		// For ZvT and ZvZ.
-        MacroLocation spore1 = MacroLocation::Main;
-		MacroLocation spore2 = MacroLocation::Main;
-        const bool hasNatural =
-            the.bases.myNatural() &&
-            the.bases.myNatural()->getOwner() == _self &&
-            the.bases.myNatural()->isCompleted();
-        if (hasNatural)
-        {
-            spore2 = MacroLocation::Natural;
-
-            Base * enemyStart = the.bases.enemyStart();
-            if (enemyStart)
-            {
-                // We know where the enemy is. Put the first spore in the natural if it is significantly closer.
-                int mainDist = the.bases.myMain()->getPosition().getApproxDistance(enemyStart->getPosition());
-                int natDist = the.bases.myNatural()->getPosition().getApproxDistance(enemyStart->getPosition());
-                if (natDist + 8 * 32 < mainDist)
-                {
-                    spore1 = MacroLocation::Natural;
-                    spore2 = MacroLocation::Main;
-                }
-            }
-        }
-		if (_enemyRace == BWAPI::Races::Terran)
-		{
-			// Don't count battlecruisers. A spore is not strong defense against them.
-			int enemyAir =
-                the.your.seen.count(BWAPI::UnitTypes::Terran_Wraith) +
-                the.your.seen.count(BWAPI::UnitTypes::Terran_Valkyrie);
-			if (nBases > 1 && (enemyAir >= 3 && !hasGreaterSpire || enemyAir >= 6))
-			{
-				sporesWanted = 2;
-			}
-			else if (enemyAir > 0 && !hasSpire || enemyAir >= 3)
-			{
-				sporesWanted = 1;
-			}
-		}
-		else if (_enemyRace == BWAPI::Races::Protoss)
-		{
-			// Natural first for ZvP, to help defend against dark templar.
-			spore1 = hasNatural ? MacroLocation::Natural : MacroLocation::Main;
-			spore2 = MacroLocation::Main;
-			int enemyAir =
-				the.your.seen.count(BWAPI::UnitTypes::Protoss_Corsair) +
-                3 * the.your.seen.count(BWAPI::UnitTypes::Protoss_Scout);
-            if (nBases > 1 && (enemyAir >= 3 && !hasGreaterSpire || enemyAir >= 6))
-			{
-				sporesWanted = 2;
-			}
-			else if (enemyAir > 0 && !hasSpire || enemyAir >= 4)
-			{
-				sporesWanted = 1;
-			}
-		}
-		else
-		{
-			// ZvZ
-			const int enemyMutas =
-                the.your.seen.count(BWAPI::UnitTypes::Zerg_Mutalisk);
-            // When did, or will, the enemy spire finish? If before now, pretend it is now.
-            const int enemySpireTime = std::max(the.now(), the.info.getEnemyBuildingTiming(BWAPI::UnitTypes::Zerg_Spire));
-            if (enemyMutas > nMutas || getOurSpireTiming() > enemySpireTime + 30 * 24)
-			{
-                //BWAPI::Broodwar->printf("our spire %d versus theirs %d", getOurSpireTiming(), enemySpireTime);
-                sporesWanted = nBases > 1 ? 2 : 1;
-			}
-            //BWAPI::Broodwar->printf("%d vs %d : sporesWanted %d -> %d", nMutas, enemyMutas, sporesWanted, nSpores);
-        }
-
-		if (sporesWanted > nSpores)
-		{
-			if (nEvo > 0 && nDrones >= 9 &&
-				!queue.anyInQueue(BWAPI::UnitTypes::Zerg_Spore_Colony) &&
-				!isBeingBuilt(BWAPI::UnitTypes::Zerg_Spore_Colony))
-			{
-				if (sporesWanted == 2)
-				{
-					queue.queueAsHighestPriority(BWAPI::UnitTypes::Zerg_Spore_Colony);
-					queue.queueAsHighestPriority(MacroAct(BWAPI::UnitTypes::Zerg_Creep_Colony, spore2));
-					if (nSpores == 0)
-					{
-						if (nDrones == 9)
-						{
-							// If we're a little low on drones, replace 1 of the 2 to be used.
-							queue.queueAsHighestPriority(BWAPI::UnitTypes::Zerg_Drone);
-						}
-						queue.queueAsHighestPriority(BWAPI::UnitTypes::Zerg_Spore_Colony);
-						queue.queueAsHighestPriority(MacroAct(BWAPI::UnitTypes::Zerg_Creep_Colony, spore1));
-					}
-				}
-				else if (sporesWanted == 1 || sporesWanted == 2 && nSpores == 1)
-				{
-					queue.queueAsHighestPriority(BWAPI::UnitTypes::Zerg_Spore_Colony);
-					queue.queueAsHighestPriority(MacroAct(BWAPI::UnitTypes::Zerg_Creep_Colony, spore1));
-				}
-			}
-		}
-        
-		// Prepare the evo as soon as the enemy has the tech, so the spores can go up ASAP.
-        // In ZvZ, don't make an evo unless we expect to need it.
-		if (nEvo == 0 && nDrones >= 9 && hasPool &&
-            (_enemyRace != BWAPI::Races::Zerg || sporesWanted >= nSpores && sporesWanted > 0) &&
-			!queue.anyInQueue(BWAPI::UnitTypes::Zerg_Evolution_Chamber) &&
-			the.my.all.count(BWAPI::UnitTypes::Zerg_Evolution_Chamber) == 0 &&
-			!isBeingBuilt(BWAPI::UnitTypes::Zerg_Evolution_Chamber))
-		{
-			queue.queueAsHighestPriority(BWAPI::UnitTypes::Zerg_Evolution_Chamber);
-		}
-
-		// More stuff to do after the spores are underway.
-		if (sporesWanted <= nSpores || isBeingBuilt(BWAPI::UnitTypes::Zerg_Spore_Colony))
-		{
-			// Also put up a spire if possible.
-			if (!hasSpire && hasLairTech && outOfBook &&
-				nGas > 0 &&
-                (nDrones > 15 || the.enemyRace() == BWAPI::Races::Zerg && nDrones > 9) &&
-				!queue.anyInQueue(BWAPI::UnitTypes::Zerg_Spire) &&
-				the.my.all.count(BWAPI::UnitTypes::Zerg_Spire) == 0 &&
-				!isBeingBuilt(BWAPI::UnitTypes::Zerg_Spire))
-			{
-				queue.queueAsHighestPriority(BWAPI::UnitTypes::Zerg_Spire);
-			}
-			// Also consider overlord speed so overlords are harder to catch.
-			else if (hasLairOrHive &&
-				minerals >= 150 && gas >= 150 &&
-				_enemyRace != BWAPI::Races::Zerg &&
-				_self->getUpgradeLevel(BWAPI::UpgradeTypes::Pneumatized_Carapace) == 0 &&
-				!_self->isUpgrading(BWAPI::UpgradeTypes::Pneumatized_Carapace) &&
-				!queue.anyInQueue(BWAPI::UpgradeTypes::Pneumatized_Carapace) &&
-				(outOfBook || !queue.anyInQueue(BWAPI::UnitTypes::Zerg_Hive)))
-			{
-				queue.queueAsHighestPriority(BWAPI::UpgradeTypes::Pneumatized_Carapace);
-			}
-		}
-	}
-
 	// Minerals are building up as we wait for a gas unit. Insert a drone or a zergling.
 	if (minerals >= 350 &&  nLarvas > 1 && outOfBook &&
 		!queue.isEmpty() &&
@@ -1987,7 +1839,7 @@ bool StrategyBossZerg::adaptToEnemyOpeningPlan()
 
 	if (plan == OpeningPlan::WorkerRush || plan == OpeningPlan::Proxy || plan == OpeningPlan::FastRush)
 	{
-		// We react with 9 pool, or pool next if we have >= 9 drones, plus sunken.
+		// We react with 9 pool, or pool next if we have >= 9 drones.
 		// "Proxy" here means a proxy in our main base or natural in the opening.
 		// Part of the reaction is handled here, and part in takeUrgentAction().
 
@@ -2157,8 +2009,7 @@ void StrategyBossZerg::checkGroundDefenses(BuildOrderQueue & queue)
 		{
 			ourPower += u->getType().supplyRequired();
 		}
-		else if (u->getType() == BWAPI::UnitTypes::Zerg_Sunken_Colony ||
-			u->getType() == BWAPI::UnitTypes::Zerg_Creep_Colony)          // blindly assume it will be a sunken
+		else if (u->getType() == BWAPI::UnitTypes::Zerg_Sunken_Colony)
 		{
 			if (ourHatchery->getDistance(u) < 10 * 32)
 			{
@@ -2167,9 +2018,9 @@ void StrategyBossZerg::checkGroundDefenses(BuildOrderQueue & queue)
 		}
 	}
 
-	int queuedSunkens =			// without checking location, and blindly assuming creep = sunken
-		queue.numInQueue(BWAPI::UnitTypes::Zerg_Creep_Colony) +
-		BuildingManager::Instance().getNumUnstarted(BWAPI::UnitTypes::Zerg_Creep_Colony);
+	int queuedSunkens =			// without checking location
+		queue.numInQueue(BWAPI::UnitTypes::Zerg_Sunken_Colony) +
+		BuildingManager::Instance().getNumUnstarted(BWAPI::UnitTypes::Zerg_Sunken_Colony);
 	int totalSunkens = ourSunkens + queuedSunkens;
 	ourPower += 5 * totalSunkens;
 
@@ -2202,7 +2053,6 @@ void StrategyBossZerg::checkGroundDefenses(BuildOrderQueue & queue)
 		enemyMarines + enemyAcademyUnits > 0 &&
 		nextUnit != BWAPI::UnitTypes::Zerg_Spawning_Pool &&
 		nextUnit != BWAPI::UnitTypes::Zerg_Zergling &&
-		nextUnit != BWAPI::UnitTypes::Zerg_Creep_Colony &&
 		nextUnit != BWAPI::UnitTypes::Zerg_Sunken_Colony)
 	{
 		// Make zerglings and/or sunkens.
@@ -2222,12 +2072,11 @@ void StrategyBossZerg::checkGroundDefenses(BuildOrderQueue & queue)
 		// The nHatches term adjusts for what we may be able to build before they arrive.
 		const bool makeOne =
 			makeSunken ||
-			enemyPower > ourPower + 6 * nHatches && !_emergencyNow ||
-			(enemyVultures > 0 || enemyHasDrop) && totalSunkens == 0;
+			enemyPower > ourPower + 6 * nHatches && !_emergencyNow;
 		
 		const bool inProgress =
-			BuildingManager::Instance().getNumUnstarted(BWAPI::UnitTypes::Zerg_Creep_Colony) > 0 ||
-			the.my.all.count(BWAPI::UnitTypes::Zerg_Creep_Colony) > 0 ||
+			BuildingManager::Instance().getNumUnstarted(BWAPI::UnitTypes::Zerg_Sunken_Colony) > 0 ||
+			the.my.all.count(BWAPI::UnitTypes::Zerg_Sunken_Colony) > 0 ||
 			UnitUtil::GetUncompletedUnitCount(BWAPI::UnitTypes::Zerg_Sunken_Colony) > 0;
 
 		if (makeOne && !inProgress)
@@ -2238,7 +2087,7 @@ void StrategyBossZerg::checkGroundDefenses(BuildOrderQueue & queue)
 				// Only fill up the drone count if we're low.
 				queue.queueAsHighestPriority(BWAPI::UnitTypes::Zerg_Drone);
 			}
-			queue.queueAsHighestPriority(MacroAct(BWAPI::UnitTypes::Zerg_Creep_Colony, MacroLocation::Front));
+			queue.queueAsHighestPriority(MacroAct(BWAPI::UnitTypes::Zerg_Sunken_Colony, MacroLocation::Front));
 		}
 	}
 
@@ -2254,8 +2103,7 @@ void StrategyBossZerg::checkGroundDefenses(BuildOrderQueue & queue)
 	_emergencyNow = enemyPowerInOurFace > ourPower;
 }
 
-// Possibly add static defenses at various bases.
-bool StrategyBossZerg::buildStaticDefense()
+bool StrategyBossZerg::buildRecommendedSunkens()
 {
     if (!_recommendSunkens)
     {
@@ -2263,11 +2111,12 @@ bool StrategyBossZerg::buildStaticDefense()
     }
 
     // Build time of a creep colony is 300 frames. If the spawning pool will finish by then, it's OK.
-    if (nDrones <= 10 ||
+    const int droneLimit = the.enemyRace() == BWAPI::Races::Zerg ? 8 : 11;
+    if (nDrones < droneLimit ||
         !hasPool && findRemainingBuildTime(BWAPI::UnitTypes::Zerg_Spawning_Pool) > 300 ||
         the.my.all.count(BWAPI::UnitTypes::Zerg_Creep_Colony) > 0 ||
         the.my.all.count(BWAPI::UnitTypes::Zerg_Sunken_Colony) > the.my.completed.count(BWAPI::UnitTypes::Zerg_Sunken_Colony) ||
-        isBeingBuilt(BWAPI::UnitTypes::Zerg_Creep_Colony))
+        isBeingBuilt(BWAPI::UnitTypes::Zerg_Sunken_Colony))
     {
         return false;
     }
@@ -2291,7 +2140,7 @@ bool StrategyBossZerg::buildStaticDefense()
             if (sunks.empty())
             {
                 // Post directly to building manager so we can control the position in detail.
-                MacroAct act(BWAPI::UnitTypes::Zerg_Creep_Colony);
+                MacroAct act(BWAPI::UnitTypes::Zerg_Sunken_Colony);
                 BWAPI::TilePosition where = base->getTilePosition();    // place the sunk close, not forward
                 if (base->getMain())
                 {
@@ -2305,6 +2154,116 @@ bool StrategyBossZerg::buildStaticDefense()
     }
 
     return false;
+}
+
+// Ensure there is one spore per base, up to _recommendSpores different bases.
+bool StrategyBossZerg::buildRecommendedSpores()
+{
+    if (!_recommendSpores)
+    {
+        return false;
+    }
+
+    // First add an evolution chamber.
+    const int droneLimit = the.enemyRace() == BWAPI::Races::Zerg ? 9 : 13;
+    if (nEvo == 0 && nDrones >= droneLimit &&
+        the.my.all.count(BWAPI::UnitTypes::Zerg_Evolution_Chamber) == 0 &&
+        !isBeingBuilt(BWAPI::UnitTypes::Zerg_Evolution_Chamber))
+    {
+        BuildingManager::Instance().addBuildingTask(BWAPI::UnitTypes::Zerg_Evolution_Chamber, the.bases.myMain()->getTilePosition(), nullptr, false);
+        return true;
+    }
+
+    // Build time of a creep colony is 300 frames. If the evo will finish by then, it's OK.
+    if (nDrones < droneLimit ||
+        nEvo == 0 && findRemainingBuildTime(BWAPI::UnitTypes::Zerg_Evolution_Chamber) > 300 ||
+        the.my.all.count(BWAPI::UnitTypes::Zerg_Spore_Colony) > the.my.completed.count(BWAPI::UnitTypes::Zerg_Spore_Colony) ||
+        isBeingBuilt(BWAPI::UnitTypes::Zerg_Spore_Colony))
+    {
+        return false;
+    }
+
+    // First spore: vT and vZ, closest base to enemy; vP, natural.
+    // Second spore in the remaining base of main/natural.
+    // Remaining spores in remaining bases.
+    const bool hasNatural =
+        the.bases.myNatural() &&
+        the.bases.myNatural()->getOwner() == _self &&
+        the.bases.myNatural()->isCompleted();
+    Base * base1;
+    Base * base2;
+    if (_enemyRace == BWAPI::Races::Protoss)
+    {
+        // Natural first for ZvP, to help defend against dark templar.
+        base1 = hasNatural ? the.bases.myNatural() : the.bases.myMain();
+        base2 =  hasNatural ? the.bases.myMain() : nullptr;
+    }
+    else // ZvT or ZvZ
+    {
+        base1 = the.bases.myMain();
+        base2 = hasNatural ? the.bases.myNatural() : nullptr;
+
+        Base * enemyStart = the.bases.enemyStart();
+        if (hasNatural && enemyStart)
+        {
+            // We know where the enemy is. Put the first spore in the natural if it is significantly closer.
+            int mainDist = the.bases.myMain()->getCenter().getApproxDistance(enemyStart->getPosition());
+            int natDist = the.bases.myNatural()->getCenter().getApproxDistance(enemyStart->getPosition());
+            if (natDist + 8 * 32 < mainDist)
+            {
+                base1 = the.bases.myNatural();
+                base2 = the.bases.myMain();
+            }
+        }
+    }
+    
+    std::vector<Base *> bases;
+    bases.push_back(base1);
+    if (base2 && _recommendSpores >= 2)
+    {
+        bases.push_back(base2);
+    }
+
+    int nWanted = _recommendSpores;
+
+    for (Base * base : bases)
+    {
+        if (base->getOwner() == the.self() &&
+            base->getDepot() &&
+            base->getDepot()->isCompleted())
+        {
+            BWAPI::Unitset spores = BWAPI::Broodwar->getUnitsInRadius(
+                base->getCenter(),
+                7 * 32,
+                BWAPI::Filter::GetType == BWAPI::UnitTypes::Zerg_Spore_Colony && BWAPI::Filter::GetPlayer == the.self()
+            );
+            if (spores.empty())
+            {
+                // Post directly to building manager so we can control the position in detail.
+                MacroAct act(BWAPI::UnitTypes::Zerg_Spore_Colony);
+                BWAPI::TilePosition where = base->getTilePosition();    // place the spore close, not forward
+                BuildingManager::Instance().addBuildingTask(act, where, nullptr, false);
+                return true;
+            }
+            else
+            {
+                --nWanted;
+                if (nWanted <= 0)
+                {
+                    break;
+                }
+
+            }
+        }
+    }
+
+    return false;
+}
+
+// Possibly add static defenses at various bases.
+bool StrategyBossZerg::buildStaticDefense()
+{
+    return buildRecommendedSunkens() || buildRecommendedSpores();
 }
 
 // If the enemy expanded or made static defense, we can spawn extra drones.
@@ -2539,6 +2498,21 @@ void StrategyBossZerg::recommendTech()
         _recommendSunkens =
             the.your.ever.count(BWAPI::UnitTypes::Terran_Vulture) > 0 ||    // assume vultures will keep coming
             the.your.seen.count(BWAPI::UnitTypes::Terran_Dropship) > 0;     // assume dropships may give up
+
+        _recommendSpores = 0;
+        // Don't count battlecruisers. A spore is not strong defense against them.
+        int enemyAir =
+            the.your.seen.count(BWAPI::UnitTypes::Terran_Wraith) +
+            the.your.seen.count(BWAPI::UnitTypes::Terran_Valkyrie);
+        if (nBases > 1 && (enemyAir >= 3 && !hasGreaterSpire || enemyAir >= 6))
+        {
+            _recommendSpores = 2;
+        }
+        else if (enemyAir > 0 && !hasSpire || enemyAir >= 3)
+        {
+            _recommendSpores = 1;
+        }
+
     }
     else if (_enemyRace == BWAPI::Races::Protoss)
     {
@@ -2563,6 +2537,20 @@ void StrategyBossZerg::recommendTech()
             the.your.seen.count(BWAPI::UnitTypes::Protoss_Dark_Templar) > 0 ||
             // If there was once a shuttle and reaver and there's still a shuttle, expect another reaver.
             the.your.seen.count(BWAPI::UnitTypes::Protoss_Shuttle) > 0 && the.your.ever.count(BWAPI::UnitTypes::Protoss_Reaver) > 0;
+
+        _recommendSpores = 0;
+        int enemyAir =
+            the.your.seen.count(BWAPI::UnitTypes::Protoss_Corsair) +
+            3 * the.your.seen.count(BWAPI::UnitTypes::Protoss_Scout);
+        if (nBases > 1 && (enemyAir >= 3 && !hasGreaterSpire || enemyAir >= 6))
+        {
+            _recommendSpores = 2;
+        }
+        else if (enemyAir > 0 && !hasSpire || enemyAir >= 3)
+        {
+            _recommendSpores = 1;
+        }
+
     }
     else
     {
@@ -2575,11 +2563,22 @@ void StrategyBossZerg::recommendTech()
             the.your.seen.count(BWAPI::UnitTypes::Zerg_Hydralisk) > 16)
                 ? 1 : 0;
         _recommendBroodling =
-            the.your.seen.count(BWAPI::UnitTypes::Zerg_Lurker) / 5 +
+            the.your.seen.count(BWAPI::UnitTypes::Zerg_Lurker) / 4 +
             the.your.seen.count(BWAPI::UnitTypes::Zerg_Defiler) / 2 +
             the.your.seen.count(BWAPI::UnitTypes::Zerg_Ultralisk);
 
         _recommendSunkens = false;
+
+        _recommendSpores = 0;
+        const int enemyMutas = the.your.seen.count(BWAPI::UnitTypes::Zerg_Mutalisk);
+
+        // When did, or will, the enemy spire finish? If before now, pretend it is now.
+        const int enemySpireTime = std::max(the.now(), the.info.getEnemyBuildingTiming(BWAPI::UnitTypes::Zerg_Spire));
+        if (enemyMutas > nMutas || getOurSpireTiming() > enemySpireTime + 30 * 24)
+        {
+            //BWAPI::Broodwar->printf("our spire %d versus theirs %d", getOurSpireTiming(), enemySpireTime);
+            _recommendSpores = 2;
+        }
     }
 
     // Queen counts.
@@ -2597,6 +2596,17 @@ void StrategyBossZerg::recommendTech()
         Config::Skills::MaxQueens,
         std::max({ _recommendParasite, _recommendEnsnare, _recommendBroodling })
     );
+
+    /*
+    static bool oldSunk = false;
+    static int oldSpore = 0;
+    if (_recommendSunkens != oldSunk || _recommendSpores != oldSpore)
+    {
+        BWAPI::Broodwar->printf("sunks %d spores %d", _recommendSunkens, _recommendSpores);
+        oldSunk = _recommendSunkens;
+        oldSpore = _recommendSpores;
+    }
+    */
 }
 
 void StrategyBossZerg::vProtossTechScores(const PlayerSnapshot & snap)
@@ -2905,7 +2915,8 @@ void StrategyBossZerg::vZergTechScores(const PlayerSnapshot & snap)
 
 		if (type == BWAPI::UnitTypes::Zerg_Sunken_Colony)
 		{
-			techScores[int(TechUnit::Mutalisks)] += count * 2;
+            techScores[int(TechUnit::Zerglings)] -= count;
+            techScores[int(TechUnit::Mutalisks)] += count * 2;
 			techScores[int(TechUnit::Ultralisks)] += count * 2;
 			techScores[int(TechUnit::Guardians)] += count;
 		}
@@ -2941,7 +2952,8 @@ void StrategyBossZerg::vZergTechScores(const PlayerSnapshot & snap)
 		}
 		else if (type == BWAPI::UnitTypes::Zerg_Scourge)
 		{
-			techScores[int(TechUnit::Ultralisks)] += count;
+            techScores[int(TechUnit::Zerglings)] += count;
+            techScores[int(TechUnit::Ultralisks)] += count;
 			techScores[int(TechUnit::Guardians)] -= count * 2;
 			techScores[int(TechUnit::Devourers)] -= count * 2;
 		}
@@ -2949,7 +2961,7 @@ void StrategyBossZerg::vZergTechScores(const PlayerSnapshot & snap)
 		{
 			techScores[int(TechUnit::Lurkers)] -= count * 2;
 			techScores[int(TechUnit::Mutalisks)] += count * 2;
-			techScores[int(TechUnit::Devourers)] += count * 2;
+			techScores[int(TechUnit::Devourers)] += count;
 		}
 		else if (type == BWAPI::UnitTypes::Zerg_Devourer)
 		{
@@ -3693,8 +3705,8 @@ void StrategyBossZerg::produceOtherStuff(int & mineralsLeft, int & gasLeft, bool
 
     // Make a spire. Make it earlier in ZvZ.
     if (!hasSpire && hasLairTech && nGas > 0 &&
-        (_recommendDefensiveSpire || airTechUnit(_techTarget)) &&
-        (_recommendDefensiveSpire || !hiveTechUnit(_techTarget) || the.my.all.count(BWAPI::UnitTypes::Zerg_Hive) > 0) &&
+        (_recommendDefensiveSpire || _recommendSpores || airTechUnit(_techTarget)) &&
+        (_recommendDefensiveSpire || _recommendSpores || !hiveTechUnit(_techTarget) || the.my.all.count(BWAPI::UnitTypes::Zerg_Hive) > 0) &&
         (nDrones >= 13 || _enemyRace == BWAPI::Races::Zerg && nDrones >= 9) &&
         hasEnoughUnits &&
         (!_emergencyGroundDefense || gasLeft >= 75) &&
@@ -3772,6 +3784,7 @@ void StrategyBossZerg::produceOtherStuff(int & mineralsLeft, int & gasLeft, bool
     // Wait until pneumatized carapace is done (except versus zerg, when we don't get that),
     // because the bot has often been getting a queen's nest too early.
     if (!hasQueensNest && hasLairTech && nGas >= 2 && nDrones >= 24 &&
+        (!hasHiveTech || _recommendQueens) &&
         !_emergencyGroundDefense && hasEnoughUnits &&
 
         (hiveTechUnit(_techTarget) ||
@@ -4109,6 +4122,7 @@ void StrategyBossZerg::produceOtherStuff(int & mineralsLeft, int & gasLeft, bool
     if (Config::Skills::MaxQueens > 0 &&
         hasQueensNest && nQueens < _recommendQueens &&
         nDrones >= 20 + 4 * nQueens &&
+        nGas >= 2 &&
         // Not if we're short of other units.
         !_emergencyGroundDefense && !_emergencyNow && enoughArmy() &&
         // Not if the enemy is apparently on their last legs.
@@ -4118,10 +4132,15 @@ void StrategyBossZerg::produceOtherStuff(int & mineralsLeft, int & gasLeft, bool
         // (If we never had a queen, _lastQueenAliveFrame is 0 and the check is "is the game long enough?")
         (_recommendEnsnare || the.now() - _lastQueenAliveFrame > 3 * 60 * 24))
     {
-        produce(BWAPI::UnitTypes::Zerg_Queen);
-        mineralsLeft -= 100;
-        gasLeft -= 100;
-        nLarvas -= 1;
+        int nToMake = _recommendQueens - nQueens;
+        while (nToMake > 0 && mineralsLeft > 0 && gasLeft > 0 && nLarvas > 0)
+        {
+            produce(BWAPI::UnitTypes::Zerg_Queen);
+            nToMake -= 1;
+            mineralsLeft -= 100;
+            gasLeft -= 100;
+            nLarvas -= 1;
+        }
     }
 
     // Possibly make an infested terran.
@@ -4143,6 +4162,7 @@ void StrategyBossZerg::produceOtherStuff(int & mineralsLeft, int & gasLeft, bool
     // Add them later if the defilerScore is negative--currently, only terran sets it other than 0.
     // Get defilers and consume even if we are in a state of emergency. We need defilers then!
     if (hasHiveTech &&
+        Config::Skills::MaxDefilers > 0 &&
         ( defilerScore >= 16 && nDrones >= 18 && nGas >= 1 ||
           defilerScore >=  0 && nDrones >= 35 && nGas >= 2 ||
           hasUltraUps        && nDrones >= 60 && nGas >= 4) &&
@@ -4188,14 +4208,23 @@ void StrategyBossZerg::produceOtherStuff(int & mineralsLeft, int & gasLeft, bool
 		}
 	}
 
-	// Make only one defiler. Defiler micro is computationally expensive.
+	// Not too many defilers. Defiler micro is computationally expensive.
 	// Special case: Treat defilers as if they were tech, not units.
-	if (hasDefilerUps && nDefilers == 0 && !_emergencyGroundDefense && nGas >= 2)
+	if (hasDefilerUps && nDefilers < Config::Skills::MaxDefilers && nGas >= 1)
 	{
-		produce(BWAPI::UnitTypes::Zerg_Defiler);
-        mineralsLeft -= 50;
-		gasLeft -= 150;
-		nLarvas -= 1;
+        int limit = std::min(Config::Skills::MaxDefilers, nGas);
+        if (!_self->hasResearched(BWAPI::TechTypes::Consume) || _enemySeemsToBeDead)
+        {
+            limit = 1;
+        }
+        if (nDefilers < limit)
+        {
+            // One at a time.
+            produce(BWAPI::UnitTypes::Zerg_Defiler);
+            mineralsLeft -= 50;
+            gasLeft -= 150;
+            nLarvas -= 1;
+        }
 	}
 }
 
@@ -4270,12 +4299,12 @@ void StrategyBossZerg::drawStrategyBossInformation()
 		if (_auxUnit != BWAPI::UnitTypes::None)
 		{
 			y += 10;
-			BWAPI::Broodwar->drawTextScreen(x, y, "%c%d%c %s", cyan, _auxUnitCount, green, UnitTypeName(_auxUnit).c_str());
+			BWAPI::Broodwar->drawTextScreen(x, y, "%c%d/%d%c %s", cyan, the.my.all.count(_auxUnit), _auxUnitCount, green, UnitTypeName(_auxUnit).c_str());
 		}
         if (_recommendQueens)
         {
             y += 10;
-            BWAPI::Broodwar->drawTextScreen(x, y, "%c%d%c Queen%s", cyan, _recommendQueens, green, _recommendQueens == 1 ? "" : "s");
+            BWAPI::Broodwar->drawTextScreen(x, y, "%c%d/%d%c Queen%s", cyan, nQueens, _recommendQueens, green, _recommendQueens == 1 ? "" : "s");
         }
         if (_techTarget != TechUnit::None)
 		{

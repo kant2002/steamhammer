@@ -315,7 +315,7 @@ bool Micro::alreadyCommanded(BWAPI::Unit unit) const
 	return (*it).second.getOrderFrame() >= the.now();
 }
 
-// Is the given unit in danger of enemy weapons fire, with the given safety margin?
+// Is the given unit in danger of enemy weapons fire, with the given safety margin (in pixels)?
 // If so, return the nearest enemy that puts the unit in danger.
 // NOTE The check is quick and dirty, not exact. It will make mistakes.
 BWAPI::Unit Micro::inWeaponsDanger(BWAPI::Unit unit, int margin) const
@@ -757,9 +757,45 @@ bool Micro::MoveSafely(BWAPI::Unit unit, const BWAPI::Position & destination)
         return false;
     }
 
-    BWAPI::Unit enemy = inWeaponsDanger(unit, 0);
+    int margin = 32;
+    if (unit->getType().isWorker() || !UnitUtil::TypeCanAttack(unit->getType()))
+    {
+        margin = 64;
+    }
+
+    BWAPI::Unit enemy = inWeaponsDanger(unit, margin);
     if (enemy)
     {
+        if (!enemy->getType().isBuilding())
+        {
+            // Look for friendly nearby units that we can flee toward.
+            const std::vector<UnitCluster> & defenders =
+                enemy->isFlying() ? the.ops.getAirDefenseClusters() : the.ops.getGroundDefenseClusters();
+            const UnitCluster * bestCluster = nullptr;
+            int lowestScore = 5 * 24;
+            for (const UnitCluster & cluster : defenders)
+            {
+                // Time in frames for each unit to reach the cluster.
+                // The times may be negative if the unit is already inside the cluster's radius.
+                int friendTime = int((unit->getDistance(cluster.center) - cluster.radius) / (the.self()->topSpeed(unit->getType())));
+                int enemyTime = int((enemy->getDistance(cluster.center) - cluster.radius) / (the.enemy()->topSpeed(enemy->getType())));
+                int enemyTimeClipped = std::max(0, enemyTime);  // OK if enemy is deeper inside
+
+                int score = friendTime - enemyTimeClipped;
+                if (score < lowestScore)
+                {
+                    bestCluster = &cluster;
+                    lowestScore = score;
+                }
+            }
+            if (bestCluster)
+            {
+                MoveNear(unit, bestCluster->center);
+                return true;
+            }
+        }
+
+        // No nearby units to flee toward. Flee away from the enemy instead.
         fleeEnemy(unit, enemy);
         return true;
     }

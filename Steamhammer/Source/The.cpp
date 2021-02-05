@@ -64,4 +64,6 @@ void The::update()
 		groundAttacks.update();
 		airAttacks.update();
 	}
+
+ //   ops.update();
 }

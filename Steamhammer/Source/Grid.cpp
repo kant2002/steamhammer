@@ -24,10 +24,10 @@ int Grid::get(int x, int y) const
 		"bad at(%d,%d) limit(%d,%d) size %dx%d", x, y, width, height, grid.size(), grid[0].size());
 
     // TODO temporary for testing
-    if (!(grid.size() == width && width > 0 && grid[0].size() == height && height > 0 && x >= 0 && y >= 0 && x < width && y < height))
-    {
-        return -1;
-    }
+    //if (!(grid.size() == width && width > 0 && grid[0].size() == height && height > 0 && x >= 0 && y >= 0 && x < width && y < height))
+    //{
+    //    return -1;
+    //}
     // TODO end
 
     return grid[x][y];

@@ -167,6 +167,17 @@ void ScoutManager::update()
 		releaseWorkerScout();
 	}
 
+    // Release the worker if it can no longer help: Enemy has combat units to chase it,
+    // we have combat units to keep watch.
+    if (_workerScout &&
+        the.bases.enemyStart() &&
+        _workerScout->getDistance(the.bases.enemyStart()->getCenter()) < 40 * 32 &&
+        the.info.enemyHasCombatUnits() &&
+        friendlyUnitNear(_workerScout))
+    {
+        releaseWorkerScout();
+    }
+
 	// Do the actual scouting. Also steal gas if called for.
 	setScoutTargets();
 	if (_workerScout)
@@ -664,6 +675,17 @@ BWAPI::Unit ScoutManager::getTheEnemyGeyser() const
 	}
 
 	return nullptr;
+}
+
+// Is a friendly combat unit nearby?
+bool ScoutManager::friendlyUnitNear(BWAPI::Unit unit) const
+{
+    return
+        BWAPI::Broodwar->getClosestUnit(
+            unit->getPosition(),
+            BWAPI::Filter::CanAttack && BWAPI::Filter::GetPlayer == the.self() && !BWAPI::Filter::IsWorker,
+            6 * 32
+        ) != nullptr;
 }
 
 bool ScoutManager::enemyWorkerInRadius()

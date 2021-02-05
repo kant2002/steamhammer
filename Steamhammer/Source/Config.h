@@ -46,6 +46,7 @@ namespace Config
         extern bool Burrow;
         extern int MaxQueens;
         extern int MaxInfestedTerrans;
+        extern int MaxDefilers;
     }
 
 	namespace Strategy
@@ -94,7 +95,8 @@ namespace Config
 		extern bool DrawStrategyBossInfo;
 		extern bool DrawSquadInfo;
 		extern bool DrawClusters;
-		extern bool DrawWorkerInfo;
+        extern bool DrawDefenseClusters;
+        extern bool DrawWorkerInfo;
         extern bool DrawBuildingInfo;
 		extern bool DrawReservedBuildingTiles;
         extern bool DrawResourceAmounts;

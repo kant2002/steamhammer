@@ -464,9 +464,9 @@ void MicroDefilers::updateMovement(const UnitCluster & cluster, BWAPI::Unit vang
 			}
 		}
 
-		if (bestDefiler && zergling->getDistance(bestDefiler) >= 32)
+		if (bestDefiler && zergling->getDistance(bestDefiler) > 32)
 		{
-			the.micro.Move(zergling, PredictMovement(bestDefiler, 8));
+			the.micro.MoveNear(zergling, PredictMovement(bestDefiler, 8));
             // BWAPI::Broodwar->printf("move food %d", zergling->getID());
 			// BWAPI::Broodwar->drawLineMap(bestDefiler->getPosition(), zergling->getPosition(), BWAPI::Colors::Yellow);
 		}
@@ -493,6 +493,7 @@ void MicroDefilers::updateSwarm(const UnitCluster & cluster)
             if (!maybeSwarm(defiler) && isReadyToCast(defiler))
             {
                 clearReadyToCast(defiler);
+                return;     // only one defiler may cast per call, to reduce duplication
             }
 		}
 	}
@@ -519,6 +520,7 @@ void MicroDefilers::updatePlague(const UnitCluster & cluster)
             if (!maybePlague(defiler) && isReadyToCast(defiler))
             {
                 clearReadyToCast(defiler);
+                return;     // only one defiler may cast per call, to reduce duplication
             }
 		}
 	}

@@ -1127,7 +1127,8 @@ bool InformationManager::enemyHasMobileDetection()
 		const UnitInfo & ui(kv.second);
 
 		if (ui.type == BWAPI::UnitTypes::Terran_Comsat_Station ||
-			ui.type == BWAPI::UnitTypes::Terran_Science_Facility ||
+            ui.type == BWAPI::UnitTypes::Spell_Scanner_Sweep ||
+            ui.type == BWAPI::UnitTypes::Terran_Science_Facility ||
 			ui.type == BWAPI::UnitTypes::Terran_Science_Vessel ||
 			ui.type == BWAPI::UnitTypes::Protoss_Observatory ||
 			ui.type == BWAPI::UnitTypes::Protoss_Observer)

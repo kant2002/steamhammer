@@ -46,6 +46,7 @@ class GameCommander
     void                drawUnitOrders();
     void                drawUnitCounts(int x, int y) const;
     void                drawTerrainHeights() const;
+    void                drawDefenseClusters();
 
 public:
 

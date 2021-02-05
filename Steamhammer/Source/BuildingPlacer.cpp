@@ -473,7 +473,9 @@ BWAPI::TilePosition BuildingPlacer::findGroupedLocation(const Building & b) cons
 		b.type == BWAPI::UnitTypes::Terran_Missile_Turret ||
 		b.type == BWAPI::UnitTypes::Protoss_Pylon ||
 		b.type == BWAPI::UnitTypes::Protoss_Photon_Cannon ||
-		b.type == BWAPI::UnitTypes::Zerg_Creep_Colony ||
+        b.type == BWAPI::UnitTypes::Zerg_Sunken_Colony ||
+        b.type == BWAPI::UnitTypes::Zerg_Spore_Colony ||
+        b.type == BWAPI::UnitTypes::Zerg_Creep_Colony ||
 		b.type == BWAPI::UnitTypes::Zerg_Hatchery)
 	{
 		return BWAPI::TilePositions::None;
@@ -843,9 +845,7 @@ BWAPI::TilePosition BuildingPlacer::getRefineryPosition() const
     int minGeyserDistanceFromHome = 100000;
 	BWAPI::Position homePosition = the.bases.myMain()->getPosition();
 
-	// NOTE In BWAPI 4.1.2 getStaticGeysers() has a bug affecting geysers whose refineries
-	// have been canceled or destroyed: They become inaccessible. https://github.com/bwapi/bwapi/issues/697
-	for (const auto geyser : BWAPI::Broodwar->getGeysers())
+	for (BWAPI::Unit geyser : BWAPI::Broodwar->getGeysers())
 	{
 		// Check to see if the geyser is near one of our depots.
 		for (BWAPI::Unit unit : the.self()->getUnits())
@@ -988,7 +988,7 @@ BWAPI::TilePosition BuildingPlacer::getProxyPosition(const Base * base) const
     }
     if (!tile.isValid())
     {
-        // In a far corner of th::ce enemy main.
+        // In a far corner of the enemy main.
         tile = getInBaseProxyPosition(base);
     }
 
@@ -1012,7 +1012,7 @@ BWAPI::TilePosition BuildingPlacer::getAntiBunkerSunkenPosition(const Base * bas
             BWAPI::TilePosition xy(x, y);
             if (xy.isValid())
             {
-                int dist = bunker->getDistance(BWAPI::Position(xy));
+                int dist = bunker->getDistance(BWAPI::Position(TileCenter(xy)));
                 if (dist > 5 * 32 &&        // sunken is out of bunker range
                     dist < 7 * 32 &&        // bunker is in sunken range
                     canBuildHere(xy, creep))
@@ -1050,7 +1050,7 @@ BWAPI::TilePosition BuildingPlacer::getAntiCannonSunkenPosition(const Base * bas
             BWAPI::TilePosition xy(x, y);
             if (xy.isValid())
             {
-                int dist = cannon->getDistance(BWAPI::Position(xy));
+                int dist = cannon->getDistance(BWAPI::Position(TileCenter(xy)));
                 if (dist < bestDist &&
                     dist >= 8 * 32 &&
                     canBuildHere(xy, creep))

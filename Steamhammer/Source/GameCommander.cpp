@@ -128,6 +128,7 @@ void GameCommander::drawDebugInterface()
 	BOSSManager::Instance().drawSearchInformation(490, 100);
 	the.map.drawHomeDistances();
     drawTerrainHeights();
+    drawDefenseClusters();
     
 	_combatCommander.drawSquadInformation(170, 70);
 	_combatCommander.drawCombatSimInformation();
@@ -327,6 +328,28 @@ void GameCommander::drawTerrainHeights() const
             BWAPI::Position pos(BWAPI::TilePosition(x, y));
             BWAPI::Broodwar->drawTextMap(pos + BWAPI::Position(12, 12), "%c%d", color, h);
         }
+    }
+}
+
+void GameCommander::drawDefenseClusters()
+{
+    if (!Config::Debug::DrawDefenseClusters)
+    {
+        return;
+    }
+
+    const std::vector<UnitCluster> & groundClusters = the.ops.getGroundDefenseClusters();
+
+    for (const UnitCluster & cluster : groundClusters)
+    {
+        cluster.draw(BWAPI::Colors::Brown, "vs ground");
+    }
+
+    const std::vector<UnitCluster> & airClusters = the.ops.getAirDefenseClusters();
+
+    for (const UnitCluster & cluster : airClusters)
+    {
+        cluster.draw(BWAPI::Colors::Grey, "vs air");
     }
 }
 
