@@ -71,12 +71,12 @@ void GameCommander::update()
 	BOSSManager::Instance().update(35 - _timerManager.getMilliseconds());
 	_timerManager.stopTimer(TimerManager::Search);
 
-    // May steal workers from WorkerManager, so run it first.
+    // May steal workers from WorkerManager, so run it before WorkerManager.
 	_timerManager.startTimer(TimerManager::Production);
 	ProductionManager::Instance().update();
 	_timerManager.stopTimer(TimerManager::Production);
 
-    // May steal workers from WorkerManager, so run it first.
+    // May steal workers from WorkerManager, so run it before WorkerManager.
 	_timerManager.startTimer(TimerManager::Building);
 	BuildingManager::Instance().update();
 	_timerManager.stopTimer(TimerManager::Building);

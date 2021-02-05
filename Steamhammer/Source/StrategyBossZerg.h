@@ -116,9 +116,10 @@ class StrategyBossZerg
 	bool hasNydus;		// at least one nydus canal, not necessarily completed
 
 	// hasLairTech means "can research stuff in the lair" (not "can research stuff that needs lair").
-	bool hasHiveTech;
-	bool hasLair;
-	bool hasLairTech;
+	bool hasHiveTech;   // completed hive
+	bool hasLair;       // completed lair
+	bool hasLairTech;   // completed lair or morphing hive or completed hive (can make spire)
+    bool hasLairOrHive; // completed lair or completed hive (can research drop)
 
 	// Tech choice special case for islands only.
 	bool goingIslandAir;

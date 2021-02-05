@@ -31,7 +31,7 @@ void BOSSManager::reset()
 void BOSSManager::startNewSearch(const std::vector<MetaPair> & goalUnits)
 {
     size_t numWorkers   = the.my.all.count(BWAPI::Broodwar->self()->getRace().getWorker());
-    size_t numDepots    = the.my.all.count(BWAPI::Broodwar->self()->getRace().getCenter())
+    size_t numDepots    = the.my.all.count(BWAPI::Broodwar->self()->getRace().getResourceDepot())
                         + the.my.all.count(BWAPI::UnitTypes::Zerg_Lair)
                         + the.my.all.count(BWAPI::UnitTypes::Zerg_Hive);
 

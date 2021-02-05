@@ -43,7 +43,7 @@ void WorkerData::addWorker(BWAPI::Unit unit)
 	if (!unit || !unit->exists()) { return; }
 
 	workers.insert(unit);
-	workerJobMap[unit] = Default;
+	workerJobMap[unit] = Idle;
 }
 
 void WorkerData::addWorker(BWAPI::Unit unit, WorkerJob job, BWAPI::Unit jobUnit)
@@ -113,7 +113,7 @@ void WorkerData::setWorkerJob(BWAPI::Unit unit, WorkerJob job, BWAPI::Unit jobUn
         if (!mineralToMine)
         {
             // The worker cannot be assigned. Give up and do nothing more.
-            BWAPI::Broodwar->printf("no mineral to mine for worker %d", unit->getID());
+            // BWAPI::Broodwar->printf("no mineral to mine for worker %d", unit->getID());
             return;
         }
         workerMineralAssignment[unit] = mineralToMine;
@@ -340,18 +340,18 @@ bool WorkerData::anyUnblocker() const
     return false;
 }
 
-enum WorkerData::WorkerJob WorkerData::getWorkerJob(BWAPI::Unit unit)
+enum WorkerData::WorkerJob WorkerData::getWorkerJob(BWAPI::Unit unit) const
 {
-	if (!unit) { return Default; }
+	if (!unit) { return Idle; }
 
-	std::map<BWAPI::Unit, enum WorkerJob>::iterator it = workerJobMap.find(unit);
+	std::map<BWAPI::Unit, enum WorkerJob>::const_iterator it = workerJobMap.find(unit);
 
 	if (it != workerJobMap.end())
 	{
 		return it->second;
 	}
 
-	return Default;
+	return Idle;
 }
 
 // No more workers are needed for full mineral mining.
@@ -595,7 +595,6 @@ char WorkerData::getJobCode(WorkerJob j) const
     if (j == WorkerData::Unblock)     return 'U';
     if (j == WorkerData::Posted)      return 'P';
     if (j == WorkerData::PostedBuild) return 'Q';
-    if (j == WorkerData::Default)     return '?';       // e.g. incomplete SCV
 	return 'X';
 }
 

@@ -205,12 +205,11 @@ void StrategyBossZerg::updateGameState()
 
 	// hasLair means "can research stuff in the lair", like overlord speed.
 	// hasLairTech means "can do stuff that needs lair", like research lurker aspect.
-	// NOTE The two are different in game, but even more different in the bot because
-	//      of a BWAPI 4.1.2 bug: You can't do lair research in a hive.
-	//      This code reflects the bug so we can work around it as much as possible.
+    // hasLairOrHive means "can research stuff in the lair or hive"
 	hasHiveTech = the.my.completed.count(BWAPI::UnitTypes::Zerg_Hive) > 0;
 	hasLair = the.my.completed.count(BWAPI::UnitTypes::Zerg_Lair) > 0;
 	hasLairTech = hasLair || nHives > 0;
+    hasLairOrHive = hasLair || hasHiveTech;
 	
 	// If we start on an island, we go air until we have nydus canals.
 	goingIslandAir = the.bases.isIslandStart() && !hasNydus;
@@ -343,6 +342,8 @@ bool StrategyBossZerg::enemyIsAllAir() const
         // NOTE A floating command center does not establish a base.
         return false;
     }
+
+    // TODO check for comsat scan - the.info.getEnemyScans().empty()
 
     for (const auto & kv : the.info.getUnitData(_enemy).getUnits())
     {
@@ -538,15 +539,15 @@ void StrategyBossZerg::cancelStuff(int mineralsNeeded)
 		return;
 	}
 
-	// Upgrades, in order from least to most important.
+	// Upgrades, in order from least to most important (in a sort of average sense).
 	// ZvZ is the key matchup--the one where we're most likely to be able to recover.
 	static const std::vector<BWAPI::UpgradeType> upgrades =
 		{ BWAPI::UpgradeTypes::Pneumatized_Carapace
 		, BWAPI::UpgradeTypes::Zerg_Missile_Attacks
-		, BWAPI::UpgradeTypes::Grooved_Spines
+        , BWAPI::UpgradeTypes::Zerg_Melee_Attacks
+        , BWAPI::UpgradeTypes::Zerg_Carapace
+        , BWAPI::UpgradeTypes::Grooved_Spines
 		, BWAPI::UpgradeTypes::Muscular_Augments
-		, BWAPI::UpgradeTypes::Zerg_Carapace
-		, BWAPI::UpgradeTypes::Zerg_Melee_Attacks
 		, BWAPI::UpgradeTypes::Metabolic_Boost
 		};
 	for (BWAPI::UpgradeType upgrade : upgrades)
@@ -739,12 +740,12 @@ bool StrategyBossZerg::nextInQueueIsUseless(BuildOrderQueue & queue) const
             upInQueue == BWAPI::UpgradeTypes::Ventral_Sacs ||
             upInQueue == BWAPI::UpgradeTypes::Antennae)
 		{
-            // Assume that there is at most one lair.
-			return !hasLair ||
+            // Assume that there is at most one lair or hive.
+			return !hasLairOrHive ||
                 _self->isUpgrading(BWAPI::UpgradeTypes::Pneumatized_Carapace) ||
                 _self->isUpgrading(BWAPI::UpgradeTypes::Ventral_Sacs) ||
 				_self->isUpgrading(BWAPI::UpgradeTypes::Antennae) ||
-                // If there are no plain hatcheries but only a lair, it may be researching burrow.
+                // If there are no plain hatcheries but only a lair or hive, it may be researching burrow.
                 nCompletedHatches == 1 && _self->isResearching(BWAPI::TechTypes::Burrowing);
 		}
 
@@ -793,17 +794,15 @@ bool StrategyBossZerg::nextInQueueIsUseless(BuildOrderQueue & queue) const
         if (upInQueue == BWAPI::UpgradeTypes::Zerg_Flyer_Carapace ||
             upInQueue == BWAPI::UpgradeTypes::Zerg_Flyer_Attacks)
         {
-            // BWAPI 4.1.2 bug: Cannot upgrade in a greater spire. As a result,
-            //                  we don't try to upgrade beyond +2.
-            const int maxUpgrade = 2;
+            const int maxUpgrade = 3;
             const int upCount =
                 _self->isUpgrading(BWAPI::UpgradeTypes::Zerg_Flyer_Carapace) +
                 _self->isUpgrading(BWAPI::UpgradeTypes::Zerg_Flyer_Attacks);
 
             return
                 _self->getUpgradeLevel(upInQueue) >= maxUpgrade ||
-                upCount >= the.my.completed.count(BWAPI::UnitTypes::Zerg_Spire);
-                          // + the.my.completed.count(BWAPI::UnitTypes::Zerg_Greater_Spire);
+                upCount >= the.my.completed.count(BWAPI::UnitTypes::Zerg_Spire)
+                         + the.my.completed.count(BWAPI::UnitTypes::Zerg_Greater_Spire);
         }
 
         if (upInQueue == BWAPI::UpgradeTypes::Gamete_Meiosis)
@@ -932,7 +931,8 @@ bool StrategyBossZerg::nextInQueueIsUseless(BuildOrderQueue & queue) const
 				the.my.all.count(BWAPI::UnitTypes::Zerg_Queens_Nest) == 0 ||
 				_self->isUpgrading(BWAPI::UpgradeTypes::Pneumatized_Carapace) ||
 				_self->isUpgrading(BWAPI::UpgradeTypes::Ventral_Sacs) ||
-                _self->isUpgrading(BWAPI::UpgradeTypes::Antennae);
+                _self->isUpgrading(BWAPI::UpgradeTypes::Antennae) ||
+                nCompletedHatches == 1 && _self->isResearching(BWAPI::TechTypes::Burrowing);
 		}
 		if (nextInQueue == BWAPI::UnitTypes::Zerg_Sunken_Colony)
 		{
@@ -1775,7 +1775,7 @@ void StrategyBossZerg::makeUrgentReaction(BuildOrderQueue & queue)
 	// If the enemy has cloaked stuff, consider overlord speed.
 	if (the.info.enemyHasCloakTech())
 	{
-		if (hasLair &&
+		if (hasLairOrHive &&
 			minerals >= 150 && gas >= 150 &&
 			_self->getUpgradeLevel(BWAPI::UpgradeTypes::Pneumatized_Carapace) == 0 &&
 			!_self->isUpgrading(BWAPI::UpgradeTypes::Pneumatized_Carapace) &&
@@ -1931,7 +1931,7 @@ void StrategyBossZerg::makeUrgentReaction(BuildOrderQueue & queue)
 				queue.queueAsHighestPriority(BWAPI::UnitTypes::Zerg_Spire);
 			}
 			// Also consider overlord speed so overlords are harder to catch.
-			else if (hasLair &&
+			else if (hasLairOrHive &&
 				minerals >= 150 && gas >= 150 &&
 				_enemyRace != BWAPI::Races::Zerg &&
 				_self->getUpgradeLevel(BWAPI::UpgradeTypes::Pneumatized_Carapace) == 0 &&
@@ -2590,12 +2590,12 @@ void StrategyBossZerg::recommendTech()
     }
     if (!_self->hasResearched(BWAPI::TechTypes::Spawn_Broodlings) && !_self->isResearching(BWAPI::TechTypes::Spawn_Broodlings))
     {
-        _recommendBroodling = std::min(_recommendBroodling, 1);
+        _recommendBroodling = std::min(_recommendBroodling, 2);
     }
 
     _recommendQueens = std::min(
         Config::Skills::MaxQueens,
-        std::max(_recommendParasite, std::max(_recommendEnsnare, _recommendBroodling))
+        std::max({ _recommendParasite, _recommendEnsnare, _recommendBroodling })
     );
 }
 
@@ -2810,7 +2810,7 @@ void StrategyBossZerg::vTerranTechScores(const PlayerSnapshot & snap)
 		}
 		else if (type == BWAPI::UnitTypes::Terran_Goliath)
 		{
-			techScores[int(TechUnit::Zerglings)] -= count * 2;
+			techScores[int(TechUnit::Zerglings)] -= count * 3;
 			techScores[int(TechUnit::Hydralisks)] += count * 3;
 			techScores[int(TechUnit::Lurkers)] -= count * 2;
 			techScores[int(TechUnit::Mutalisks)] -= count * 3;
@@ -3720,9 +3720,9 @@ void StrategyBossZerg::produceOtherStuff(int & mineralsLeft, int & gasLeft, bool
         gasLeft -= 150;
     }
 
-    // Get overlord speed before hive. Due to the BWAPI 4.1.2 bug, we can't get it after.
+    // Get overlord speed.
     // Skip it versus zerg, since it's rarely worth the cost.
-    if (hasLair && nGas > 0 && nDrones >= 15 &&
+    if (hasLairOrHive && nGas > 0 && nDrones >= 15 &&
         _enemyRace != BWAPI::Races::Zerg &&
         !_emergencyGroundDefense && hasEnoughUnits &&
         _techTarget != TechUnit::Mutalisks && _techTarget != TechUnit::Lurkers &&    // get your lair tech FIRST
@@ -3739,7 +3739,7 @@ void StrategyBossZerg::produceOtherStuff(int & mineralsLeft, int & gasLeft, bool
     }
 
     // Get overlord drop if we plan to drop.
-    if (hasLair && nGas > 0 && nDrones >= 18 &&
+    if (hasLairOrHive && nGas > 0 && nDrones >= 18 &&
         nBases >= 3 &&
         !_emergencyGroundDefense && hasEnoughUnits &&
         StrategyManager::Instance().dropIsPlanned() &&
@@ -3756,7 +3756,7 @@ void StrategyBossZerg::produceOtherStuff(int & mineralsLeft, int & gasLeft, bool
     // Get overlord sight range if we're maxed and accumulating resources.
     // This will be rare.
     if (_supplyUsed > 400 - 12 && mineralsLeft > 500 && gasLeft > 500 &&
-        hasLair && nGas >= 3 && nDrones >= 60 &&
+        hasLairOrHive && nGas >= 3 && nDrones >= 60 &&
         nBases >= 3 &&
         _self->getUpgradeLevel(BWAPI::UpgradeTypes::Pneumatized_Carapace) == 1 &&
         !_self->isUpgrading(BWAPI::UpgradeTypes::Ventral_Sacs) &&
@@ -3771,19 +3771,15 @@ void StrategyBossZerg::produceOtherStuff(int & mineralsLeft, int & gasLeft, bool
     // Make it later versus zerg.
     // Wait until pneumatized carapace is done (except versus zerg, when we don't get that),
     // because the bot has often been getting a queen's nest too early.
-    if (!hasQueensNest && hasLair && nGas >= 2 && nDrones >= 24 &&
+    if (!hasQueensNest && hasLairTech && nGas >= 2 && nDrones >= 24 &&
         !_emergencyGroundDefense && hasEnoughUnits &&
 
         (hiveTechUnit(_techTarget) ||
         armorUps == 2 ||
         _enemyRace == BWAPI::Races::Zerg && nMutas >= 12) &&
 
-        !isBeingBuilt(BWAPI::UnitTypes::Zerg_Queens_Nest) &&
         the.my.all.count(BWAPI::UnitTypes::Zerg_Queens_Nest) == 0 &&
-
-        (_enemyRace == BWAPI::Races::Zerg ||
-        _self->getUpgradeLevel(BWAPI::UpgradeTypes::Pneumatized_Carapace) == 1 ||
-        _self->isUpgrading(BWAPI::UpgradeTypes::Pneumatized_Carapace) && lairUpgradeTime() < (BWAPI::UnitTypes::Zerg_Queens_Nest).buildTime()))
+        !isBeingBuilt(BWAPI::UnitTypes::Zerg_Queens_Nest))
     {
         produce(BWAPI::UnitTypes::Zerg_Queens_Nest);
         mineralsLeft -= 150;
@@ -3793,7 +3789,7 @@ void StrategyBossZerg::produceOtherStuff(int & mineralsLeft, int & gasLeft, bool
     // Possibly research queen spells.
     // We don't even think about it unless we already have a queen.
     if (nQueens > 0 && hasQueensNest && nGas >= 2 && nDrones >= 24 &&
-        _recommendQueens &&
+        _recommendQueens > 0 &&
         !_self->isResearching(BWAPI::TechTypes::Ensnare) &&
         !_self->isResearching(BWAPI::TechTypes::Spawn_Broodlings) &&
         !_self->isUpgrading(BWAPI::UpgradeTypes::Gamete_Meiosis))       // +50 energy
@@ -3817,7 +3813,7 @@ void StrategyBossZerg::produceOtherStuff(int & mineralsLeft, int & gasLeft, bool
             nGas >= 3 && (nDrones >= 60 || nDrones >= 30 && nQueens >= 4) &&
             !_emergencyGroundDefense && !_emergencyNow && enoughArmy())
         {
-            // NOTE We only get here if ensnare or broodling is already researched.
+            // NOTE We only get this far if ensnare or broodling is already researched.
             produce(BWAPI::UpgradeTypes::Gamete_Meiosis);
             mineralsLeft -= 150;
             gasLeft -= 150;
@@ -3831,7 +3827,6 @@ void StrategyBossZerg::produceOtherStuff(int & mineralsLeft, int & gasLeft, bool
         nHives == 0 && hasLair && hasQueensNest && nDrones >= 16 && nGas >= 2 &&
         !_emergencyGroundDefense && hasEnoughUnits &&
         (_enemyRace != BWAPI::Races::Zerg || nMutas >= 12) &&
-        (_self->getUpgradeLevel(BWAPI::UpgradeTypes::Pneumatized_Carapace) == 1 || _enemyRace == BWAPI::Races::Zerg) &&
         !_self->isUpgrading(BWAPI::UpgradeTypes::Pneumatized_Carapace) &&
         !_self->isUpgrading(BWAPI::UpgradeTypes::Ventral_Sacs) &&
         !_self->isUpgrading(BWAPI::UpgradeTypes::Antennae))
@@ -3914,11 +3909,19 @@ void StrategyBossZerg::produceOtherStuff(int & mineralsLeft, int & gasLeft, bool
     }
 
     // Get gas. If necessary, expand for it.
+    // We make only one extractor at a time, because the building reservation system
+    // does not work for geysers: If we made two at once, they would often be on the
+    // same geyser.
     bool addExtractor = false;
     if (nFreeGas > 0 && hasPool && !isBeingBuilt(BWAPI::UnitTypes::Zerg_Extractor))
     {
-        // A. If we have a functioning economy, get our first gas.
-        if (nGas == 0 && nDrones >= 10)
+        // A. Late in the game, we have many drones. Make extractors while possible.
+        if (nDrones >= 50)
+        {
+            addExtractor = true;
+        }
+        // B. If we have a functioning economy, get our first gas.
+        else if (nGas == 0 && nDrones >= 10)
         {
             addExtractor = true;
             if (!WorkerManager::Instance().isCollectingGas())
@@ -3926,12 +3929,7 @@ void StrategyBossZerg::produceOtherStuff(int & mineralsLeft, int & gasLeft, bool
                 produce(MacroCommandType::StartGas);
             }
         }
-        // B. Late in the game, we have many drones. Make extractors freely.
-        else if (nDrones >= 50)
-        {
-            addExtractor = true;
-        }
-        // C. Or make more extractors if we have a low ratio of gas to minerals.
+        // C. Make more extractors if we have a low ratio of gas to minerals.
         else if ((_gasUnit != BWAPI::UnitTypes::None || _mineralUnit.gasPrice() > 0) &&
             nDrones > 3 * the.bases.baseCount(_self) + 3 * nGas + 4 &&
             (minerals + 50) / (gas + 50) >= 3)
@@ -3954,7 +3952,7 @@ void StrategyBossZerg::produceOtherStuff(int & mineralsLeft, int & gasLeft, bool
         // If aiming for hive tech, get at least 3.
         // Doesn't break 1-base tech strategies, because then the geyser is not available.
         else if (hasLairTech && nGas < 2 && nDrones >= 12 ||
-            hiveTechUnit(_techTarget) && nGas < 3 && nDrones >= 18)
+            hiveTechUnit(_techTarget) && nGas < 3 && nDrones >= 21)
         {
             addExtractor = true;
         }
@@ -4075,9 +4073,6 @@ void StrategyBossZerg::produceOtherStuff(int & mineralsLeft, int & gasLeft, bool
     }
 
     // If we're going air and expect to keep needing air units, get air upgrades.
-    // NOTE Due to a BWAPI 4.1.2 bug, it can't research upgrades in a greater spire.
-    //      So we stop at flyer carapace +2.
-    //      Comments show how to get the higher upgrades.
     if (hasSpire && nDrones >= 15 && nGas > 0 &&
         the.my.all.count(BWAPI::UnitTypes::Zerg_Greater_Spire) == 0 &&
         hasPool &&
@@ -4091,9 +4086,8 @@ void StrategyBossZerg::produceOtherStuff(int & mineralsLeft, int & gasLeft, bool
         const int airArmorUps = _self->getUpgradeLevel(BWAPI::UpgradeTypes::Zerg_Flyer_Carapace);
         const int airAttackUps = _self->getUpgradeLevel(BWAPI::UpgradeTypes::Zerg_Flyer_Attacks);
 
-        //if (airArmorUps < 2 && hasLairTech ||
-        //	airArmorUps < 3 && hasGreaterSpire && hasHiveTech)
-        if (airArmorUps < 2 && hasLairTech && !hasGreaterSpire)
+        if (airArmorUps < 2 && hasLairTech ||
+        	airArmorUps < 3 && hasHiveTech)
         {
             produce(BWAPI::UpgradeTypes::Zerg_Flyer_Carapace);
             mineralsLeft -= 150;     // TODO not correct for upgrades 2 or 3
@@ -4111,15 +4105,15 @@ void StrategyBossZerg::produceOtherStuff(int & mineralsLeft, int & gasLeft, bool
         */
     }
 
-    // Possibly add queens, if we already have a queen's nest.
+    // Possibly produce queens, if we already have a queen's nest.
     if (Config::Skills::MaxQueens > 0 &&
         hasQueensNest && nQueens < _recommendQueens &&
-        nDrones >= 20 + 6 * nQueens &&
+        nDrones >= 20 + 4 * nQueens &&
         // Not if we're short of other units.
         !_emergencyGroundDefense && !_emergencyNow && enoughArmy() &&
         // Not if the enemy is apparently on their last legs.
         enemyGroundArmySize > 0 && enemyAntigroundArmySize > 0 && the.bases.baseCount(_enemy) >= 2 &&
-        // Not if we formerly had a queen and it died too recently. Leave a gap in time.
+        // Not if we formerly had queens and they all died too recently. Leave a gap in time.
         // Exception: Ensnare can be so valuable that we want to keep it available.
         // (If we never had a queen, _lastQueenAliveFrame is 0 and the check is "is the game long enough?")
         (_recommendEnsnare || the.now() - _lastQueenAliveFrame > 3 * 60 * 24))

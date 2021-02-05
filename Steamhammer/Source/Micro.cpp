@@ -15,7 +15,7 @@ size_t TotalCommands = 0;  // not all commands are counted
 // So far, the only problem detected is issuing two orders during the same frame.
 void MicroState::check(BWAPI::Unit u, BWAPI::Order o) const
 {
-    return;	// TODO only check when debugging
+    return;	// TODO only continue when debugging
 
 	if (orderFrame == the.now())
 	{

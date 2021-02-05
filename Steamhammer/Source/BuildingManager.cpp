@@ -29,6 +29,11 @@ void BuildingManager::update()
     checkForDeadTerranBuilders();           // if we are terran and a building is under construction without a worker, assign a new one    
     checkForCompletedBuildings();           // check to see if any buildings have completed and update data structures
 	checkReservedResources();               // verify that reserved minerals and gas are counted correctly
+
+    if (the.now() % 72 == 0 && the.selfRace() == BWAPI::Races::Terran)
+    {
+        clearAbandonedTerranBuildings();
+    }
 }
 
 // The building took too long to start, or we lost too many workers trying to build it.
@@ -104,17 +109,23 @@ void BuildingManager::assignWorkersToUnassignedBuildings()
 		// If we don't already have a valid builder, choose one.
 		// NOTE There is a dependency loop here. To get the builder, we want to know the
 		//      building's position. But to check its final position we need to know the
-		//      builder unit, because other units block the building placement. To solve this,
-		//      we get the builder first based on the desired rather than the final position.
+		//      builder unit, because other units block the building placement while the
+        //      builder unit itself does not. To solve this, we get the builder first based
+        //      on the desired rather than the final position.
 		//      Better solutions are possible!
-        if (!validBuilder(b))
+        if (!validBuilder(b.builderUnit))
         {
-            releaseBuilderUnit(b);		// does nothing if it's null
+            releaseBuilderUnit(b);		           // does nothing if it's null
             setBuilderUnit(b);
+            if (b.builderUnit)
+            {
+                //BWAPI::Broodwar->printf("(re)assign builder %d to %s", b.builderUnit->getID(), UnitTypeName(b.type).c_str());
+                ++b.buildersSent;
+            }
         }
 
 		// No good, we can't get a worker. Give up on the building for this frame.
-		if (!b.builderUnit || !b.builderUnit->exists())
+		if (!b.builderUnit)
 		{
 			continue;
 		}
@@ -132,12 +143,14 @@ void BuildingManager::assignWorkersToUnassignedBuildings()
 			{
 				_stalledForLackOfSpace = true;
 			}
+            if (b.builderUnit && b.buildersSent > 0)
+            {
+                --b.buildersSent;
+            }
 			releaseBuilderUnit(b);
 			continue;
 		}
 		b.finalPosition = testLocation;
-
-		++b.buildersSent;    // count workers ever assigned to build it
 
 		//BWAPI::Broodwar->printf("assign builder %d to %s", b.builderUnit->getID(), UnitTypeName(b.type).c_str());
 
@@ -303,10 +316,10 @@ void BuildingManager::checkForDeadTerranBuilders()
 
 		UAB_ASSERT(b.buildingUnit, "null buildingUnit");
 
-		if (!UnitUtil::IsValidUnit(b.builderUnit))
+		if (!validBuilder(b.builderUnit))
 		{
 			releaseBuilderUnit(b);
-			setBuilderUnit(b);
+			setBuilderUnit(b);      // don't count it in buildersSent
 			if (b.builderUnit)
 			{
 				b.builderUnit->rightClick(b.buildingUnit);
@@ -394,6 +407,37 @@ void BuildingManager::checkReservedResources()
 	}
 }
 
+// It's possible for a terran building to be abandoned unfinished and never canceled,
+// due to a bug somewhere. Work around it: Cancel the building anyway.
+void BuildingManager::clearAbandonedTerranBuildings()
+{
+    for (BWAPI::Unit building : the.self()->getUnits())
+    {
+        if (building->getType().isBuilding() &&
+            !building->isCompleted() &&
+            !building->isBeingConstructed() &&
+            building->canCancelConstruction())
+        {
+            // The building is abandoned if it is not in the building queue.
+            for (const Building & b : _buildings)
+            {
+                if (b.buildingUnit == building)
+                {
+                    goto not_abandoned;
+                }
+            }
+            // If we got here, it was abandoned.
+            if (Config::Debug::DrawQueueFixInfo)
+            {
+                BWAPI::Broodwar->printf("queue: cancel abandoned %s", UnitTypeName(building).c_str());
+            }
+            building->cancelConstruction();
+        }
+not_abandoned:
+        ;
+    }
+}
+
 // Add a new building to be constructed and return it.
 // The builder may be null. In that case, the building manager will assign a worker on its own later.
 Building & BuildingManager::addTrackedBuildingTask(const MacroAct & act, BWAPI::TilePosition desiredLocation, BWAPI::Unit builder, bool isGasSteal)
@@ -415,11 +459,12 @@ Building & BuildingManager::addTrackedBuildingTask(const MacroAct & act, BWAPI::
     b.isGasSteal = isGasSteal;
     b.status = BuildingStatus::Unassigned;
 
-	// The builder, if provided, may have been killed, mind controlled, or morphed.
-	if (builder && builder->exists() && builder->getPlayer() == the.self() && builder->getType().isWorker())
+	// The builder, if provided, may have been killed, or be otherwise unavailable.
+	if (validBuilder(builder))
 	{
 		//BWAPI::Broodwar->printf("build man receives worker %d for %s", builder->getID(), UnitTypeName(type).c_str());
 		b.builderUnit = builder;
+        b.buildersSent = 1;
         // Ensure that our builder is assigned to be a builder. The caller may not have done it.
         WorkerManager::Instance().setBuildWorker(builder);
 	}
@@ -454,17 +499,17 @@ bool BuildingManager::isBuildingPositionExplored(const Building & b) const
 }
 
 // Do we have a builder unit that can build?
-bool BuildingManager::validBuilder(const Building & b) const
+bool BuildingManager::validBuilder(BWAPI::Unit worker) const
 {
     return
-        b.builderUnit &&
-        b.builderUnit->exists() &&
-        !b.builderUnit->isLockedDown() &&
-        !b.builderUnit->isStasised() &&
-        !b.builderUnit->isMaelstrommed() &&
-        !b.builderUnit->isBurrowed() &&
-        b.builderUnit->getPlayer() == the.self() &&     // not mind controlled
-        b.builderUnit->getType().isWorker();            // not morphed into a building already
+        worker &&
+        worker->exists() &&
+        !worker->isLockedDown() &&
+        !worker->isStasised() &&
+        !worker->isMaelstrommed() &&
+        !worker->isBurrowed() &&
+        worker->getPlayer() == the.self() &&     // not mind controlled
+        worker->getType().isWorker();            // not morphed into a building already
 }
 
 // Assign a worker to contruct the building.

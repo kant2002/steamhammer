@@ -53,8 +53,6 @@ class CombatCommander
 
 	void			cancelDyingItems();
 
-	int             getNumType(BWAPI::Unitset & units, BWAPI::UnitType type);
-
 	BWAPI::Unit     findClosestDefender(const Squad & defenseSquad, BWAPI::Position pos, bool flyingDefender, bool pullWoekers, bool enemyHasAntiAir);
     BWAPI::Unit     findClosestWorkerToTarget(BWAPI::Unitset & unitsToAssign, BWAPI::Unit target);
 
@@ -67,10 +65,6 @@ class CombatCommander
 	BWAPI::Position	getDefenseLocation();
 
     void            initializeSquads();
-    void            assignFlyingDefender(Squad & squad);
-    void            emptySquad(Squad & squad, BWAPI::Unitset & unitsToAssign);
-    int             getNumGroundDefendersInSquad(Squad & squad);
-    int             getNumAirDefendersInSquad(Squad & squad);
 
 	void            updateDefenseSquadUnits(Squad & defenseSquad, const size_t & flyingDefendersNeeded, const size_t & groundDefendersNeeded, bool pullWorkers, bool enemyHasAntiAir);
 

@@ -37,17 +37,15 @@ MapGrid::MapGrid(int mapWidth, int mapHeight, int cellSize)
 // 2. The least-recently explored accessible cell (with attention to byGround).
 // In either case, choose the cell farthest from our start.
 // Item 1 ensures that, if early game scouting failed, we scout with force.
-// If byGround, only locations that are accessible by ground from the given location.
+// If byGround, only locations that are accessible by ground (in the given partition).
 // If not byGround, the partition is not used.
-// If zoneID is non-zero, require the position to be in the given zone.
-BWAPI::Position MapGrid::getLeastExplored(bool byGround, int partition, int zoneID) 
+BWAPI::Position MapGrid::getLeastExplored(bool byGround, int partition) 
 {
 	// 1. Any starting location that has not been explored.
 	for (BWAPI::TilePosition tile : BWAPI::Broodwar->getStartLocations())
 	{
 		if (!BWAPI::Broodwar->isExplored(tile) &&
-			(!byGround || partition == the.partitions.id(tile)) &&
-			(!zoneID || the.zone.at(tile) == zoneID))
+			(!byGround || partition == the.partitions.id(tile)))
 		{
 			return BWAPI::Position(tile);
 		}
@@ -66,12 +64,6 @@ BWAPI::Position MapGrid::getLeastExplored(bool byGround, int partition, int zone
 
 			// Skip places that we can't get to.
 			if (byGround && partition != the.partitions.id(cellCenter))
-			{
-				continue;
-			}
-
-			// If the zone is specified, skip places outside the zone.
-			if (zoneID && the.zone.at(cellCenter) != zoneID)
 			{
 				continue;
 			}
@@ -97,7 +89,6 @@ BWAPI::Position MapGrid::getLeastExplored(bool byGround, int partition, int zone
 BWAPI::Position MapGrid::getLeastExploredNear(const BWAPI::Position & center, bool byGround)
 {
     int minSeen = INT_MAX;
-    double minSeenDist = 0;
     int leastRow(0), leastCol(0);
 
     for (int r = 0; r<rows; ++r)

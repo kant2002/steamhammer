@@ -50,7 +50,7 @@ public:
 	void				update();
 	void				getUnits(BWAPI::Unitset & units, BWAPI::Position center, int radius, bool ourUnits, bool oppUnits);
 	BWAPI::Position		getLeastExplored() { return getLeastExplored(false, 1); };
-	BWAPI::Position		getLeastExplored(bool byGround, int mapPartition, int zoneID = 0);
+	BWAPI::Position		getLeastExplored(bool byGround, int mapPartition);
     BWAPI::Position     getLeastExploredNear(const BWAPI::Position & center, bool byGround);
 
 	GridCell & getCellByIndex(int r, int c) { return cells[r*cols + c]; }

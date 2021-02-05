@@ -63,7 +63,7 @@ void MapTools::setBWAPIMapData()
 	{
 		// The neutral units may include moving critters which do not permanently block tiles.
 		// Something immobile blocks tiles it occupies until it is destroyed. (Are there exceptions?)
-		if (!unit->getType().canMove() && !unit->getType().isFlyer())
+		if (!unit->getType().canMove() && !unit->getType().isFlyer() && !unit->getType().isSpell())
 		{
 			BWAPI::TilePosition pos = unit->getInitialTilePosition();
 			for (int x = pos.x; x < pos.x + unit->getType().tileWidth(); ++x)
@@ -286,7 +286,7 @@ Base * MapTools::nextExpansion(bool hidden, bool wantMinerals, bool wantGas) con
         BWAPI::TilePosition bottomRight = topLeft + BWAPI::TilePosition(4, 3);
 
         // No good if the building location is known to be in range of enemy static defense.
-        if (the.groundAttacks.inRange(player->getRace().getCenter(), topLeft))
+        if (the.groundAttacks.inRange(player->getRace().getResourceDepot(), topLeft))
         {
             if (Config::Debug::DrawExpoScores)
             {
@@ -338,9 +338,9 @@ Base * MapTools::nextExpansion(bool hidden, bool wantMinerals, bool wantGas) con
         }
 
         // No good if a visible building is in the way.
-        for (int x = 0; x < player->getRace().getCenter().tileWidth(); ++x)
+        for (int x = 0; x < player->getRace().getResourceDepot().tileWidth(); ++x)
         {
-			for (int y = 0; y < player->getRace().getCenter().tileHeight(); ++y)
+			for (int y = 0; y < player->getRace().getResourceDepot().tileHeight(); ++y)
             {
                 if (the.placer.isReserved(topLeft.x + x, topLeft.y + y))
 				{

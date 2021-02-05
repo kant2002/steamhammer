@@ -455,7 +455,6 @@ void ProductionManager::maybeReorderQueue()
 }
 
 // Return null if no producer is found.
-// NOTE closestTo defaults to BWAPI::Positions::None, meaning we don't care.
 BWAPI::Unit ProductionManager::getProducer(MacroAct act) const
 {
     if (act.isBuilding() && !UnitUtil::IsMorphedBuildingType(act.getUnitType()))
@@ -479,7 +478,7 @@ BWAPI::Unit ProductionManager::getProducer(MacroAct act) const
 	}
 
     // We may want to choose the producer by location.
-    BWAPI::Position closestTo = BWAPI::Positions::None;
+    BWAPI::Position closestTo = BWAPI::Positions::None;     // "don't care where"
     if (act.getMacroLocation() != MacroLocation::Anywhere)
     {
         closestTo = the.placer.getMacroLocationPos(act.getMacroLocation());

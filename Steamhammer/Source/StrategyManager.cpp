@@ -311,10 +311,12 @@ const MetaPairVector StrategyManager::getTerranBuildOrderGoal()
 	int numGoliaths		= the.my.all.count(BWAPI::UnitTypes::Terran_Goliath);
     int numTanks        = the.my.all.count(BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode)
                         + the.my.all.count(BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode);
+    int numBCs          = the.my.all.count(BWAPI::UnitTypes::Terran_Battlecruiser);
 
 	bool hasEBay		= the.my.completed.count(BWAPI::UnitTypes::Terran_Engineering_Bay) > 0;
 	bool hasAcademy		= the.my.completed.count(BWAPI::UnitTypes::Terran_Academy) > 0;
 	bool hasArmory		= the.my.completed.count(BWAPI::UnitTypes::Terran_Armory) > 0;
+    bool hasPhysicsLab  = the.my.completed.count(BWAPI::UnitTypes::Terran_Physics_Lab) > 0;
 
 	int maxSCVs = WorkerManager::Instance().getMaxWorkers();
 
@@ -348,7 +350,7 @@ const MetaPairVector StrategyManager::getTerranBuildOrderGoal()
     {
 	    goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Marine, numMarines + 8));
 
-		if (numMarines >= 10)
+		if (numMarines >= 8)
 		{
 			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Academy, 1));
 			if (numRefineries == 0)
@@ -414,8 +416,7 @@ goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Terran_Infantry_Wea
 			int nTanksWanted;
 			if (enemiesCounteredByTanks > 0)
 			{
-				nTanksWanted = std::min(numMarines / 4, enemiesCounteredByTanks);
-				nTanksWanted = std::min(nTanksWanted, numTanks + 2);
+                nTanksWanted = std::min({ numMarines / 4, enemiesCounteredByTanks, numTanks + 2 });
 			}
 			else
 			{
@@ -428,7 +429,20 @@ goal.push_back(std::pair<MacroAct, int>(BWAPI::UpgradeTypes::Terran_Infantry_Wea
 			goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode, nTanksWanted));
 			goal.push_back(std::pair<MacroAct, int>(BWAPI::TechTypes::Tank_Siege_Mode, 1));
 		}
-	}
+
+        /*
+        * TODO the first battlecruiser never builds but jams the queue due to an unknown bug
+        // Eventually make battlecruisers.
+        if (numVessels > 0 && numRefineries >= 3 && the.my.completed.count(BWAPI::UnitTypes::Terran_Physics_Lab) == 0)
+        {
+            goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Physics_Lab, 1));
+        }
+        if (hasPhysicsLab && numRefineries >= 3)
+        {
+            goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Battlecruiser, numBCs + 1));
+        }
+        */
+    }
 	else if (_openingGroup == "vultures")
 	{
 		goal.push_back(std::pair<MacroAct, int>(BWAPI::UnitTypes::Terran_Vulture, numVultures + 3));

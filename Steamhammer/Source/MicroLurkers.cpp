@@ -139,9 +139,8 @@ void MicroLurkers::executeMicro(const BWAPI::Unitset & targets, const UnitCluste
                 !u->isFlying() &&
                 u->isDetected() &&
  				u->getPosition().isValid() &&
-                !infestable(u) &&
-                !u->isInvincible();
-		});
+                !infestable(u);
+    });
 	
 	for (BWAPI::Unit lurker : lurkers)
 	{

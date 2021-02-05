@@ -36,7 +36,6 @@ void MicroMelee::assignTargets(const BWAPI::Unitset & meleeUnits, const BWAPI::U
             target->getType() != BWAPI::UnitTypes::Zerg_Egg &&
             target->getPosition().isValid() &&
             !infestable(target) &&
-			!target->isInvincible() &&
 			!target->isUnderDisruptionWeb())             // melee unit can't attack under dweb
 		{
 			meleeUnitTargets.insert(target);

@@ -96,6 +96,11 @@ void CombatSimulation::drawWhichEnemies(const BWAPI::Position & center) const
 // Include an enemy unit if we can hit it, or it can hit us.
 bool CombatSimulation::includeEnemy(CombatSimEnemies which, BWAPI::UnitType type) const
 {
+    if (type.isSpell())
+    {
+        return false;
+    }
+
 	if (which == CombatSimEnemies::ZerglingEnemies)
 	{
 		// Ground enemies plus air enemies that can shoot down.

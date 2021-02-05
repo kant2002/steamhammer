@@ -27,14 +27,13 @@ enum WorkerJob
     , Gas
     , Build
     , Combat
-    , Idle
+    , Idle          // default job, job when burrowed, etc.
     , Repair
     , Scout
     , ReturnCargo
     , Unblock       // mine out blocking minerals
     , Posted        // posted to a location
     , PostedBuild   // posted to a location, assigned to construct there
-    , Default
 };
 
 private:
@@ -93,7 +92,7 @@ public:
 
 	int				getNumAssignedWorkers(BWAPI::Unit unit) const;
 
-	WorkerJob		getWorkerJob(BWAPI::Unit unit);
+	WorkerJob		getWorkerJob(BWAPI::Unit unit) const;
 	BWAPI::Unit		getWorkerResource(BWAPI::Unit unit);
 	BWAPI::Unit		getWorkerDepot(BWAPI::Unit unit);
 	BWAPI::Unit		getWorkerRepairUnit(BWAPI::Unit unit);

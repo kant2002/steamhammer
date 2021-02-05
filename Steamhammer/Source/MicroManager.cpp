@@ -86,6 +86,7 @@ void MicroManager::execute(const UnitCluster & cluster)
 			if (!unit->getType().canMove() &&
 				!unit->isInvincible() &&
 				!unit->isFlying() &&
+                !unit->getType().isSpell() &&
 				order.getPosition().getDistance(unit->getInitialPosition()) < 4.5 * 32)
 			{
 				targets.insert(unit);
@@ -108,6 +109,7 @@ void MicroManager::execute(const UnitCluster & cluster)
 		{
 			// All visible enemy units.
 			// This is for when units are the goal, not a location.
+            // NOTE This may include some enemy spells!
 			targets = BWAPI::Broodwar->enemy()->getUnits();
 		}
 		else
@@ -120,6 +122,19 @@ void MicroManager::execute(const UnitCluster & cluster)
 				MapGrid::Instance().getUnits(targets, unit->getPosition(), unit->getType().sightRange(), false, true);
 			}
 		}
+
+        // Remove targets that we definitely can't attack.
+        for (auto it = targets.begin(); it != targets.end(); )
+        {
+            if ((*it)->isInvincible() || (*it)->getType().isSpell())
+            {
+                it = targets.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
 
 		executeMicro(targets, cluster);
 	}

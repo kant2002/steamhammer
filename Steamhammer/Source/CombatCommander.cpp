@@ -201,6 +201,7 @@ void CombatCommander::chooseScourgeTarget(const Squad & sourgeSquad)
 		// Skip inappropriate units and units known to have moved away some time ago.
         // Also stay out of range of enemy static air defense.
 		if (!ui.type.isFlyer() ||
+            ui.type.isSpell() ||
             ui.type == BWAPI::UnitTypes::Protoss_Interceptor ||
             ui.type == BWAPI::UnitTypes::Zerg_Overlord ||
 			ui.goneFromLastPosition && the.now() - ui.updateFrame > 5 * 24 ||
@@ -1586,12 +1587,15 @@ int CombatCommander::workerPullScore(BWAPI::Unit worker)
 // Tries to pull the "best" workers for combat, as decided by workerPullScore() above.
 void CombatCommander::pullWorkers(int n)
 {
-	auto compare = [](BWAPI::Unit left, BWAPI::Unit right)
+	struct Compare
 	{
-		return workerPullScore(left) < workerPullScore(right);
+		auto operator()(BWAPI::Unit left, BWAPI::Unit right) const -> bool
+		{
+			return workerPullScore(left) < workerPullScore(right);
+		}
 	};
 
-	std::priority_queue<BWAPI::Unit, std::vector<BWAPI::Unit>, decltype(compare)> workers;
+	std::priority_queue<BWAPI::Unit, std::vector<BWAPI::Unit>, Compare> workers;
 
 	Squad & groundSquad = _squadData.getSquad("Ground");
 
@@ -1692,16 +1696,16 @@ SquadOrder CombatCommander::getAttackOrder(const Squad * squad)
 // For a squad with ground units, ignore targets which are not accessible by ground.
 BWAPI::Position CombatCommander::getAttackLocation(const Squad * squad)
 {
-	// Know where the squad is. If it's empty or unknown, assume it is at our start position.
-	// NOTE In principle, different members of the squad may be in different map partitions,
-	// unable to reach each others' positions by ground. We ignore that complication.
-	// NOTE Since we aren't doing islands, all squads are reachable from the start position.
-	//const int squadPartition = squad
-	//	? squad->mapPartition()
-	//	: the.partitions.id(the.bases.myStartingBase()->getTilePosition());
-	const int squadPartition = the.partitions.id(the.bases.myStart()->getTilePosition());
+    // If the squad is empty, minimize effort.
+    if (squad && squad->getUnits().empty())
+    {
+        return the.bases.myMain()->getPosition();
+    }
 
 	// Ground and air considerations.
+    // NOTE The squad doesn't recalculate these values until it updates, which hasn't happened yet.
+    //      So any changes we just made to the squad's units won't be reflected here yet. The slight
+    //      delay doesn't cause any known problem (and changes that matter don't happen often).
 	bool hasGround = true;
 	bool hasAir = false;
 	bool canAttackGround = true;
@@ -1714,13 +1718,25 @@ BWAPI::Position CombatCommander::getAttackLocation(const Squad * squad)
 		canAttackAir = squad->canAttackAir();
 	}
 
-	// 1. Attack the enemy base with the weakest defense.
+    // If the squad has no combat units, or is unable to attack, return home.
+    if (!hasGround && !hasAir || !canAttackGround && !canAttackAir)
+    {
+        return the.bases.myMain()->getPosition();
+    }
+
+    // Know where the squad is. If it's empty or unknown, assume it is at our start position.
+    // NOTE In principle, different members of the squad may be in different map partitions,
+    // unable to reach each others' positions by ground. We ignore that complication.
+    // NOTE Since we aren't doing islands, all squads are reachable from the start position,
+    //      except in the case of accidentally pushing units through a barrier.
+    const int squadPartition = the.partitions.id(the.bases.myStart()->getTilePosition());
+
+    // 1. Attack the enemy base with the weakest defense.
 	// Only if the squad can attack ground. Lift the command center and it is no longer counted as a base.
 	if (canAttackGround)
 	{
 		Base * targetBase = nullptr;
         int bestScore = INT_MIN;
-        int shortestDistance = INT_MAX;
 		for (Base * base : the.bases.getAll())
 		{
 			if (base->getOwner() == the.enemy())
@@ -1740,7 +1756,7 @@ BWAPI::Position CombatCommander::getAttackLocation(const Squad * squad)
 				}
 
                 // A base with low remaining minerals is lower priority.
-                if (base->getLastKnownMinerals() < 100)
+                if (base->getLastKnownMinerals() < 300)
                 {
                     score -= 2;
                 }
@@ -1784,13 +1800,13 @@ BWAPI::Position CombatCommander::getAttackLocation(const Squad * squad)
 		}
 		if (targetBase)
 		{
-			return targetBase->getCenter();
+            return targetBase->getCenter();
 		}
 	}
 
 	// 2. Attack known enemy buildings.
 	// We assume that a terran can lift the buildings; otherwise, the squad must be able to attack ground.
-	if (canAttackGround || the.enemy()->getRace() == BWAPI::Races::Terran)
+	if (canAttackGround || the.enemyRace() == BWAPI::Races::Terran)
 	{
 		for (const auto & kv : the.info.getUnitInfo(the.enemy()))
 		{
@@ -1811,13 +1827,13 @@ BWAPI::Position CombatCommander::getAttackLocation(const Squad * squad)
 					// The building is lifted (or was when last seen). Only if the squad can hit it.
 					if (canAttackAir)
 					{
-						return ui.lastPosition;
+                        return ui.lastPosition;
 					}
 				}
 				else
 				{
 					// The building is not thought to be lifted.
-					return ui.lastPosition;
+                    return ui.lastPosition;
 				}
 			}
 		}
@@ -1827,6 +1843,8 @@ BWAPI::Position CombatCommander::getAttackLocation(const Squad * squad)
 	const BWAPI::Position squadCenter = squad
 		? squad->calcCenter()
 		: the.bases.myStart()->getPosition();
+    BWAPI::Unit bestUnit = nullptr;
+    int bestDistance = INT_MAX;
 	for (BWAPI::Unit unit : the.enemy()->getUnits())
 	{
 		if (unit->getType() == BWAPI::UnitTypes::Zerg_Larva ||
@@ -1840,23 +1858,33 @@ BWAPI::Position CombatCommander::getAttackLocation(const Squad * squad)
 		// Ground squads ignore enemy units which are not accessible by ground, except when nearby.
 		// The "when nearby" exception allows a chance to attack enemies that are in range,
 		// even if they are beyond a barrier. It's very rough.
-		if (hasGround &&
+        int distance = squad && squad->getVanguard() ? unit->getDistance(squad->getVanguard()) : unit->getDistance(squadCenter);
+        if (hasGround &&
 			squadPartition != the.partitions.id(unit->getPosition()) &&
-			unit->getDistance(squadCenter) > 300)
+			distance > 300)
 		{
 			continue;
 		}
 
 		if (unit->isFlying() && canAttackAir || !unit->isFlying() && canAttackGround)
 		{
-			return unit->getPosition();
+            if (distance < bestDistance)
+            {
+                bestUnit = unit;
+                bestDistance = distance;
+            }
 		}
+        if (bestUnit)
+        {
+            return unit->getPosition();
+        }
 	}
 
     // 4. Attack the remembered locations of unseen enemy units which might still be there.
     // Choose the one most recently seen.
     int lastSeenFrame = 0;
     BWAPI::Position lastSeenPos = BWAPI::Positions::None;
+    BWAPI::UnitType lastSeenType = BWAPI::UnitTypes::None;      // for debugging only
     for (const auto & kv : the.info.getUnitData(the.enemy()).getUnits())
     {
         const UnitInfo & ui(kv.second);
@@ -1864,11 +1892,13 @@ BWAPI::Position CombatCommander::getAttackLocation(const Squad * squad)
         if (ui.updateFrame < the.now() &&
             ui.updateFrame > lastSeenFrame &&
             !ui.goneFromLastPosition &&
+            !ui.type.isSpell() &&
             (hasAir || the.partitions.id(ui.lastPosition) == squadPartition) &&
             ((ui.type.isFlyer() || ui.lifted) && canAttackAir || (!ui.type.isFlyer() || !ui.lifted) && canAttackGround))
         {
             lastSeenFrame = ui.updateFrame;
             lastSeenPos = ui.lastPosition;
+            lastSeenType = ui.type;
         }
     }
     if (lastSeenPos.isValid())
@@ -1877,7 +1907,7 @@ BWAPI::Position CombatCommander::getAttackLocation(const Squad * squad)
     }
 
 	// 5. We can't see anything, so explore the map until we find something.
-	return MapGrid::Instance().getLeastExplored(hasGround && !hasAir, squadPartition);
+    return MapGrid::Instance().getLeastExplored(!hasAir, squadPartition);
 }
 
 // Choose a point of attack for the given drop squad.

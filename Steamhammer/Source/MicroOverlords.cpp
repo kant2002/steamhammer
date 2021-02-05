@@ -108,8 +108,18 @@ void MicroOverlords::assignOverlords()
             }
         }
     }
+    // Or if there are no overlord hunters, try to see the base we may want to take next.
+    else if (!overlordHunters)
+    {
+        BWAPI::TilePosition nextBasePos = the.map.getNextExpansion(false, true, true);
+        if (nextBasePos.isValid())
+        {
+            // The next mineral + gas expansion.
+            destinations.push_back(nextBasePos);
+        }
+    }
 
-    // Assign one overlord to each destination.
+    // Assign one overlord to each destination while possible.
     BWAPI::Unitset unassigned = getUnits();
     for (BWAPI::TilePosition & dest : destinations)
     {

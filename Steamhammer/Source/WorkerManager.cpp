@@ -36,7 +36,7 @@ void WorkerManager::makeBusy(BWAPI::Unit worker)
 
 void WorkerManager::update()
 {
-    busy.clear();
+    UAB_ASSERT(busy.empty(), "unexpected busy workers");
 
 	// NOTE Combat workers are placed in a combat squad and get their orders there.
 	//      We ignore them here.
@@ -53,6 +53,10 @@ void WorkerManager::update()
 
 	drawWorkerInformation();
 	workerData.drawDepotDebugInfo();
+
+    // Workers are not busy except while WorkerManager::update() is running, so that
+    // other modules can steal workers (which can't be stolen when busy).
+    busy.clear();
 }
 
 // Adjust worker jobs. This is done first, before handling each job.
@@ -532,7 +536,7 @@ void WorkerManager::handleUnblockWorkers()
     }
 }
 
-// Workers assigned to specific posts on the map, identified by MacroLocation.
+// Workers assigned to specific posts on the map.
 void WorkerManager::handlePostedWorkers()
 {
     for (BWAPI::Unit worker : workerData.getWorkers())
@@ -553,7 +557,7 @@ void WorkerManager::handlePostedWorkers()
                 BWAPI::Position pos = workerData.getWorkerPostPosition(worker);
                 if (worker->getDistance(pos) > 8 * 32)
                 {
-                    //BWAPI::Broodwar->printf("moving posted worker %d to %d,%d", worker->getID(), pos.x, pos.y);
+                    // BWAPI::Broodwar->printf("moving posted worker %d to %d,%d", worker->getID(), pos.x, pos.y);
                     the.micro.MoveNear(worker, pos);
                     makeBusy(worker);
                 }
@@ -1042,7 +1046,6 @@ BWAPI::Unit WorkerManager::getPostedWorker(const BWAPI::Position & pos)
         {
             BWAPI::Position post = workerData.getWorkerPostPosition(worker);
             int distance = pos.getApproxDistance(post);
-            //BWAPI::Broodwar->printf("posted %d post %d,%d dist %d", worker->getID(), post.x, post.y, distance);
             if (distance < closestDistance)
             {
                 closestWorker = worker;
@@ -1096,8 +1099,6 @@ BWAPI::Unit WorkerManager::getBuilder(const Building & b)
     BWAPI::Unit builder = getPostedWorker(pos);
     if (builder)
     {
-        //BWAPI::Broodwar->printf("getBuilder gets posted %d for %s @ %d,%d",
-        //    builder->getID(), UnitTypeName(b.type).c_str(), pos.x, pos.y);
         return builder;
     }
 
@@ -1116,8 +1117,6 @@ BWAPI::Unit WorkerManager::getBuilder(const Building & b)
     }
     if (builder)
     {
-        //BWAPI::Broodwar->printf("getBuilder gets nearby %d for %s @ %d,%d",
-        //    builder->getID(), UnitTypeName(b.type).c_str(), pos.x, pos.y);
         return builder;
     }
 
@@ -1125,7 +1124,7 @@ BWAPI::Unit WorkerManager::getBuilder(const Building & b)
 	// We'll wait for the worker to return its cargo and select it on a later frame.
 	if (getAnyWorker(pos, thisBaseRange))
 	{
-		return nullptr;
+        return nullptr;
 	}
 
 	// 6. This base seems to be barren of workers. Return a worker which is at any base.
@@ -1199,10 +1198,12 @@ void WorkerManager::postGivenWorker(BWAPI::Unit worker, MacroLocation loc)
 }
 
 // Post the closest free worker to the given macro location.
-// In case of failure (which should be rare), do nothing.
+// In case of failure (which should be rare), do nothing and return null.
 BWAPI::Unit WorkerManager::postWorker(MacroLocation loc)
 {
     BWAPI::Position pos = the.placer.getMacroLocationPos(loc);
+    UAB_ASSERT(pos.isValid(), "post to bad macroloc");
+
     BWAPI::Unit worker = getUnencumberedWorker(pos, INT_MAX);
     if (!worker)
     {
@@ -1211,6 +1212,7 @@ BWAPI::Unit WorkerManager::postWorker(MacroLocation loc)
 
     if (worker)
     {
+        // BWAPI::Broodwar->printf("posting worker %d", worker->getID());
         postGivenWorker(worker, loc);
     }
     return worker;
@@ -1347,7 +1349,7 @@ bool WorkerManager::isFree(BWAPI::Unit worker)
 {
     UAB_ASSERT(worker, "Worker was null");
 
-	WorkerData::WorkerJob job = workerData.getWorkerJob(worker);
+    WorkerData::WorkerJob job = workerData.getWorkerJob(worker);
 	return
         (job == WorkerData::Minerals || job == WorkerData::Idle && !worker->isBurrowed()) &&
         !isBusy(worker) &&

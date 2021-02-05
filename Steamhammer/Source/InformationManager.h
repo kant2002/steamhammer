@@ -32,6 +32,7 @@ class InformationManager
 	BWAPI::Unitset										_staticDefense;
 	BWAPI::Unitset										_ourPylons;
 	std::map<BWAPI::Unit, BWAPI::Unitset>				_theirTargets;		// our unit -> [enemy units targeting it]
+    BWAPI::Unitset                                      _enemyScans;
 
     // Track a resource container (mineral patch or geyser) by its initial static unit.
     // A mineral patch unit will disappear when it is mined out. A geyser unit will change when taken.
@@ -56,6 +57,7 @@ class InformationManager
     void updateBullets();
     void updateResources();
     void updateEnemyGasTiming();
+    void updateEnemyScans();
 
 public:
 
@@ -107,6 +109,7 @@ public:
 
 	const BWAPI::Unitset &  getStaticDefense() const { return _staticDefense; };
 	const BWAPI::Unitset &  getOurPylons() const { return _ourPylons; };
+    const BWAPI::Unitset &  getEnemyScans() const { return _enemyScans; };
 
 	BWAPI::Unit				nearestGroundStaticDefense(BWAPI::Position pos) const;
 	BWAPI::Unit				nearestAirStaticDefense(BWAPI::Position pos) const;

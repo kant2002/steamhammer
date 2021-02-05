@@ -232,6 +232,7 @@ bool UnitUtil::IsValidUnit(BWAPI::Unit unit)
 		(unit->getPosition().isValid() || unit->isLoaded()) &&	// position is invalid if loaded in transport or bunker
 		unit->getHitPoints() > 0 &&
 		unit->getType() != BWAPI::UnitTypes::Unknown &&
+        !unit->getType().isSpell() &&
 		unit->getPlayer() == BWAPI::Broodwar->self();			// catches mind controlled units
 }
 

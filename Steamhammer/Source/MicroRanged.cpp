@@ -44,8 +44,7 @@ void MicroRanged::assignTargets(const BWAPI::Unitset & rangedUnits, const BWAPI:
 			u->isDetected() &&
 			u->getType() != BWAPI::UnitTypes::Zerg_Larva &&
 			u->getType() != BWAPI::UnitTypes::Zerg_Egg &&
-            !infestable(u) &&
-			!u->isInvincible();
+            !infestable(u);
 	});
 
 	// Figure out if the enemy is ready to attack ground or air.

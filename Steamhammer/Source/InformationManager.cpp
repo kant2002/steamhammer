@@ -64,6 +64,7 @@ void InformationManager::update()
     updateBullets();
     updateResources();
     updateEnemyGasTiming();
+    updateEnemyScans();
 }
 
 void InformationManager::updateUnitInfo() 
@@ -303,6 +304,23 @@ void InformationManager::updateEnemyGasTiming()
        {
             _enemyGasTiming = the.now();
             return;
+        }
+    }
+}
+
+// Keep track of active enemy scans every frame (if the enemy is terran).
+void InformationManager::updateEnemyScans()
+{
+    if (the.enemyRace() == BWAPI::Races::Terran)
+    {
+        _enemyScans.clear();
+        for (BWAPI::Unit u : BWAPI::Broodwar->enemy()->getUnits())//the.enemy()->getUnits())
+        {
+            if (u->getType() == BWAPI::UnitTypes::Spell_Scanner_Sweep)
+            {
+                // NOTE getRemoveTimer() returns 0 for enemy scans.
+                _enemyScans.insert(u);
+            }
         }
     }
 }
@@ -711,6 +729,7 @@ bool InformationManager::weHaveCombatUnits()
 		if (!u->getType().isWorker() &&
 			!u->getType().isBuilding() &&
 			u->isCompleted() &&
+            !u->getType().isSpell() &&
 			u->getType() != BWAPI::UnitTypes::Zerg_Larva &&
 			u->getType() != BWAPI::UnitTypes::Zerg_Overlord)
 		{
@@ -839,7 +858,7 @@ bool InformationManager::enemyHasAirTech()
 	{
 		const UnitInfo & ui(kv.second);
 
-		if ((ui.type.isFlyer() && ui.type != BWAPI::UnitTypes::Zerg_Overlord) ||
+		if (ui.type.isFlyer() && ui.type != BWAPI::UnitTypes::Zerg_Overlord && !ui.type.isSpell() ||
 			ui.type == BWAPI::UnitTypes::Terran_Starport ||
 			ui.type == BWAPI::UnitTypes::Terran_Control_Tower ||
 			ui.type == BWAPI::UnitTypes::Terran_Science_Facility ||
@@ -1262,6 +1281,7 @@ int InformationManager::nScourgeNeeded()
 
 		// A few unit types should not usually be scourged. Skip them.
 		if (ui.type.isFlyer() &&
+            ui.type != BWAPI::UnitTypes::Spell_Scanner_Sweep &&
 			ui.type != BWAPI::UnitTypes::Zerg_Overlord &&
 			ui.type != BWAPI::UnitTypes::Zerg_Scourge &&
 			ui.type != BWAPI::UnitTypes::Protoss_Interceptor)

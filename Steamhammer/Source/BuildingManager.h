@@ -13,28 +13,28 @@ class BuildingManager
 
     BuildingManager();
 
-    int             _reservedMinerals;				// minerals reserved for planned buildings
-    int             _reservedGas;					// gas reserved for planned buildings
+    int  _reservedMinerals;				    // minerals reserved for planned buildings
+    int  _reservedGas;					    // gas reserved for planned buildings
+	bool _stalledForLackOfSpace;			// no valid location to place a protoss building
 
-	bool			_stalledForLackOfSpace;			// no valid location to place a protoss building
+    bool isBuildingPositionExplored(const Building & b) const;
+	void undoBuildings(const std::vector< std::reference_wrapper<Building> > &toRemove);
+	void removeBuildings(const std::vector< std::reference_wrapper<Building> > & toRemove);
 
-    bool            isBuildingPositionExplored(const Building & b) const;
-	void			undoBuildings(const std::vector< std::reference_wrapper<Building> > &toRemove);
-	void            removeBuildings(const std::vector< std::reference_wrapper<Building> > & toRemove);
+    void validateBuildings();					// STEP 1
+    void assignWorkersToUnassignedBuildings();	// STEP 2
+    void constructAssignedBuildings();			// STEP 3
+    void checkForStartedConstruction();			// STEP 4
+    void checkForDeadTerranBuilders();			// STEP 5
+    void checkForCompletedBuildings();			// STEP 6
+	void checkReservedResources();				// error check
+    void clearAbandonedTerranBuildings();       // error workaround
 
-    void            validateBuildings();					// STEP 1
-    void            assignWorkersToUnassignedBuildings();	// STEP 2
-    void            constructAssignedBuildings();			// STEP 3
-    void            checkForStartedConstruction();			// STEP 4
-    void            checkForDeadTerranBuilders();			// STEP 5
-    void            checkForCompletedBuildings();			// STEP 6
-	void			checkReservedResources();				// error check
+	bool buildingTimedOut(const Building & b) const;
 
-	bool			buildingTimedOut(const Building & b) const;
-
-    bool            validBuilder(const Building & b) const;
-	void			setBuilderUnit(Building & b);
-	void			releaseBuilderUnit(Building & b);
+    bool validBuilder(BWAPI::Unit worker) const;
+	void setBuilderUnit(Building & b);
+	void releaseBuilderUnit(Building & b);
     
 public:
     
