@@ -1,3 +1,4 @@
+
 #pragma once
 
 #include "BWAPI.h"
@@ -19,19 +20,20 @@ namespace Config
         extern bool PrintInfoOnStart;
     }
 
-	namespace IO
-	{
-		extern std::string ErrorLogFilename;
-		extern bool LogAssertToErrorFile;
+    namespace IO
+    {
+        extern std::string ErrorLogFilename;
+        extern bool LogAssertToErrorFile;
 
         extern std::string StaticDir;
         extern std::string PreparedDataDir;
         extern std::string ReadDir;
-		extern std::string WriteDir;
-		extern int MaxGameRecords;
-		extern bool ReadOpponentModel;
-		extern bool WriteOpponentModel;
-	}
+        extern std::string WriteDir;
+        extern std::string OpeningTimingFile;
+        extern int MaxGameRecords;
+        extern bool ReadOpponentModel;
+        extern bool WriteOpponentModel;
+    }
 
     namespace Skills
     {
@@ -44,15 +46,18 @@ namespace Config
         extern bool GasSteal;
 
         extern bool Burrow;
+        extern bool UseSunkenRangeBug;
+
         extern int MaxQueens;
         extern int MaxInfestedTerrans;
         extern int MaxDefilers;
     }
 
-	namespace Strategy
+    namespace Strategy
     {
+        extern bool Crazyhammer;
         extern std::string StrategyName;
-		extern bool UsePlanRecognizer;
+        extern bool UsePlanRecognizer;
         extern bool UseEnemySpecificStrategy;
         extern bool FoundEnemySpecificStrategy;
     }
@@ -74,31 +79,33 @@ namespace Config
     {
         extern bool DrawGameInfo;
         extern bool DrawUnitHealthBars;
-		extern bool DrawProductionInfo;
-		extern bool DrawBuildOrderSearchInfo;
-		extern bool DrawQueueFixInfo;
-		extern bool DrawScoutInfo;
-		extern bool DrawEnemyUnitInfo;
-        extern bool DrawUnitCounts;
-		extern bool DrawHiddenEnemies;
-		extern bool DrawModuleTimers;
-		extern bool DrawCombatSimulationInfo;
-		extern bool DrawUnitTargets;
-		extern bool DrawUnitOrders;
-		extern bool DrawMicroState;
-		extern bool DrawMapInfo;
-		extern bool DrawMapGrid;
-		extern bool DrawMapDistances;
-        extern bool DrawTerrainHeights;
-		extern bool DrawBaseInfo;
-        extern bool DrawExpoScores;
-		extern bool DrawStrategyBossInfo;
-		extern bool DrawSquadInfo;
-		extern bool DrawClusters;
-        extern bool DrawDefenseClusters;
+        extern bool DrawProductionInfo;
+        extern bool DrawBuildOrderSearchInfo;
+        extern bool DrawQueueFixInfo;
+        extern bool DrawScoutInfo;
         extern bool DrawWorkerInfo;
+        extern bool DrawModuleTimers;
+        extern bool DrawReservedBuildingTiles;
+        extern bool DrawCombatSimulationInfo;
         extern bool DrawBuildingInfo;
-		extern bool DrawReservedBuildingTiles;
+        extern bool DrawStaticDefensePlan;
+        extern bool DrawEnemyUnitInfo;
+        extern bool DrawUnitCounts;
+        extern bool DrawHiddenEnemies;
+        extern bool DrawMapInfo;
+        extern bool DrawMapGrid;
+        extern bool DrawMapDistances;
+        extern bool DrawTerrainHeights;
+        extern bool DrawBaseInfo;
+        extern bool DrawExpoScores;
+        extern bool DrawStrategyBossInfo;
+        extern bool DrawUnitTargets;
+        extern bool DrawUnitOrders;
+        extern bool DrawMicroState;
+        extern bool DrawLurkerTactics;
+        extern bool DrawSquadInfo;
+        extern bool DrawClusters;
+        extern bool DrawDefenseClusters;
         extern bool DrawResourceAmounts;
 
         extern BWAPI::Color ColorLineTarget;
@@ -114,19 +121,19 @@ namespace Config
         extern int RetreatMeleeUnitShields;
         extern int RetreatMeleeUnitHP;
         extern int CombatSimRadius;         
-		extern int ScoutDefenseRadius;
-	}
+        extern int ScoutDefenseRadius;
+    }
     
     namespace Macro
     {
         extern int BOSSFrameLimit;
         extern int WorkersPerRefinery;
-		extern double WorkersPerPatch;
-		extern int AbsoluteMaxWorkers;
+        extern double WorkersPerPatch;
+        extern int AbsoluteMaxWorkers;
         extern int BuildingSpacing;
         extern int PylonSpacing;
-		extern int ProductionJamFrameLimit;
-		extern bool ExpandToIslands;
+        extern int ProductionJamFrameLimit;
+        extern bool ExpandToIslands;
     }
 
     namespace Tools

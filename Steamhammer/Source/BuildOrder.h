@@ -17,7 +17,7 @@ public:
     BuildOrder(const BWAPI::Race race);
     BuildOrder(const BWAPI::Race race, const std::vector<MacroAct> & metaVector);
 
-	void clearAll() { _buildOrder.clear(); };
+    void clearAll() { _buildOrder.clear(); };
 
     void add(const MacroAct & act);
 

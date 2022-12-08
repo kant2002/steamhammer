@@ -8,58 +8,62 @@ class GridCell
 {
 public:
 
-	int             timeLastVisited;
+    int             timeLastVisited;
     int             timeLastOpponentSeen;
-	int				timeLastScan;
-	BWAPI::Unitset  ourUnits;
-	BWAPI::Unitset  oppUnits;
-	BWAPI::Position center;
+    int				timeLastScan;
+    BWAPI::Unitset  ourUnits;
+    BWAPI::Unitset  oppUnits;
+    BWAPI::Position center;
 
-	// Not the ideal place for this constant, but this is where it is used.
-	const static int ScanDuration = 240;    // approximate time that a comsat scan provides vision
+    // Not the ideal place for this constant, but this is where it is used.
+    const static int ScanDuration = 240;    // approximate time that a comsat scan provides vision
 
-	GridCell()
+    GridCell()
         : timeLastVisited(0)
         , timeLastOpponentSeen(0)
-		, timeLastScan(-ScanDuration)
+        , timeLastScan(-ScanDuration)
     {
     }
 };
 
+// Forward declaration.
+class Base;
+
 class MapGrid 
 {
-	MapGrid();
-	MapGrid(int mapWidth, int mapHeight, int cellSize);
+    MapGrid();
+    MapGrid(int mapWidth, int mapHeight, int cellSize);
 
-	int							cellSize;
-	int							mapWidth, mapHeight;
-	int							rows, cols;
-	int							lastUpdated;
+    int							cellSize;
+    int							mapWidth, mapHeight;
+    int							rows, cols;
+    int							lastUpdated;
 
-	std::vector< GridCell >		cells;
+    std::vector< GridCell >		cells;
 
-	void						calculateCellCenters();
+    void						calculateCellCenters();
 
-	void						clearGrid();
-	BWAPI::Position				getCellCenter(int x, int y);
+    void						clearGrid();
+    BWAPI::Position				getCellCenter(int x, int y);
 
 public:
 
-	static MapGrid &	Instance();
+    static MapGrid &	Instance();
 
-	void				update();
-	void				getUnits(BWAPI::Unitset & units, BWAPI::Position center, int radius, bool ourUnits, bool oppUnits);
-	BWAPI::Position		getLeastExplored() { return getLeastExplored(false, 1); };
-	BWAPI::Position		getLeastExplored(bool byGround, int mapPartition);
+    void				update();
+    void				getUnits(BWAPI::Unitset & units, BWAPI::Position center, int radius, bool ourUnits, bool oppUnits);
+    BWAPI::Position		getLeastExplored() { return getLeastExplored(false, 1); };
+    BWAPI::Position		getLeastExplored(bool byGround, int mapPartition);
     BWAPI::Position     getLeastExploredNear(const BWAPI::Position & center, bool byGround);
+    BWAPI::Position     getLeastExploredNearBase(Base * center, bool byGround);
 
-	GridCell & getCellByIndex(int r, int c) { return cells[r*cols + c]; }
-	GridCell & getCell(BWAPI::Position pos) { return getCellByIndex(pos.y / cellSize, pos.x / cellSize); }
-	GridCell & getCell(BWAPI::Unit unit)    { return getCell(unit->getPosition()); }
+    GridCell & getCellByIndex(int r, int c) { return cells[r*cols + c]; }
+    GridCell & getCell(BWAPI::Position pos) { return getCellByIndex(pos.y / cellSize, pos.x / cellSize); }
+    GridCell & getCell(BWAPI::Unit unit)    { return getCell(unit->getPosition()); }
 
-	// Track comsat scans so we don't scan the same place again too soon.
-	void				scanAtPosition(const BWAPI::Position & pos);
-	bool				scanIsActiveAt(const BWAPI::Position & pos);
+    // Track comsat scans so we don't scan the same place again too soon.
+    void				scanAtPosition(const BWAPI::Position & pos);
+    bool				scanIsActiveAt(const BWAPI::Position & pos);
 };
 
 }

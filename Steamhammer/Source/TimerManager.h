@@ -9,30 +9,30 @@ namespace UAlbertaBot
 
 class TimerManager
 {
-	std::vector<BOSS::Timer> _timers;
-	std::vector<std::string> _timerNames;
+    std::vector<BOSS::Timer> _timers;
+    std::vector<std::string> _timerNames;
 
-	int _count;
-	double _maxMilliseconds;
-	double _totalMilliseconds;
+    int _count;
+    double _maxMilliseconds;
+    double _totalMilliseconds;
 
-	int _barWidth;
+    int _barWidth;
 
 public:
 
-	enum Type { Total, InformationManager, MapGrid, OpponentModel, Search, Worker, Production, Building, Combat, Micro, Scout, NumTypes };
+    enum Type { Total, InformationManager, MapGrid, OpponentModel, Search, Worker, Production, Building, Combat, Micro, Scout, NumTypes };
 
-	TimerManager();
+    TimerManager();
 
-	void startTimer(const TimerManager::Type t);
+    void startTimer(const TimerManager::Type t);
 
-	void stopTimer(const TimerManager::Type t);
+    void stopTimer(const TimerManager::Type t);
 
-	double getMilliseconds();      // for this frame
-	double getMaxMilliseconds();   // over all frames
-	double getMeanMilliseconds();  // over all frames
+    double getMilliseconds();      // for this frame
+    double getMaxMilliseconds();   // over all frames
+    double getMeanMilliseconds();  // over all frames
 
-	void drawModuleTimers(int x, int y);
+    void drawModuleTimers(int x, int y);
 };
 
 }

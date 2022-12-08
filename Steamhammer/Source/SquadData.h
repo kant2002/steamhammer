@@ -1,3 +1,4 @@
+
 #pragma once
 
 #include "Squad.h"
@@ -6,23 +7,22 @@ namespace UAlbertaBot
 {
 class SquadData
 {
-	std::map<std::string, Squad> _squads;
+    std::map<std::string, Squad> _squads;
 
     void    updateAllSquads();
     void    verifySquadUniqueMembership();
 
 public:
 
-	SquadData();
+    SquadData();
 
     void            clearSquadData();
 
     bool            canAssignUnitToSquad(BWAPI::Unit unit, const Squad & squad) const;
     void            assignUnitToSquad(BWAPI::Unit unit, Squad & squad);
-	void            createSquad(const std::string & name, const SquadOrder & order, size_t priority);
+    Squad &         createSquad(const std::string & name, size_t priority);
     void            removeSquad(const std::string & squadName);
-	void            drawSquadInformation(int x, int y);
-	void            drawCombatSimInformation();
+    void            drawSquadInformation(int x, int y);
 
     void            update();
     void            setRegroup();

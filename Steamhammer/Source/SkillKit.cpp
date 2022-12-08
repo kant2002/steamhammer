@@ -1,37 +1,40 @@
 #include "SkillKit.h"
 
+#include "SkillBattles.h"
 #include "SkillGasSteal.h"
+#include "SkillLurkers.h"
+#include "SkillOpeningTiming.h"
 #include "SkillUnitTimings.h"
 #include "The.h"
 
 using namespace UAlbertaBot;
+
+// Usage: addSkill(new WhateverSkill).
+void SkillKit::addSkill(Skill * skill)
+{
+    if (skill->enabled())
+    {
+        skills.push_back(skill);
+    }
+    else
+    {
+        delete skill;
+    }
+}
 
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
 // This happens before skill data is read, necessarily.
 void SkillKit::initialize()
 {
-    SkillGasSteal * gasSteal = new SkillGasSteal;
-    if (gasSteal->enabled())
-    {
-        skills.push_back(gasSteal);
-    }
-    else
-    {
-        delete gasSteal;
-    }
-
-    SkillUnitTimings * unitTimings = new SkillUnitTimings;
-    if (unitTimings->enabled())
-    {
-        skills.push_back(unitTimings);
-    }
-    else
-    {
-        delete unitTimings;
-    }
+    addSkill(new SkillBattles);
+    addSkill(new SkillGasSteal);
+    addSkill(new SkillLurkers);
+    addSkill(new SkillOpeningTiming);
+    addSkill(new SkillUnitTimings);
 }
 
+// Called from GameRecord, where skill data is persisted.
 // skill: <data depending on the skill>
 void SkillKit::read(GameRecord & r, const std::string & line)
 {
@@ -52,6 +55,7 @@ void SkillKit::read(GameRecord & r, const std::string & line)
     // If we didn't find the skill by name, it may be disabled or even deleted. That's fine.
 }
 
+// Called from GameRecordNow, where skill data for the current game is persisted.
 void SkillKit::write(std::ostream & out)
 {
     for (Skill * skill : skills)
@@ -76,6 +80,15 @@ void SkillKit::update()
                 skill->execute();
             }
         }
+    }
+}
+
+// Draw debugging info. Each skill decides for itself whether to draw its info.
+void SkillKit::draw() const
+{
+    for (Skill * skill : skills)
+    {
+        skill->draw();
     }
 }
 

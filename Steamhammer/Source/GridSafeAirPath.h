@@ -11,7 +11,7 @@ class GridSafeAirPath : public Grid
 private:
     std::vector<BWAPI::TilePosition> sortedTilePositions;
 
-	void compute(const BWAPI::TilePosition & start, int limit);
+    void compute(const BWAPI::TilePosition & start, int limit);
 
 public:
     GridSafeAirPath();

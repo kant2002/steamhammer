@@ -16,14 +16,14 @@ void MicroMedics::executeMicro(const BWAPI::Unitset & targets, const UnitCluster
 
 void MicroMedics::update(const UnitCluster & cluster, BWAPI::Unit vanguard)
 {
-	const BWAPI::Unitset & medics = Intersection(getUnits(), cluster.units);
-	if (medics.empty())
-	{
-		return;
-	}
+    const BWAPI::Unitset & medics = Intersection(getUnits(), cluster.units);
+    if (medics.empty())
+    {
+        return;
+    }
 
-	// create a set of all medic targets
-	BWAPI::Unitset medicTargets;
+    // create a set of all medic targets
+    BWAPI::Unitset medicTargets;
     for (BWAPI::Unit unit : BWAPI::Broodwar->self()->getUnits())
     {
         if (unit->getHitPoints() < unit->getInitialHitPoints() && unit->getType().isOrganic())
@@ -43,7 +43,7 @@ void MicroMedics::update(const UnitCluster & cluster, BWAPI::Unit vanguard)
             continue;
         }
 
-        int closestMedicDist = INT_MAX;
+        int closestMedicDist = MAX_DISTANCE;
         BWAPI::Unit closestMedic = nullptr;
 
         for (const auto medic : availableMedics)
@@ -66,16 +66,16 @@ void MicroMedics::update(const UnitCluster & cluster, BWAPI::Unit vanguard)
         }
         else
         {
-			// We didn't find a medic, so they're all in use. Stop looping.
+            // We didn't find a medic, so they're all in use. Stop looping.
             break;
         }
     }
 
     // remaining medics should head toward the goal position
-	BWAPI::Position medicGoal = vanguard ? vanguard->getPosition() : cluster.center;
-	for (const auto medic : availableMedics)
+    BWAPI::Position medicGoal = vanguard ? vanguard->getPosition() : cluster.center;
+    for (const auto medic : availableMedics)
     {
-		the.micro.AttackMove(medic, medicGoal);		// the same as heal-move
+        the.micro.AttackMove(medic, medicGoal);		// the same as heal-move
     }
 }
 
@@ -83,10 +83,10 @@ void MicroMedics::update(const UnitCluster & cluster, BWAPI::Unit vanguard)
 // This info is used in deciding whether to stim, and could have other uses.
 int MicroMedics::getTotalEnergy()
 {
-	int energy = 0;
-	for (BWAPI::Unit unit : getUnits())
-	{
-		energy += unit->getEnergy();
-	}
-	return energy;
+    int energy = 0;
+    for (BWAPI::Unit unit : getUnits())
+    {
+        energy += unit->getEnergy();
+    }
+    return energy;
 }

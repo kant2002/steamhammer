@@ -9,13 +9,13 @@ namespace UAlbertaBot
 class GridInset : public GridWalk
 {
 public:
-	GridInset();
+    GridInset();
 
-	void initialize();
-	
-	// Try to find a position near the start with the given inset. May fail.
-	BWAPI::Position find(const BWAPI::Position & start, int inset);
+    void initialize();
+    
+    // Try to find a position near the start with the given inset. May fail.
+    BWAPI::Position find(const BWAPI::Position & start, int inset);
 
-	void draw() const;
+    void draw() const;
 };
 }

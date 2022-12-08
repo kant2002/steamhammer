@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <iostream>
 
 namespace UAlbertaBot
 {
@@ -47,6 +48,10 @@ public:
     // Execute the skill, for those skills that make execute/don't decisions.
     // Called once per update when feasible() and good() are true.
     virtual void execute() = 0;
+
+    // Skills that want to draw debugging info should override this.
+    // It will be called once per frame.
+    virtual void draw() const {};
 
     int nextUpdate() const { return _nextUpdateFrame; };
 

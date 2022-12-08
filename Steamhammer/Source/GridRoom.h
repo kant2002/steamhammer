@@ -9,10 +9,10 @@ namespace UAlbertaBot
 class GridRoom : public GridWalk
 {
 public:
-	GridRoom();
+    GridRoom();
 
-	void initialize();
-	
-	void draw() const;
+    void initialize();
+    
+    void draw() const;
 };
 }

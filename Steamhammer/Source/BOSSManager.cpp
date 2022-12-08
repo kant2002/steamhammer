@@ -8,12 +8,12 @@ using namespace UAlbertaBot;
 
 BOSSManager & BOSSManager::Instance() 
 {
-	static BOSSManager instance;
-	return instance;
+    static BOSSManager instance;
+    return instance;
 }
 
 BOSSManager::BOSSManager() 
-	: _previousSearchStartFrame(0)
+    : _previousSearchStartFrame(0)
     , _previousSearchFinishFrame(0)
     , _searchInProgress(false)
     , _previousStatus("No Searches")
@@ -35,7 +35,7 @@ void BOSSManager::startNewSearch(const std::vector<MetaPair> & goalUnits)
                         + the.my.all.count(BWAPI::UnitTypes::Zerg_Lair)
                         + the.my.all.count(BWAPI::UnitTypes::Zerg_Hive);
 
-	// TODO these are both solvable problems :-/
+    // TODO these are both solvable problems :-/
     if (numWorkers == 0)
     {
         _previousStatus = "\x08No Workers :(";
@@ -66,16 +66,16 @@ void BOSSManager::startNewSearch(const std::vector<MetaPair> & goalUnits)
     }
     catch (const BOSS::BOSSException &)
     {
-		if (Config::Debug::DrawBuildOrderSearchInfo)
-		{
-			BWAPI::BroodwarPtr->printf("Exception in BOSS::GameState constructor");
-		}
+        if (Config::Debug::DrawBuildOrderSearchInfo)
+        {
+            BWAPI::BroodwarPtr->printf("Exception in BOSS::GameState constructor");
+        }
     }
 }
 
 void BOSSManager::drawSearchInformation(int x, int y) 
 {
-	if (!Config::Debug::DrawBuildOrderSearchInfo)
+    if (!Config::Debug::DrawBuildOrderSearchInfo)
     {
         return;
     }
@@ -118,21 +118,21 @@ void BOSSManager::update(double timeLimit)
         _smartSearch->setTimeLimit((int)realTimeLimit);
         bool caughtException = false;
 
-		try
+        try
         {
             // call the search to continue searching
             // this will resume a search in progress or start a new search if not yet started
-			_smartSearch->search();
-		}
-		catch (const BOSS::BOSSException &)
+            _smartSearch->search();
+        }
+        catch (const BOSS::BOSSException &)
         {
-			if (Config::Debug::DrawBuildOrderSearchInfo)
-			{
-				BWAPI::Broodwar->drawTextScreen(0, 0, "Search didn't find a solution, resorting to Naive Build Order");
-			}
+            if (Config::Debug::DrawBuildOrderSearchInfo)
+            {
+                BWAPI::Broodwar->drawTextScreen(0, 0, "Search didn't find a solution, resorting to Naive Build Order");
+            }
             _previousStatus = "BOSSExeption";
             caughtException = true;
-		}
+        }
 
         _totalPreviousSearchTime += _smartSearch->getResults().timeElapsed;
 
@@ -144,7 +144,7 @@ void BOSSManager::update(double timeLimit)
             bool solved = _smartSearch->getResults().solved && _smartSearch->getResults().solutionFound;
 
             // if we've found a solution, let us know
-			if (Config::Debug::DrawBuildOrderSearchInfo && _smartSearch->getResults().solved)
+            if (Config::Debug::DrawBuildOrderSearchInfo && _smartSearch->getResults().solved)
             {
                 BWAPI::Broodwar->printf("Build order SOLVED in %d nodes", (int)_smartSearch->getResults().nodesExpanded);
             }
@@ -190,7 +190,7 @@ void BOSSManager::update(double timeLimit)
                 // so try another naive build order search as a last resort
                 BOSS::NaiveBuildOrderSearch nbos(_smartSearch->getParameters().initialState, _smartSearch->getParameters().goal);
 
-				try
+                try
                 {
                     if (searchTimeOut)
                     {
@@ -202,23 +202,23 @@ void BOSSManager::update(double timeLimit)
                         _previousStatus = std::string("\x02") + "BOSS Exception\n";
                     }
 
-					_previousBuildOrder = nbos.solve();
+                    _previousBuildOrder = nbos.solve();
                     _previousStatus += "\x03NBOS Solution";
 
-					return;
-				}
+                    return;
+                }
                 // and if that search doesn't work then we're out of luck, no build orders for us
-				catch (const BOSS::BOSSException & exception)
+                catch (const BOSS::BOSSException & exception)
                 {
                     _previousStatus += "\x08Naive Exception";
                     if (Config::Debug::DrawBuildOrderSearchInfo)
                     {
-						UAB_ASSERT_WARNING(false, "BOSS Timeout Naive Search Exception: %s", exception.what());
-						BWAPI::Broodwar->drawTextScreen(0, 20, "No BuildOrder found, returning empty BuildOrder");
+                        UAB_ASSERT_WARNING(false, "BOSS Timeout Naive Search Exception: %s", exception.what());
+                        BWAPI::Broodwar->drawTextScreen(0, 20, "No BuildOrder found, returning empty BuildOrder");
                     }
-					_previousBuildOrder = BOSS::BuildOrder();
-					return;
-				}
+                    _previousBuildOrder = BOSS::BuildOrder();
+                    return;
+                }
             }
         }
     }
@@ -233,14 +233,14 @@ void BOSSManager::logBadSearch()
 
 BOSS::BuildOrderSearchGoal BOSSManager::GetGoal(const std::vector<MetaPair> & goalUnits)
 {
-	BOSS::BuildOrderSearchGoal goal(BOSS::Races::GetRaceID(BWAPI::Broodwar->self()->getRace()));
+    BOSS::BuildOrderSearchGoal goal(BOSS::Races::GetRaceID(BWAPI::Broodwar->self()->getRace()));
 
-	for (size_t i=0; i<goalUnits.size(); ++i)
-	{
-		goal.setGoal(GetActionType(goalUnits[i].first), goalUnits[i].second);
-	}
+    for (size_t i=0; i<goalUnits.size(); ++i)
+    {
+        goal.setGoal(GetActionType(goalUnits[i].first), goalUnits[i].second);
+    }
 
-	return goal;
+    return goal;
 }
 
 // gets the StarcraftState corresponding to the beginning of a Melee game
@@ -249,7 +249,7 @@ BOSS::GameState BOSSManager::getStartState()
     BOSS::GameState state(getRace());
     state.setStartingState();
 
-	return state;
+    return state;
 }
 
 const BOSS::RaceID BOSSManager::getRace() const
@@ -282,14 +282,14 @@ bool BOSSManager::isSearchInProgress()
 // converts SearchResults.buildOrder vector into vector of MacroAct
 std::vector<MacroAct> BOSSManager::GetMetaVector(const BOSS::BuildOrder & buildOrder)
 {
-	std::vector<MacroAct> metaVector;
-    	
-	for (size_t i(0); i<buildOrder.size(); ++i)
-	{
-		metaVector.push_back(GetMacroAct(buildOrder[i]));
-	}
+    std::vector<MacroAct> metaVector;
+        
+    for (size_t i(0); i<buildOrder.size(); ++i)
+    {
+        metaVector.push_back(GetMacroAct(buildOrder[i]));
+    }
 
-	return metaVector;
+    return metaVector;
 }
 
 
@@ -300,46 +300,46 @@ BuildOrder BOSSManager::getBuildOrder()
 
 BOSS::ActionType BOSSManager::GetActionType(const MacroAct & t)
 {
-	// set the appropriate type
-	if (t.isUnit())
-	{
-		return BOSS::ActionType(t.getUnitType());
-	}
-	else if (t.isUpgrade())
-	{
-		return BOSS::ActionType(t.getUpgradeType());
-	} 
-	else if (t.isTech())
-	{
-		return BOSS::ActionType(t.getTechType());
-	}
-	else
-	{
-		UAB_ASSERT(false, "Should have found a valid type here");
-	}
-	
-	return BOSS::ActionType();
+    // set the appropriate type
+    if (t.isUnit())
+    {
+        return BOSS::ActionType(t.getUnitType());
+    }
+    else if (t.isUpgrade())
+    {
+        return BOSS::ActionType(t.getUpgradeType());
+    } 
+    else if (t.isTech())
+    {
+        return BOSS::ActionType(t.getTechType());
+    }
+    else
+    {
+        UAB_ASSERT(false, "Should have found a valid type here");
+    }
+    
+    return BOSS::ActionType();
 }
 
 MacroAct BOSSManager::GetMacroAct(const BOSS::ActionType & a)
 {
-	// set the appropriate type
-	if (a.isUnit())
-	{
-		return MacroAct(a.getUnitType());
-	}
-	else if (a.isUpgrade())
-	{
-		return MacroAct(a.getUpgradeType());
-	} 
-	else if (a.isTech())
-	{
-		return MacroAct(a.getTechType());
-	}
-	else
-	{
-		UAB_ASSERT(false, "Should have found a valid type here");
-	}
-	
-	return MacroAct();
+    // set the appropriate type
+    if (a.isUnit())
+    {
+        return MacroAct(a.getUnitType());
+    }
+    else if (a.isUpgrade())
+    {
+        return MacroAct(a.getUpgradeType());
+    } 
+    else if (a.isTech())
+    {
+        return MacroAct(a.getTechType());
+    }
+    else
+    {
+        UAB_ASSERT(false, "Should have found a valid type here");
+    }
+    
+    return MacroAct();
 }

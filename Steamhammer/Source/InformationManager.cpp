@@ -11,21 +11,22 @@
 using namespace UAlbertaBot;
 
 InformationManager::InformationManager()
-	: _self(BWAPI::Broodwar->self())
+    : _self(BWAPI::Broodwar->self())
     , _enemy(BWAPI::Broodwar->enemy())
-	
-	, _weHaveCombatUnits(false)
-	, _enemyHasCombatUnits(false)
-	, _enemyHasStaticAntiAir(false)
-	, _enemyHasAntiAir(false)
-	, _enemyHasAirTech(false)
-	, _enemyHasCloakTech(false)
-	, _enemyCloakedUnitsSeen(false)
-	, _enemyHasMobileCloakTech(false)
-	, _enemyHasOverlordHunters(false)
-	, _enemyHasStaticDetection(false)
-	, _enemyHasMobileDetection(_enemy->getRace() == BWAPI::Races::Zerg)
-	, _enemyHasSiegeMode(false)
+    
+    , _weHaveCombatUnits(false)
+    , _enemyHasCombatUnits(false)
+    , _enemyHasStaticAntiAir(false)
+    , _enemyHasAntiAir(false)
+    , _enemyHasAirTech(false)
+    , _enemyHasCloakTech(false)
+    , _enemyCloakedUnitsSeen(false)
+    , _enemyHasMobileCloakTech(false)
+    , _enemyHasOverlordHunters(false)
+    , _enemyHasStaticDetection(false)
+    , _enemyHasMobileDetection(_enemy->getRace() == BWAPI::Races::Zerg)
+    , _enemyHasSiegeMode(false)
+    , _enemyHasStorm(false)
     , _enemyGasTiming(0)
 {
 }
@@ -39,7 +40,7 @@ void InformationManager::initialize()
 // Set up _occupiedLocations.
 void InformationManager::initializeRegionInformation()
 {
-	updateOccupiedRegions(the.zone.ptr(the.bases.myStart()->getTilePosition()), _self);
+    updateOccupiedRegions(the.zone.ptr(the.bases.myStart()->getTilePosition()), _self);
 }
 
 // Initial mineral and gas values.
@@ -57,10 +58,10 @@ void InformationManager::initializeResources()
 
 void InformationManager::update()
 {
-	updateUnitInfo();
-	updateGoneFromLastPosition();
-	updateBaseLocationInfo();
-	updateTheirTargets();
+    updateUnitInfo();
+    updateGoneFromLastPosition();
+    updateBaseLocationInfo();
+    updateTheirTargets();
     updateBullets();
     updateResources();
     updateEnemyGasTiming();
@@ -69,174 +70,182 @@ void InformationManager::update()
 
 void InformationManager::updateUnitInfo() 
 {
-	_unitData[_enemy].removeBadUnits();
-	_unitData[_self].removeBadUnits();
+    _unitData[_enemy].removeBadUnits();
+    _unitData[_self].removeBadUnits();
 
-	for (BWAPI::Unit unit : _enemy->getUnits())
-	{
-		updateUnit(unit);
-	}
+    for (BWAPI::Unit unit : _enemy->getUnits())
+    {
+        updateUnit(unit);
+    }
 
-	// Remove destroyed pylons from _ourPylons.
+    // Remove destroyed pylons from _ourPylons.
     for (auto pylonIt = _ourPylons.begin(); pylonIt != _ourPylons.end(); )
-	{
+    {
         if (!(*pylonIt)->exists())
-		{
+        {
             pylonIt = _ourPylons.erase(pylonIt);
-		}
+        }
         else
         {
             ++pylonIt;
         }
-	}
+    }
 
-	bool anyNewPylons = false;
+    bool anyNewPylons = false;
 
-	for (BWAPI::Unit unit : _self->getUnits())
-	{
-		updateUnit(unit);
+    for (BWAPI::Unit unit : _self->getUnits())
+    {
+        updateUnit(unit);
 
-		// Add newly-completed pylons to _ourPylons, and notify BuildingManager.
-		if (unit->getType() == BWAPI::UnitTypes::Protoss_Pylon &&
-			unit->isCompleted() &&
-			!_ourPylons.contains(unit))
-		{
-			_ourPylons.insert(unit);
-			anyNewPylons = true;
-		}
-	}
+        // Add newly-completed pylons to _ourPylons, and notify BuildingManager.
+        if (unit->getType() == BWAPI::UnitTypes::Protoss_Pylon &&
+            unit->isCompleted() &&
+            !_ourPylons.contains(unit))
+        {
+            _ourPylons.insert(unit);
+            anyNewPylons = true;
+        }
+    }
 
-	if (anyNewPylons)
-	{
-		BuildingManager::Instance().unstall();
-	}
+    if (anyNewPylons)
+    {
+        BuildingManager::Instance().unstall();
+    }
 }
 
 void InformationManager::updateBaseLocationInfo() 
 {
-	_occupiedRegions[_self].clear();
-	_occupiedRegions[_enemy].clear();
-	
-	// The enemy occupies a region if it has a building there.
-	for (const auto & kv : _unitData[_enemy].getUnits())
-	{
-		const UnitInfo & ui(kv.second);
+    _occupiedRegions[_self].clear();
+    _occupiedRegions[_enemy].clear();
+    
+    // The enemy occupies a region if it has a building there.
+    for (const auto & kv : _unitData[_enemy].getUnits())
+    {
+        const UnitInfo & ui(kv.second);
 
-		if (ui.type.isBuilding() && !ui.goneFromLastPosition && !ui.lifted)
-		{
-			updateOccupiedRegions(the.zone.ptr(BWAPI::TilePosition(ui.lastPosition)), _enemy);
-		}
-	}
+        if (ui.type.isBuilding() && !ui.goneFromLastPosition && !ui.lifted)
+        {
+            updateOccupiedRegions(the.zone.ptr(BWAPI::TilePosition(ui.lastPosition)), _enemy);
+        }
+    }
 
-	// We occupy a region if we have a building there.
-	for (const BWAPI::Unit unit : _self->getUnits())
-	{
-		if (unit->getType().isBuilding() && unit->getPosition().isValid())
-		{
-			updateOccupiedRegions(the.zone.ptr(unit->getTilePosition()), _self);
-		}
-	}
+    // We occupy a region if we have a building there.
+    for (const BWAPI::Unit unit : _self->getUnits())
+    {
+        if (unit->getType().isBuilding() && unit->getPosition().isValid())
+        {
+            updateOccupiedRegions(the.zone.ptr(unit->getTilePosition()), _self);
+        }
+    }
 }
 
 void InformationManager::updateOccupiedRegions(const Zone * zone, BWAPI::Player player) 
 {
-	// if the region is valid (flying buildings may be in nullptr regions)
-	if (zone)
-	{
-		// add it to the list of occupied regions
-		_occupiedRegions[player].insert(zone);
-	}
+    // if the region is valid (flying buildings may be in nullptr regions)
+    if (zone)
+    {
+        // add it to the list of occupied regions
+        _occupiedRegions[player].insert(zone);
+    }
 }
 
 // If we can see the last known location of a remembered unit and the unit is not there,
 // set the unit's goneFromLastPosition flag (unless it is burrowed or burrowing).
 void InformationManager::updateGoneFromLastPosition()
 {
-	// We don't need to check every frame.
-	// 1. The game supposedly only resets visible tiles when frame % 100 == 99.
-	// 2. If the unit has only been gone from its location for a short time, it probably
-	//    didn't go far (though it might have been recalled or gone through a nydus).
-	// On the other hand, burrowed units can disappear from view more quickly.
-	// 3. Detection is updated immediately, so we might overlook having detected
-	//    a burrowed unit if we don't update often enough.
-	// 4. We also might miss a unit in the process of burrowing.
-	// All in all, we should check fairly often.
-	if (the.now() % 6 == 5)
-	{
-		_unitData[_enemy].updateGoneFromLastPosition();
-	}
+    // We don't need to check every frame.
+    // 1. The game supposedly only resets visible tiles when frame % 100 == 99.
+    // 2. If the unit has only been gone from its location for a short time, it probably
+    //    didn't go far (though it might have been recalled or gone through a nydus).
+    // On the other hand, burrowed units can disappear from view more quickly.
+    // 3. Detection is updated immediately, so we might overlook having detected
+    //    a burrowed unit if we don't update often enough.
+    // 4. We also might miss a unit in the process of burrowing.
+    // All in all, we should check fairly often.
+    if (the.now() % 6 == 5)
+    {
+        _unitData[_enemy].updateGoneFromLastPosition();
+    }
 
-	if (Config::Debug::DrawHiddenEnemies)
-	{
-		for (const auto & kv : _unitData[_enemy].getUnits())
-		{
-			const UnitInfo & ui(kv.second);
+    if (Config::Debug::DrawHiddenEnemies)
+    {
+        for (const auto & kv : _unitData[_enemy].getUnits())
+        {
+            const UnitInfo & ui(kv.second);
 
-			// Units that are out of sight range.
-			if (ui.unit && !ui.unit->isVisible())
-			{
-				if (ui.goneFromLastPosition)
-				{
-					// Draw a small X.
-					BWAPI::Broodwar->drawLineMap(
-						ui.lastPosition + BWAPI::Position(-2, -2),
-						ui.lastPosition + BWAPI::Position(2, 2),
-						BWAPI::Colors::Red);
-					BWAPI::Broodwar->drawLineMap(
-						ui.lastPosition + BWAPI::Position(2, -2),
-						ui.lastPosition + BWAPI::Position(-2, 2),
-						BWAPI::Colors::Red);
-				}
-				else
-				{
-					// Draw a small circle.
-					BWAPI::Color color = ui.burrowed ? BWAPI::Colors::Yellow : BWAPI::Colors::Green;
-					BWAPI::Broodwar->drawCircleMap(ui.lastPosition, 4, color);
-				}
-			}
+            // Units that are out of sight range.
+            if (ui.unit && !ui.unit->isVisible())
+            {
+                if (ui.goneFromLastPosition)
+                {
+                    // Draw a small X.
+                    BWAPI::Broodwar->drawLineMap(
+                        ui.lastPosition + BWAPI::Position(-2, -2),
+                        ui.lastPosition + BWAPI::Position(2, 2),
+                        BWAPI::Colors::Red);
+                    BWAPI::Broodwar->drawLineMap(
+                        ui.lastPosition + BWAPI::Position(2, -2),
+                        ui.lastPosition + BWAPI::Position(-2, 2),
+                        BWAPI::Colors::Red);
+                }
+                else
+                {
+                    // Draw a small circle.
+                    BWAPI::Color color = ui.burrowed ? BWAPI::Colors::Yellow : BWAPI::Colors::Green;
+                    BWAPI::Broodwar->drawCircleMap(ui.lastPosition, 4, color);
+                }
+            }
 
-			// Units that are in sight range but undetected.
-			if (ui.unit && ui.unit->isVisible() && !ui.unit->isDetected())
-			{
-				// Draw a larger circle.
-				BWAPI::Broodwar->drawCircleMap(ui.lastPosition, 8, BWAPI::Colors::Purple);
+            // Units that are in sight range but undetected.
+            if (ui.unit && ui.unit->isVisible() && !ui.unit->isDetected())
+            {
+                // Draw a larger circle.
+                BWAPI::Broodwar->drawCircleMap(ui.lastPosition, 8, BWAPI::Colors::Purple);
 
-				BWAPI::Broodwar->drawTextMap(ui.lastPosition + BWAPI::Position(10, 6),
-					"%c%s", white, UnitTypeName(ui.type).c_str());
-			}
-		}
-	}
+                BWAPI::Broodwar->drawTextMap(ui.lastPosition + BWAPI::Position(10, 6),
+                    "%c%s", white, UnitTypeName(ui.type).c_str());
+            }
+        }
+    }
 }
 
 // For each of our units, keep track of which enemies are targeting it.
 // It changes frequently, so this is updated every frame.
 void InformationManager::updateTheirTargets()
 {
-	_theirTargets.clear();
+    _theirTargets.clear();
 
-	// We only know the targets for visible enemy units.
-	for (BWAPI::Unit enemy : _enemy->getUnits())
-	{
-		BWAPI::Unit target = enemy->getOrderTarget();
-		if (target && target->getPlayer() == _self && (target->getType() == BWAPI::UnitTypes::Terran_Vulture_Spider_Mine || UnitUtil::AttackOrder(enemy)))
-		{
-			_theirTargets[target].insert(enemy);
-			//BWAPI::Broodwar->drawLineMap(enemy->getPosition(), target->getPosition(), BWAPI::Colors::Yellow);
-		}
-	}
+    // We only know the targets for visible enemy units.
+    for (BWAPI::Unit enemy : _enemy->getUnits())
+    {
+        BWAPI::Unit target = enemy->getOrderTarget();
+        if (target && target->getPlayer() == _self && (target->getType() == BWAPI::UnitTypes::Terran_Vulture_Spider_Mine || UnitUtil::AttackOrder(enemy)))
+        {
+            _theirTargets[target].insert(enemy);
+            //BWAPI::Broodwar->drawLineMap(enemy->getPosition(), target->getPosition(), BWAPI::Colors::Yellow);
+        }
+    }
 }
 
-// TODO An unfinished experiment to locate undetected lurkers by their spines.
+// Detect whether the enemy has cast psionic storm.
+// NOTE It's easy because Steamhammer doesn't use storm itself.
+// TODO Also an unfinished experiment to locate undetected lurkers by their spines.
 void InformationManager::updateBullets()
 {
-    return;
     BWAPI::Bulletset bullets = BWAPI::Broodwar->getBullets();
 
-    int x = 150;
+    int x = 150;    // for lurker spine debugging
     int y = 30;
+
     for (BWAPI::Bullet bullet : bullets)
     {
-        if (bullet->getType() == BWAPI::BulletTypes::Subterranean_Spines)
+        if (bullet->getType() == BWAPI::BulletTypes::Psionic_Storm)
+        {
+            // Latch: Once they have storm, they always have it.
+            _enemyHasStorm = true;
+        }
+        // TODO disabled
+        else if (false && bullet->getType() == BWAPI::BulletTypes::Subterranean_Spines)
         {
             char color = gray;
             if (bullet->getPlayer() == the.self())
@@ -314,7 +323,7 @@ void InformationManager::updateEnemyScans()
     if (the.enemyRace() == BWAPI::Races::Terran)
     {
         _enemyScans.clear();
-        for (BWAPI::Unit u : BWAPI::Broodwar->enemy()->getUnits())//the.enemy()->getUnits())
+        for (BWAPI::Unit u : the.enemy()->getUnits())
         {
             if (u->getType() == BWAPI::UnitTypes::Spell_Scanner_Sweep)
             {
@@ -327,52 +336,52 @@ void InformationManager::updateEnemyScans()
 
 bool InformationManager::isEnemyBuildingInRegion(const Zone * zone) 
 {
-	// Invalid zones aren't considered the same.
-	if (!zone)
-	{
-		return false;
-	}
+    // Invalid zones aren't considered the same.
+    if (!zone)
+    {
+        return false;
+    }
 
-	for (const auto & kv : _unitData[_enemy].getUnits())
-	{
-		const UnitInfo & ui(kv.second);
-		if (ui.type.isBuilding() && !ui.goneFromLastPosition && !ui.lifted)
-		{
-			if (zone->id() == the.zone.at(ui.lastPosition)) 
-			{
-				return true;
-			}
-		}
-	}
+    for (const auto & kv : _unitData[_enemy].getUnits())
+    {
+        const UnitInfo & ui(kv.second);
+        if (ui.type.isBuilding() && !ui.goneFromLastPosition && !ui.lifted)
+        {
+            if (zone->id() == the.zone.at(ui.lastPosition)) 
+            {
+                return true;
+            }
+        }
+    }
 
-	return false;
+    return false;
 }
 
 const UIMap & InformationManager::getUnitInfo(BWAPI::Player player) const
 {
-	return getUnitData(player).getUnits();
+    return getUnitData(player).getUnits();
 }
 
 std::set<const Zone *> & InformationManager::getOccupiedRegions(BWAPI::Player player)
 {
-	return _occupiedRegions[player];
+    return _occupiedRegions[player];
 }
 
 int InformationManager::getAir2GroundSupply(BWAPI::Player player) const
 {
-	int supply = 0;
+    int supply = 0;
 
-	for (const auto & kv : getUnitData(player).getUnits())
-	{
-		const UnitInfo & ui(kv.second);
+    for (const auto & kv : getUnitData(player).getUnits())
+    {
+        const UnitInfo & ui(kv.second);
 
-		if (ui.type.isFlyer() && UnitUtil::TypeCanAttackGround(ui.type))
-		{
-			supply += ui.type.supplyRequired();
-		}
-	}
+        if (ui.type.isFlyer() && UnitUtil::TypeCanAttackGround(ui.type))
+        {
+            supply += ui.type.supplyRequired();
+        }
+    }
 
-	return supply;
+    return supply;
 }
 
 void InformationManager::drawExtendedInterface()
@@ -386,10 +395,10 @@ void InformationManager::drawExtendedInterface()
 
     // draw enemy units
     for (const auto & kv : getUnitData(_enemy).getUnits())
-	{
+    {
         const UnitInfo & ui(kv.second);
 
-		BWAPI::UnitType type(ui.type);
+        BWAPI::UnitType type(ui.type);
         int hitPoints = ui.lastHP;
         int shields = ui.lastShields;
 
@@ -404,8 +413,8 @@ void InformationManager::drawExtendedInterface()
         {
             BWAPI::Broodwar->drawBoxMap(BWAPI::Position(left, top), BWAPI::Position(right, bottom), BWAPI::Colors::Grey, false);
             BWAPI::Broodwar->drawTextMap(BWAPI::Position(left + 3, top + 4), "%s %c",
-				ui.type.getName().c_str(),
-				ui.goneFromLastPosition ? 'X' : ' ');
+                ui.type.getName().c_str(),
+                ui.goneFromLastPosition ? 'X' : ' ');
         }
         
         if (!type.isResourceContainer() && type.maxHitPoints() > 0)
@@ -539,37 +548,37 @@ void InformationManager::drawExtendedInterface()
 
 void InformationManager::drawUnitInformation(int x, int y) 
 {
-	if (!Config::Debug::DrawEnemyUnitInfo)
+    if (!Config::Debug::DrawEnemyUnitInfo)
     {
         return;
     }
 
-	BWAPI::Broodwar->drawTextScreen(x, y-10, "\x03 Self Loss:\x04 Minerals: \x1f%d \x04Gas: \x07%d", _unitData[_self].getMineralsLost(), _unitData[_self].getGasLost());
+    BWAPI::Broodwar->drawTextScreen(x, y-10, "\x03 Self Loss:\x04 Minerals: \x1f%d \x04Gas: \x07%d", _unitData[_self].getMineralsLost(), _unitData[_self].getGasLost());
     BWAPI::Broodwar->drawTextScreen(x, y, "\x03 Enemy Loss:\x04 Minerals: \x1f%d \x04Gas: \x07%d", _unitData[_enemy].getMineralsLost(), _unitData[_enemy].getGasLost());
-	BWAPI::Broodwar->drawTextScreen(x, y+20, "\x04 UNIT NAME");
-	BWAPI::Broodwar->drawTextScreen(x+140, y+20, "\x04#");
-	BWAPI::Broodwar->drawTextScreen(x+160, y+20, "\x04X");
+    BWAPI::Broodwar->drawTextScreen(x, y+20, "\x04 UNIT NAME");
+    BWAPI::Broodwar->drawTextScreen(x+140, y+20, "\x04#");
+    BWAPI::Broodwar->drawTextScreen(x+160, y+20, "\x04X");
 
-	int yspace = 0;
+    int yspace = 0;
 
-	for (BWAPI::UnitType t : BWAPI::UnitTypes::allUnitTypes()) 
-	{
-		int numUnits = _unitData[_enemy].getNumUnits(t);
-		int numDeadUnits = _unitData[_enemy].getNumDeadUnits(t);
+    for (BWAPI::UnitType t : BWAPI::UnitTypes::allUnitTypes()) 
+    {
+        int numUnits = _unitData[_enemy].getNumUnits(t);
+        int numDeadUnits = _unitData[_enemy].getNumDeadUnits(t);
 
-		if (numUnits || numDeadUnits) 
-		{
+        if (numUnits || numDeadUnits) 
+        {
             char color = white;
 
             if (t.isDetector())			{ color = purple; }
-			else if (t.canAttack())		{ color = red; }		
-			else if (t.isBuilding())	{ color = yellow; }
+            else if (t.canAttack())		{ color = red; }		
+            else if (t.isBuilding())	{ color = yellow; }
 
-			BWAPI::Broodwar->drawTextScreen(x, y+40+((yspace)*10), " %c%s", color, t.getName().c_str());
-			BWAPI::Broodwar->drawTextScreen(x+140, y+40+((yspace)*10), "%c%d", color, numUnits);
-			BWAPI::Broodwar->drawTextScreen(x+160, y+40+((yspace++)*10), "%c%d", color, numDeadUnits);
-		}
-	}
+            BWAPI::Broodwar->drawTextScreen(x, y+40+((yspace)*10), " %c%s", color, t.getName().c_str());
+            BWAPI::Broodwar->drawTextScreen(x+140, y+40+((yspace)*10), "%c%d", color, numUnits);
+            BWAPI::Broodwar->drawTextScreen(x+160, y+40+((yspace++)*10), "%c%d", color, numDeadUnits);
+        }
+    }
 
     for (const auto & kv : getUnitData(_enemy).getUnits())
     {
@@ -611,87 +620,89 @@ void InformationManager::drawResourceAmounts() const
 
 void InformationManager::maybeClearNeutral(BWAPI::Unit unit)
 {
-	if (unit && unit->getPlayer() == the.neutral() && unit->getType().isBuilding())
-	{
-		the.bases.clearNeutral(unit);
-	}
+    if (unit && unit->getPlayer() == the.neutral() && unit->getType().isBuilding())
+    {
+        the.bases.clearNeutral(unit);
+    }
 }
 
+// NOTE This includes both completed and uncompleted static defense buildings.
+//      Also shield batteries.
 void InformationManager::maybeAddStaticDefense(BWAPI::Unit unit)
 {
-	if (unit && unit->getPlayer() == _self && UnitUtil::IsStaticDefense(unit->getType()) && unit->isCompleted())
-	{
-		_staticDefense.insert(unit);
-	}
+    if (unit && unit->getPlayer() == _self && UnitUtil::IsStaticDefense(unit->getType()))
+    {
+        _staticDefense.insert(unit);
+    }
 }
 
 void InformationManager::updateUnit(BWAPI::Unit unit)
 {
     if (unit->getPlayer() == _self || unit->getPlayer() == _enemy)
     {
-		_unitData[unit->getPlayer()].updateUnit(unit);
-	}
+        _unitData[unit->getPlayer()].updateUnit(unit);
+    }
 }
 
 void InformationManager::onUnitDestroy(BWAPI::Unit unit) 
 { 
-	if (unit->getPlayer() == _self || unit->getPlayer() == _enemy)
-	{
-		_unitData[unit->getPlayer()].removeUnit(unit);
+    if (unit->getPlayer() == _self || unit->getPlayer() == _enemy)
+    {
+        _unitData[unit->getPlayer()].removeUnit(unit);
 
-		// If it is our static defense, remove it.
-		if (unit->getPlayer() == _self && UnitUtil::IsStaticDefense(unit->getType()))
-		{
-			_staticDefense.erase(unit);
-		}
-	}
-	else
-	{
-		// Should be neutral.
-		the.bases.clearNeutral(unit);
-	}
+        // If it is our static defense, remove it.
+        if (unit->getPlayer() == _self && UnitUtil::IsStaticDefense(unit->getType()))
+        {
+            _staticDefense.erase(unit);
+        }
+    }
+    else
+    {
+        // Should be neutral.
+        the.bases.clearNeutral(unit);
+    }
 }
 
 // Only returns units expected to be completed.
-// A building is considered completed if its completeBy is now or earlier.
 void InformationManager::getNearbyForce(std::vector<UnitInfo> & unitsOut, BWAPI::Position p, BWAPI::Player player, int radius) 
 {
-	for (const auto & kv : getUnitData(player).getUnits())
-	{
-		const UnitInfo & ui(kv.second);
+    for (const auto & kv : getUnitData(player).getUnits())
+    {
+        const UnitInfo & ui(kv.second);
 
-		if (UnitUtil::IsCombatSimUnit(ui) &&
+        if (UnitUtil::IsCombatSimUnit(ui) &&
             !ui.goneFromLastPosition &&
-			ui.completeBy <= the.now())
-		{
-			if (ui.type == BWAPI::UnitTypes::Terran_Medic)
-			{
-				// Spellcasters that the combat simulator is able to simulate.
-				if (ui.lastPosition.getDistance(p) <= (radius + 64))
-				{
-					unitsOut.push_back(ui);
-				}
-			}
-			else
-			{
-				// Non-spellcasters, aka units with weapons that have a range.
+            ui.isCompleted() &&
+            ui.powered)
+        {
+            if (ui.type == BWAPI::UnitTypes::Terran_Medic)
+            {
+                // Spellcasters that the combat simulator is able to simulate.
+                if (ui.lastPosition.getDistance(p) <= radius + 64)
+                {
+                    unitsOut.push_back(ui);
+                }
+            }
+            else
+            {
+                // Non-spellcasters, aka units with weapons that have a range.
 
-				// Determine its attack range, in the worst case.
-				int range = UnitUtil::GetMaxAttackRange(ui.type);
+                // Determine its attack range, in the worst case.
+                int range = UnitUtil::GetMaxAttackRange(ui.type);
 
-				// Include it if it can attack into the radius we care about (with fudge factor).
-				if (range && ui.lastPosition.getDistance(p) <= (radius + range + 32))
-				{
-					unitsOut.push_back(ui);
-				}
-			}
-		}
-		// NOTE FAP does not support detectors.
-		// else if (ui.type.isDetector() && ui.lastPosition.getDistance(p) <= (radius + 250))
-        // {
-		//	unitsOut.push_back(ui);
-        // }
-	}
+                // Include it if it can attack into the radius we care about (with fudge factor).
+                if (range && ui.lastPosition.getDistance(p) <= radius + range + 32)
+                {
+                    unitsOut.push_back(ui);
+                }
+            }
+            // NOTE FAP does not support detectors.
+            // else if (ui.type.isDetector() && ui.lastPosition.getDistance(p) <= (radius + 250))
+            // {
+            //	unitsOut.push_back(ui);
+            // }
+        }
+    }
 }
 
 int InformationManager::getNumUnits(BWAPI::UnitType t, BWAPI::Player player) const
@@ -711,134 +722,134 @@ int InformationManager::getNumUnits(BWAPI::UnitType t, BWAPI::Player player) con
     return count;
 
     // Buggy original! The original method can be extremely wrong, even giving negative counts.
-	// return getUnitData(player).getNumUnits(t);
+    // return getUnitData(player).getNumUnits(t);
 }
 
 // We have completed combat units (excluding workers).
 // This is a latch, initially false and set true forever when we get our first combat units.
 bool InformationManager::weHaveCombatUnits()
 {
-	// Latch: Once we have combat units, pretend we always have them.
-	if (_weHaveCombatUnits)
-	{
-		return true;
-	}
+    // Latch: Once we have combat units, pretend we always have them.
+    if (_weHaveCombatUnits)
+    {
+        return true;
+    }
 
-	for (BWAPI::Unit u : _self->getUnits())
-	{
-		if (!u->getType().isWorker() &&
-			!u->getType().isBuilding() &&
-			u->isCompleted() &&
+    for (BWAPI::Unit u : _self->getUnits())
+    {
+        if (!u->getType().isWorker() &&
+            !u->getType().isBuilding() &&
+            u->isCompleted() &&
             !u->getType().isSpell() &&
-			u->getType() != BWAPI::UnitTypes::Zerg_Larva &&
-			u->getType() != BWAPI::UnitTypes::Zerg_Overlord)
-		{
-			_weHaveCombatUnits = true;
-			return true;
-		}
-	}
+            u->getType() != BWAPI::UnitTypes::Zerg_Larva &&
+            u->getType() != BWAPI::UnitTypes::Zerg_Overlord)
+        {
+            _weHaveCombatUnits = true;
+            return true;
+        }
+    }
 
-	return false;
+    return false;
 }
 
 // Enemy has completed combat units (excluding workers).
 bool InformationManager::enemyHasCombatUnits()
 {
-	// Latch: Once they're known to have the tech, they always have it.
-	if (_enemyHasCombatUnits)
-	{
-		return true;
-	}
+    // Latch: Once they're known to have the tech, they always have it.
+    if (_enemyHasCombatUnits)
+    {
+        return true;
+    }
 
-	for (const auto & kv : getUnitData(_enemy).getUnits())
-	{
-		const UnitInfo & ui(kv.second);
+    for (const auto & kv : getUnitData(_enemy).getUnits())
+    {
+        const UnitInfo & ui(kv.second);
 
-		if (!ui.type.isWorker() &&
-			!ui.type.isBuilding() &&
-			ui.isCompleted() &&
-			ui.type != BWAPI::UnitTypes::Zerg_Larva &&
-			ui.type != BWAPI::UnitTypes::Zerg_Overlord)
-		{
-			_enemyHasCombatUnits = true;
-			return true;
-		}
-	}
+        if (!ui.type.isWorker() &&
+            !ui.type.isBuilding() &&
+            ui.isCompleted() &&
+            ui.type != BWAPI::UnitTypes::Zerg_Larva &&
+            ui.type != BWAPI::UnitTypes::Zerg_Overlord)
+        {
+            _enemyHasCombatUnits = true;
+            return true;
+        }
+    }
 
-	return false;
+    return false;
 }
 
 // Enemy has spore colonies, photon cannons, or turrets.
 bool InformationManager::enemyHasStaticAntiAir()
 {
-	// Latch: Once they're known to have the tech, they always have it.
-	if (_enemyHasStaticAntiAir)
-	{
-		return true;
-	}
+    // Latch: Once they're known to have the tech, they always have it.
+    if (_enemyHasStaticAntiAir)
+    {
+        return true;
+    }
 
-	for (const auto & kv : getUnitData(_enemy).getUnits())
-	{
-		const UnitInfo & ui(kv.second);
+    for (const auto & kv : getUnitData(_enemy).getUnits())
+    {
+        const UnitInfo & ui(kv.second);
 
-		if (ui.type == BWAPI::UnitTypes::Terran_Missile_Turret ||
-			ui.type == BWAPI::UnitTypes::Protoss_Photon_Cannon ||
-			ui.type == BWAPI::UnitTypes::Zerg_Spore_Colony)
-		{
-			_enemyHasStaticAntiAir = true;
-			return true;
-		}
-	}
+        if (ui.type == BWAPI::UnitTypes::Terran_Missile_Turret ||
+            ui.type == BWAPI::UnitTypes::Protoss_Photon_Cannon ||
+            ui.type == BWAPI::UnitTypes::Zerg_Spore_Colony)
+        {
+            _enemyHasStaticAntiAir = true;
+            return true;
+        }
+    }
 
-	return false;
+    return false;
 }
 
 // Enemy has mobile units that can shoot up, or the tech to produce them.
 bool InformationManager::enemyHasAntiAir()
 {
-	// Latch: Once they're known to have the tech, they always have it.
-	if (_enemyHasAntiAir)
-	{
-		return true;
-	}
+    // Latch: Once they're known to have the tech, they always have it.
+    if (_enemyHasAntiAir)
+    {
+        return true;
+    }
 
-	for (const auto & kv : getUnitData(_enemy).getUnits())
-	{
-		const UnitInfo & ui(kv.second);
+    for (const auto & kv : getUnitData(_enemy).getUnits())
+    {
+        const UnitInfo & ui(kv.second);
 
-		if (
-			// For terran, anything other than SCV, command center, depot is a hit.
-			// Surely nobody makes ebay before barracks!
-			(_enemy->getRace() == BWAPI::Races::Terran &&
-			ui.type != BWAPI::UnitTypes::Terran_SCV &&
-			ui.type != BWAPI::UnitTypes::Terran_Command_Center &&
-			ui.type != BWAPI::UnitTypes::Terran_Supply_Depot)
+        if (
+            // For terran, anything other than SCV, command center, depot is a hit.
+            // Surely nobody makes ebay before barracks!
+            (_enemy->getRace() == BWAPI::Races::Terran &&
+            ui.type != BWAPI::UnitTypes::Terran_SCV &&
+            ui.type != BWAPI::UnitTypes::Terran_Command_Center &&
+            ui.type != BWAPI::UnitTypes::Terran_Supply_Depot)
 
-			||
+            ||
 
-			// Otherwise, any mobile unit that has an air weapon.
-			(!ui.type.isBuilding() && UnitUtil::TypeCanAttackAir(ui.type))
+            // Otherwise, any mobile unit that has an air weapon.
+            (!ui.type.isBuilding() && UnitUtil::TypeCanAttackAir(ui.type))
 
-			||
+            ||
 
-			// Or a building for making such a unit.
+            // Or a building for making such a unit.
             // The cyber core only counts once it is finished, other buildings earlier.
-			ui.type == BWAPI::UnitTypes::Protoss_Cybernetics_Core && ui.isCompleted() ||
-			ui.type == BWAPI::UnitTypes::Protoss_Stargate ||
-			ui.type == BWAPI::UnitTypes::Protoss_Fleet_Beacon ||
-			ui.type == BWAPI::UnitTypes::Protoss_Arbiter_Tribunal ||
-			ui.type == BWAPI::UnitTypes::Zerg_Hydralisk_Den ||
-			ui.type == BWAPI::UnitTypes::Zerg_Spire ||
-			ui.type == BWAPI::UnitTypes::Zerg_Greater_Spire
+            ui.type == BWAPI::UnitTypes::Protoss_Cybernetics_Core && ui.isCompleted() ||
+            ui.type == BWAPI::UnitTypes::Protoss_Stargate ||
+            ui.type == BWAPI::UnitTypes::Protoss_Fleet_Beacon ||
+            ui.type == BWAPI::UnitTypes::Protoss_Arbiter_Tribunal ||
+            ui.type == BWAPI::UnitTypes::Zerg_Hydralisk_Den ||
+            ui.type == BWAPI::UnitTypes::Zerg_Spire ||
+            ui.type == BWAPI::UnitTypes::Zerg_Greater_Spire
 
-			)
-		{
-			_enemyHasAntiAir = true;
-			return true;
-		}
-	}
+            )
+        {
+            _enemyHasAntiAir = true;
+            return true;
+        }
+    }
 
-	return false;
+    return false;
 }
 
 // Enemy has air units or air-producing tech.
@@ -848,71 +859,71 @@ bool InformationManager::enemyHasAntiAir()
 // Protoss robo fac and terran starport are taken to imply air units.
 bool InformationManager::enemyHasAirTech()
 {
-	// Latch: Once they're known to have the tech, they always have it.
-	if (_enemyHasAirTech)
-	{
-		return true;
-	}
+    // Latch: Once they're known to have the tech, they always have it.
+    if (_enemyHasAirTech)
+    {
+        return true;
+    }
 
-	for (const auto & kv : getUnitData(_enemy).getUnits())
-	{
-		const UnitInfo & ui(kv.second);
+    for (const auto & kv : getUnitData(_enemy).getUnits())
+    {
+        const UnitInfo & ui(kv.second);
 
-		if (ui.type.isFlyer() && ui.type != BWAPI::UnitTypes::Zerg_Overlord && !ui.type.isSpell() ||
-			ui.type == BWAPI::UnitTypes::Terran_Starport ||
-			ui.type == BWAPI::UnitTypes::Terran_Control_Tower ||
-			ui.type == BWAPI::UnitTypes::Terran_Science_Facility ||
-			ui.type == BWAPI::UnitTypes::Terran_Covert_Ops ||
-			ui.type == BWAPI::UnitTypes::Terran_Physics_Lab ||
-			ui.type == BWAPI::UnitTypes::Protoss_Stargate ||
-			ui.type == BWAPI::UnitTypes::Protoss_Arbiter_Tribunal ||
-			ui.type == BWAPI::UnitTypes::Protoss_Fleet_Beacon ||
-			ui.type == BWAPI::UnitTypes::Protoss_Robotics_Facility ||
-			ui.type == BWAPI::UnitTypes::Protoss_Robotics_Support_Bay ||
-			ui.type == BWAPI::UnitTypes::Protoss_Observatory ||
-			ui.type == BWAPI::UnitTypes::Zerg_Spire ||
-			ui.type == BWAPI::UnitTypes::Zerg_Greater_Spire)
-		{
-			_enemyHasAirTech = true;
-			return true;
-		}
-	}
+        if (ui.type.isFlyer() && ui.type != BWAPI::UnitTypes::Zerg_Overlord && !ui.type.isSpell() ||
+            ui.type == BWAPI::UnitTypes::Terran_Starport ||
+            ui.type == BWAPI::UnitTypes::Terran_Control_Tower ||
+            ui.type == BWAPI::UnitTypes::Terran_Science_Facility ||
+            ui.type == BWAPI::UnitTypes::Terran_Covert_Ops ||
+            ui.type == BWAPI::UnitTypes::Terran_Physics_Lab ||
+            ui.type == BWAPI::UnitTypes::Protoss_Stargate ||
+            ui.type == BWAPI::UnitTypes::Protoss_Arbiter_Tribunal ||
+            ui.type == BWAPI::UnitTypes::Protoss_Fleet_Beacon ||
+            ui.type == BWAPI::UnitTypes::Protoss_Robotics_Facility ||
+            ui.type == BWAPI::UnitTypes::Protoss_Robotics_Support_Bay ||
+            ui.type == BWAPI::UnitTypes::Protoss_Observatory ||
+            ui.type == BWAPI::UnitTypes::Zerg_Spire ||
+            ui.type == BWAPI::UnitTypes::Zerg_Greater_Spire)
+        {
+            _enemyHasAirTech = true;
+            return true;
+        }
+    }
 
-	return false;
+    return false;
 }
 
 // This test is good for "can I benefit from detection?"
 // NOTE The enemySeenBurrowing() call also sets _enemyHasCloakTech .
 bool InformationManager::enemyHasCloakTech()
 {
-	// Latch: Once they're known to have the tech, they always have it.
-	if (_enemyHasCloakTech)
-	{
-		return true;
-	}
+    // Latch: Once they're known to have the tech, they always have it.
+    if (_enemyHasCloakTech)
+    {
+        return true;
+    }
 
-	for (const auto & kv : getUnitData(_enemy).getUnits())
-	{
-		const UnitInfo & ui(kv.second);
+    for (const auto & kv : getUnitData(_enemy).getUnits())
+    {
+        const UnitInfo & ui(kv.second);
 
-		if (ui.type.hasPermanentCloak() ||                             // DT, observer
-			ui.type.isCloakable() ||                                   // wraith, ghost
-			ui.type == BWAPI::UnitTypes::Terran_Vulture_Spider_Mine ||
-			ui.type == BWAPI::UnitTypes::Protoss_Citadel_of_Adun ||    // assume DT
-			ui.type == BWAPI::UnitTypes::Protoss_Templar_Archives ||   // assume DT
-			ui.type == BWAPI::UnitTypes::Protoss_Observatory ||
-			ui.type == BWAPI::UnitTypes::Protoss_Arbiter_Tribunal ||
-			ui.type == BWAPI::UnitTypes::Protoss_Arbiter ||
-			ui.type == BWAPI::UnitTypes::Zerg_Lurker ||
-			ui.type == BWAPI::UnitTypes::Zerg_Lurker_Egg ||
-			ui.unit->isBurrowed())
-		{
-			_enemyHasCloakTech = true;
-			return true;
-		}
-	}
+        if (ui.type.hasPermanentCloak() ||                             // DT, observer
+            ui.type.isCloakable() ||                                   // wraith, ghost
+            ui.type == BWAPI::UnitTypes::Terran_Vulture_Spider_Mine ||
+            ui.type == BWAPI::UnitTypes::Protoss_Citadel_of_Adun ||    // assume DT
+            ui.type == BWAPI::UnitTypes::Protoss_Templar_Archives ||   // assume DT
+            ui.type == BWAPI::UnitTypes::Protoss_Observatory ||
+            ui.type == BWAPI::UnitTypes::Protoss_Arbiter_Tribunal ||
+            ui.type == BWAPI::UnitTypes::Protoss_Arbiter ||
+            ui.type == BWAPI::UnitTypes::Zerg_Lurker ||
+            ui.type == BWAPI::UnitTypes::Zerg_Lurker_Egg ||
+            ui.unit->isBurrowed())
+        {
+            _enemyHasCloakTech = true;
+            return true;
+        }
+    }
 
-	return false;
+    return false;
 }
 
 // This test means more "can I be SURE that I will benefit from detection?"
@@ -922,32 +933,32 @@ bool InformationManager::enemyHasCloakTech()
 // NOTE If they have cloaked units, they have cloak tech. Set all appropriate flags.
 bool InformationManager::enemyCloakedUnitsSeen()
 {
-	// Latch: Once they're known to have the tech, they always have it.
-	if (_enemyCloakedUnitsSeen)
-	{
-		return true;
-	}
+    // Latch: Once they're known to have the tech, they always have it.
+    if (_enemyCloakedUnitsSeen)
+    {
+        return true;
+    }
 
-	for (const auto & kv : getUnitData(_enemy).getUnits())
-	{
-		const UnitInfo & ui(kv.second);
+    for (const auto & kv : getUnitData(_enemy).getUnits())
+    {
+        const UnitInfo & ui(kv.second);
 
-		if (ui.type.isCloakable() ||                                    // wraith, ghost
-			ui.type == BWAPI::UnitTypes::Terran_Vulture_Spider_Mine ||
-			ui.type == BWAPI::UnitTypes::Protoss_Dark_Templar ||
-			ui.type == BWAPI::UnitTypes::Protoss_Arbiter ||
-			ui.type == BWAPI::UnitTypes::Zerg_Lurker ||
-			ui.type == BWAPI::UnitTypes::Zerg_Lurker_Egg ||
-			ui.unit->isBurrowed())
-		{
-			_enemyHasCloakTech = true;
-			_enemyCloakedUnitsSeen = true;
-			_enemyHasMobileCloakTech = true;
-			return true;
-		}
-	}
+        if (ui.type.isCloakable() ||                                    // wraith, ghost
+            ui.type == BWAPI::UnitTypes::Terran_Vulture_Spider_Mine ||
+            ui.type == BWAPI::UnitTypes::Protoss_Dark_Templar ||
+            ui.type == BWAPI::UnitTypes::Protoss_Arbiter ||
+            ui.type == BWAPI::UnitTypes::Zerg_Lurker ||
+            ui.type == BWAPI::UnitTypes::Zerg_Lurker_Egg ||
+            ui.unit->isBurrowed())
+        {
+            _enemyHasCloakTech = true;
+            _enemyCloakedUnitsSeen = true;
+            _enemyHasMobileCloakTech = true;
+            return true;
+        }
+    }
 
-	return false;
+    return false;
 }
 
 // This test is better for "do I need detection to live?"
@@ -955,62 +966,62 @@ bool InformationManager::enemyCloakedUnitsSeen()
 // NOTE If they have cloaked units, they have cloak tech. Set all appropriate flags.
 bool InformationManager::enemyHasMobileCloakTech()
 {
-	// Latch: Once they're known to have the tech, they always have it.
-	if (_enemyHasMobileCloakTech)
-	{
-		return true;
-	}
+    // Latch: Once they're known to have the tech, they always have it.
+    if (_enemyHasMobileCloakTech)
+    {
+        return true;
+    }
 
-	for (const auto & kv : getUnitData(_enemy).getUnits())
-	{
-		const UnitInfo & ui(kv.second);
+    for (const auto & kv : getUnitData(_enemy).getUnits())
+    {
+        const UnitInfo & ui(kv.second);
 
-		if (ui.type.isCloakable() ||                                   // wraith, ghost
-			ui.type == BWAPI::UnitTypes::Protoss_Dark_Templar ||
-			ui.type == BWAPI::UnitTypes::Protoss_Citadel_of_Adun ||    // assume DT
-			ui.type == BWAPI::UnitTypes::Protoss_Templar_Archives ||   // assume DT
-			ui.type == BWAPI::UnitTypes::Protoss_Arbiter_Tribunal ||
-			ui.type == BWAPI::UnitTypes::Protoss_Arbiter ||
-			ui.type == BWAPI::UnitTypes::Zerg_Lurker ||
-			ui.type == BWAPI::UnitTypes::Zerg_Lurker_Egg)
-		{
-			_enemyHasCloakTech = true;
-			_enemyHasMobileCloakTech = true;
-			return true;
-		}
-	}
+        if (ui.type.isCloakable() ||                                   // wraith, ghost
+            ui.type == BWAPI::UnitTypes::Protoss_Dark_Templar ||
+            ui.type == BWAPI::UnitTypes::Protoss_Citadel_of_Adun ||    // assume DT
+            ui.type == BWAPI::UnitTypes::Protoss_Templar_Archives ||   // assume DT
+            ui.type == BWAPI::UnitTypes::Protoss_Arbiter_Tribunal ||
+            ui.type == BWAPI::UnitTypes::Protoss_Arbiter ||
+            ui.type == BWAPI::UnitTypes::Zerg_Lurker ||
+            ui.type == BWAPI::UnitTypes::Zerg_Lurker_Egg)
+        {
+            _enemyHasCloakTech = true;
+            _enemyHasMobileCloakTech = true;
+            return true;
+        }
+    }
 
-	return false;
+    return false;
 }
 
 // Enemy has cloaked wraiths or arbiters.
 bool InformationManager::enemyHasAirCloakTech()
 {
-	for (const auto & kv : getUnitData(_enemy).getUnits())
-	{
-		const UnitInfo & ui(kv.second);
+    for (const auto & kv : getUnitData(_enemy).getUnits())
+    {
+        const UnitInfo & ui(kv.second);
 
-		// We have to see a wraith that is cloaked to be sure.
-		if (ui.type == BWAPI::UnitTypes::Terran_Wraith &&
-			ui.unit->isVisible() && !ui.unit->isDetected())
-		{
-			_enemyHasCloakTech = true;
-			_enemyHasMobileCloakTech = true;
-			_enemyHasAirCloakTech = true;
-			return true;
-		}
+        // We have to see a wraith that is cloaked to be sure.
+        if (ui.type == BWAPI::UnitTypes::Terran_Wraith &&
+            ui.unit->isVisible() && !ui.unit->isDetected())
+        {
+            _enemyHasCloakTech = true;
+            _enemyHasMobileCloakTech = true;
+            _enemyHasAirCloakTech = true;
+            return true;
+        }
 
-		if (ui.type == BWAPI::UnitTypes::Protoss_Arbiter_Tribunal ||
-			ui.type == BWAPI::UnitTypes::Protoss_Arbiter)
-		{
-			_enemyHasCloakTech = true;
-			_enemyHasMobileCloakTech = true;
-			_enemyHasAirCloakTech = true;
-			return true;
-		}
-	}
+        if (ui.type == BWAPI::UnitTypes::Protoss_Arbiter_Tribunal ||
+            ui.type == BWAPI::UnitTypes::Protoss_Arbiter)
+        {
+            _enemyHasCloakTech = true;
+            _enemyHasMobileCloakTech = true;
+            _enemyHasAirCloakTech = true;
+            return true;
+        }
+    }
 
-	return false;
+    return false;
 }
 
 // Enemy has air units good for hunting down overlords.
@@ -1018,41 +1029,41 @@ bool InformationManager::enemyHasAirCloakTech()
 // A starport does not count; it may well be for something else.
 bool InformationManager::enemyHasOverlordHunters()
 {
-	// Latch: Once they're known to have the tech, they always have it.
-	if (_enemyHasOverlordHunters)
-	{
-		return true;
-	}
+    // Latch: Once they're known to have the tech, they always have it.
+    if (_enemyHasOverlordHunters)
+    {
+        return true;
+    }
 
-	for (const auto & kv : getUnitData(_enemy).getUnits())
-	{
-		const UnitInfo & ui(kv.second);
+    for (const auto & kv : getUnitData(_enemy).getUnits())
+    {
+        const UnitInfo & ui(kv.second);
 
-		if (ui.type == BWAPI::UnitTypes::Terran_Wraith ||
-			ui.type == BWAPI::UnitTypes::Terran_Valkyrie ||
-			ui.type == BWAPI::UnitTypes::Terran_Battlecruiser ||
-			ui.type == BWAPI::UnitTypes::Protoss_Corsair ||
-			ui.type == BWAPI::UnitTypes::Protoss_Scout ||
-			ui.type == BWAPI::UnitTypes::Protoss_Carrier ||
-			ui.type == BWAPI::UnitTypes::Protoss_Stargate ||
-			ui.type == BWAPI::UnitTypes::Zerg_Spire ||
-			ui.type == BWAPI::UnitTypes::Zerg_Greater_Spire ||
-			ui.type == BWAPI::UnitTypes::Zerg_Mutalisk ||
-			ui.type == BWAPI::UnitTypes::Zerg_Scourge)
-		{
-			_enemyHasOverlordHunters = true;
-			_enemyHasAirTech = true;
-			return true;
-		}
-	}
+        if (ui.type == BWAPI::UnitTypes::Terran_Wraith ||
+            ui.type == BWAPI::UnitTypes::Terran_Valkyrie ||
+            ui.type == BWAPI::UnitTypes::Terran_Battlecruiser ||
+            ui.type == BWAPI::UnitTypes::Protoss_Corsair ||
+            ui.type == BWAPI::UnitTypes::Protoss_Scout ||
+            ui.type == BWAPI::UnitTypes::Protoss_Carrier ||
+            ui.type == BWAPI::UnitTypes::Protoss_Stargate ||
+            ui.type == BWAPI::UnitTypes::Zerg_Spire ||
+            ui.type == BWAPI::UnitTypes::Zerg_Greater_Spire ||
+            ui.type == BWAPI::UnitTypes::Zerg_Mutalisk ||
+            ui.type == BWAPI::UnitTypes::Zerg_Scourge)
+        {
+            _enemyHasOverlordHunters = true;
+            _enemyHasAirTech = true;
+            return true;
+        }
+    }
 
-	return false;
+    return false;
 }
 
 void InformationManager::enemySeenBurrowing()
 {
-	_enemyHasCloakTech = true;
-	_enemyCloakedUnitsSeen = true;
+    _enemyHasCloakTech = true;
+    _enemyCloakedUnitsSeen = true;
 }
 
 // Look up when an enemy building finished, or is predicted to finish.
@@ -1071,7 +1082,52 @@ int InformationManager::getEnemyBuildingTiming(BWAPI::UnitType type) const
     }
 
     // "Infinite" time in the future.
-    return INT_MAX;
+    return MAX_FRAME;
+}
+
+// Return the remaining build time for one of our buildings, given only its type.
+// This is for checking the timing of our tech buildings.
+// If already completed, return 0. If not under construction, return "never".
+int InformationManager::remainingBuildTime(BWAPI::UnitType type) const
+{
+    for (BWAPI::Unit unit : the.self()->getUnits())
+    {
+        if (unit->getType() == type)
+        {
+            return unit->getRemainingBuildTime();
+        }
+    }
+
+    return MAX_FRAME;
+}
+
+// If we are making more than one spire, return the earliest.
+int InformationManager::getMySpireTiming() const
+{
+    if (the.my.completed.count(BWAPI::UnitTypes::Zerg_Spire) > 0 ||
+        the.my.all.count(BWAPI::UnitTypes::Zerg_Greater_Spire) > 0)
+    {
+        // The spire is complete, return an early time.
+        return 1;
+    }
+
+    int frame = MAX_FRAME;
+    if (the.my.all.count(BWAPI::UnitTypes::Zerg_Spire) > 0)
+    {
+        for (BWAPI::Unit unit : _self->getUnits())
+        {
+            if (unit->getType() == BWAPI::UnitTypes::Zerg_Spire)
+            {
+                int f = the.now() + unit->getRemainingBuildTime();
+                if (f < frame)
+                {
+                    frame = f;
+                }
+            }
+        }
+    }
+
+    return frame;
 }
 
 // Enemy has spore colonies, photon cannons, turrets, or spider mines.
@@ -1079,97 +1135,97 @@ int InformationManager::getEnemyBuildingTiming(BWAPI::UnitType type) const
 // Spider mines only catch cloaked ground units, so this routine is not for countering wraiths.
 bool InformationManager::enemyHasStaticDetection()
 {
-	// Latch: Once they're known to have the tech, they always have it.
-	if (_enemyHasStaticDetection)
-	{
-		return true;
-	}
+    // Latch: Once they're known to have the tech, they always have it.
+    if (_enemyHasStaticDetection)
+    {
+        return true;
+    }
 
-	if (enemyHasStaticAntiAir())
-	{
-		_enemyHasStaticDetection = true;
-		return true;
-	}
+    if (enemyHasStaticAntiAir())
+    {
+        _enemyHasStaticDetection = true;
+        return true;
+    }
 
-	for (const auto & kv : getUnitData(_enemy).getUnits())
-	{
-		const UnitInfo & ui(kv.second);
+    for (const auto & kv : getUnitData(_enemy).getUnits())
+    {
+        const UnitInfo & ui(kv.second);
 
-		if (ui.type == BWAPI::UnitTypes::Terran_Vulture_Spider_Mine)
-		{
-			_enemyHasStaticDetection = true;
-			return true;
-		}
-	}
+        if (ui.type == BWAPI::UnitTypes::Terran_Vulture_Spider_Mine)
+        {
+            _enemyHasStaticDetection = true;
+            return true;
+        }
+    }
 
-	return false;
+    return false;
 }
 
 // Enemy has overlords, observers, comsat, or science vessels.
 bool InformationManager::enemyHasMobileDetection()
 {
-	// Latch: Once they're known to have the tech, they always have it.
-	if (_enemyHasMobileDetection)
-	{
-		return true;
-	}
+    // Latch: Once they're known to have the tech, they always have it.
+    if (_enemyHasMobileDetection)
+    {
+        return true;
+    }
 
-	// If the enemy is zerg, they have overlords.
-	// If they went random, we may not have known until now.
-	if (_enemy->getRace() == BWAPI::Races::Zerg)
-	{
-		_enemyHasMobileDetection = true;
-		return true;
-	}
+    // If the enemy is zerg, they have overlords.
+    // If they went random, we may not have known until now.
+    if (_enemy->getRace() == BWAPI::Races::Zerg)
+    {
+        _enemyHasMobileDetection = true;
+        return true;
+    }
 
-	for (const auto & kv : getUnitData(_enemy).getUnits())
-	{
-		const UnitInfo & ui(kv.second);
+    for (const auto & kv : getUnitData(_enemy).getUnits())
+    {
+        const UnitInfo & ui(kv.second);
 
-		if (ui.type == BWAPI::UnitTypes::Terran_Comsat_Station ||
+        if (ui.type == BWAPI::UnitTypes::Terran_Comsat_Station ||
             ui.type == BWAPI::UnitTypes::Spell_Scanner_Sweep ||
             ui.type == BWAPI::UnitTypes::Terran_Science_Facility ||
-			ui.type == BWAPI::UnitTypes::Terran_Science_Vessel ||
-			ui.type == BWAPI::UnitTypes::Protoss_Observatory ||
-			ui.type == BWAPI::UnitTypes::Protoss_Observer)
-		{
-			_enemyHasMobileDetection = true;
-			return true;
-		}
-	}
+            ui.type == BWAPI::UnitTypes::Terran_Science_Vessel ||
+            ui.type == BWAPI::UnitTypes::Protoss_Observatory ||
+            ui.type == BWAPI::UnitTypes::Protoss_Observer)
+        {
+            _enemyHasMobileDetection = true;
+            return true;
+        }
+    }
 
-	return false;
+    return false;
 }
 
 bool InformationManager::enemyHasSiegeMode()
 {
-	// Only terran can get siege mode. Ignore the possibility of protoss mind control.
-	if (_enemy->getRace() != BWAPI::Races::Terran)
-	{
-		return false;
-	}
+    // Only terran can get siege mode. Ignore the possibility of protoss mind control.
+    if (_enemy->getRace() != BWAPI::Races::Terran)
+    {
+        return false;
+    }
 
-	// Latch: Once they're known to have the tech, they always have it.
-	if (_enemyHasSiegeMode)
-	{
-		return true;
-	}
+    // Latch: Once they're known to have the tech, they always have it.
+    if (_enemyHasSiegeMode)
+    {
+        return true;
+    }
 
-	for (const auto & kv : getUnitData(_enemy).getUnits())
-	{
-		const UnitInfo & ui(kv.second);
+    for (const auto & kv : getUnitData(_enemy).getUnits())
+    {
+        const UnitInfo & ui(kv.second);
 
-		// If the tank is in the process of sieging, it is still in tank mode.
-		// If it is unsieging, it is still in siege mode. So this condition catches everything.
-		if (ui.type == BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode ||
-			ui.unit->isVisible() && ui.unit->getOrder() == BWAPI::Orders::Sieging)
-		{
-			_enemyHasSiegeMode = true;
-			return true;
-		}
-	}
+        // If the tank is in the process of sieging, it is still in tank mode.
+        // If it is unsieging, it is still in siege mode. So this condition catches everything.
+        if (ui.type == BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode ||
+            ui.unit->isVisible() && ui.unit->getOrder() == BWAPI::Orders::Sieging)
+        {
+            _enemyHasSiegeMode = true;
+            return true;
+        }
+    }
 
-	return false;
+    return false;
 }
 
 // The enemy may use drop.
@@ -1197,23 +1253,23 @@ bool InformationManager::weHaveCloakTech() const
 // NOTE This assumes that we never put medics or SCVs into a bunker.
 BWAPI::Unit InformationManager::nearestGroundStaticDefense(BWAPI::Position pos) const
 {
-    int closestDist = INT_MAX;
-	BWAPI::Unit closest = nullptr;
-	for (BWAPI::Unit building : _staticDefense)
-	{
-		if (building->getType() == BWAPI::UnitTypes::Terran_Bunker && !building->getLoadedUnits().empty() ||
-			building->getType() == BWAPI::UnitTypes::Protoss_Photon_Cannon ||
-			building->getType() == BWAPI::UnitTypes::Zerg_Sunken_Colony)
-		{
-			int dist = building->getDistance(pos);
-			if (dist < closestDist)
-			{
-				closestDist = dist;
-				closest = building;
-			}
-		}
-	}
-	return closest;
+    int closestDist = MAX_DISTANCE;
+    BWAPI::Unit closest = nullptr;
+    for (BWAPI::Unit building : _staticDefense)
+    {
+        if (building->getType() == BWAPI::UnitTypes::Terran_Bunker && !building->getLoadedUnits().empty() ||
+            building->getType() == BWAPI::UnitTypes::Protoss_Photon_Cannon ||
+            building->getType() == BWAPI::UnitTypes::Zerg_Sunken_Colony)
+        {
+            int dist = building->getDistance(pos);
+            if (dist < closestDist)
+            {
+                closestDist = dist;
+                closest = building;
+            }
+        }
+    }
+    return closest;
 }
 
 // Our nearest static defense building that can hit air, by air distance.
@@ -1222,49 +1278,49 @@ BWAPI::Unit InformationManager::nearestGroundStaticDefense(BWAPI::Position pos) 
 // If we ever put firebats or SCVs or medics into a bunker, we'll have to do a fancier check.
 BWAPI::Unit InformationManager::nearestAirStaticDefense(BWAPI::Position pos) const
 {
-    int closestDist = INT_MAX;
-	BWAPI::Unit closest = nullptr;
-	for (BWAPI::Unit building : _staticDefense)
-	{
-		if (building->getType() == BWAPI::UnitTypes::Terran_Missile_Turret ||
-			building->getType() == BWAPI::UnitTypes::Terran_Bunker && !building->getLoadedUnits().empty() ||
-			building->getType() == BWAPI::UnitTypes::Protoss_Photon_Cannon || 
-			building->getType() == BWAPI::UnitTypes::Zerg_Spore_Colony)
-		{
-			int dist = building->getDistance(pos);
-			if (dist < closestDist)
-			{
-				closestDist = dist;
-				closest = building;
-			}
-		}
-	}
-	return closest;
+    int closestDist = MAX_DISTANCE;
+    BWAPI::Unit closest = nullptr;
+    for (BWAPI::Unit building : _staticDefense)
+    {
+        if (building->getType() == BWAPI::UnitTypes::Terran_Missile_Turret ||
+            building->getType() == BWAPI::UnitTypes::Terran_Bunker && !building->getLoadedUnits().empty() ||
+            building->getType() == BWAPI::UnitTypes::Protoss_Photon_Cannon || 
+            building->getType() == BWAPI::UnitTypes::Zerg_Spore_Colony)
+        {
+            int dist = building->getDistance(pos);
+            if (dist < closestDist)
+            {
+                closestDist = dist;
+                closest = building;
+            }
+        }
+    }
+    return closest;
 }
 
 // Our nearest shield battery, by air distance.
 // Null if none.
 BWAPI::Unit InformationManager::nearestShieldBattery(BWAPI::Position pos) const
 {
-	if (_self->getRace() == BWAPI::Races::Protoss)
-	{
-        int closestDist = INT_MAX;
-		BWAPI::Unit closest = nullptr;
-		for (BWAPI::Unit building : _staticDefense)
-		{
-			if (building->getType() == BWAPI::UnitTypes::Protoss_Shield_Battery)
-			{
-				int dist = building->getDistance(pos);
-				if (dist < closestDist)
-				{
-					closestDist = dist;
-					closest = building;
-				}
-			}
-		}
-		return closest;
-	}
-	return nullptr;
+    if (_self->getRace() == BWAPI::Races::Protoss)
+    {
+        int closestDist = MAX_DISTANCE;
+        BWAPI::Unit closest = nullptr;
+        for (BWAPI::Unit building : _staticDefense)
+        {
+            if (building->getType() == BWAPI::UnitTypes::Protoss_Shield_Battery)
+            {
+                int dist = building->getDistance(pos);
+                if (dist < closestDist)
+                {
+                    closestDist = dist;
+                    closest = building;
+                }
+            }
+        }
+        return closest;
+    }
+    return nullptr;
 }
 
 // Zerg specific calculation: How many scourge hits are needed
@@ -1274,30 +1330,30 @@ BWAPI::Unit InformationManager::nearestShieldBattery(BWAPI::Position pos) const
 // NOTE This ignores air armor, which might make a difference in rare cases.
 int InformationManager::nScourgeNeeded()
 {
-	int count = 0;
+    int count = 0;
 
-	for (const auto & kv : getUnitData(_enemy).getUnits())
-	{
-		const UnitInfo & ui(kv.second);
+    for (const auto & kv : getUnitData(_enemy).getUnits())
+    {
+        const UnitInfo & ui(kv.second);
 
-		// A few unit types should not usually be scourged. Skip them.
-		if (ui.type.isFlyer() &&
+        // A few unit types should not usually be scourged. Skip them.
+        if (ui.type.isFlyer() &&
             ui.type != BWAPI::UnitTypes::Spell_Scanner_Sweep &&
-			ui.type != BWAPI::UnitTypes::Zerg_Overlord &&
-			ui.type != BWAPI::UnitTypes::Zerg_Scourge &&
-			ui.type != BWAPI::UnitTypes::Protoss_Interceptor)
-		{
-			int hp = ui.type.maxHitPoints() + ui.type.maxShields();      // assume the worst
-			count += (hp + 109) / 110;
-		}
-	}
+            ui.type != BWAPI::UnitTypes::Zerg_Overlord &&
+            ui.type != BWAPI::UnitTypes::Zerg_Scourge &&
+            ui.type != BWAPI::UnitTypes::Protoss_Interceptor)
+        {
+            int hp = ui.type.maxHitPoints() + ui.type.maxShields();      // assume the worst
+            count += (hp + 109) / 110;
+        }
+    }
 
-	return count;
+    return count;
 }
 
 const UnitData & InformationManager::getUnitData(BWAPI::Player player) const
 {
-	return _unitData.find(player)->second;
+    return _unitData.find(player)->second;
 }
 
 // Enemy units only. Return null if the enemy unit is not found.
@@ -1315,12 +1371,12 @@ const UnitInfo * InformationManager::getUnitInfo(BWAPI::Unit unit) const
 // Return the set of enemy units targeting a given one of our units.
 const BWAPI::Unitset & InformationManager::getEnemyFireteam(BWAPI::Unit ourUnit) const
 {
-	auto it = _theirTargets.find(ourUnit);
-	if (it != _theirTargets.end())
-	{
-		return (*it).second;
-	}
-	return EmptyUnitSet;
+    auto it = _theirTargets.find(ourUnit);
+    if (it != _theirTargets.end())
+    {
+        return (*it).second;
+    }
+    return EmptyUnitSet;
 }
 
 // Return the last seen resource amount of a mineral patch or vespene geyser.
@@ -1375,6 +1431,6 @@ bool InformationManager::isGeyserTaken(BWAPI::Unit resource) const
 
 InformationManager & InformationManager::Instance()
 {
-	static InformationManager instance;
-	return instance;
+    static InformationManager instance;
+    return instance;
 }

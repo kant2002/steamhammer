@@ -20,9 +20,9 @@ class GridCreep : public Grid
 
 public:
 
-	GridCreep();
+    GridCreep();
 
-	void update();
+    void update();
 };
 
 }

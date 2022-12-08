@@ -1,4 +1,4 @@
-#pragma once;
+#pragma once
 
 #include "Common.h"
 
@@ -10,8 +10,8 @@ class MicroHighTemplar : public MicroManager
 {
 public:
 
-	MicroHighTemplar();
-	void executeMicro(const BWAPI::Unitset & targets, const UnitCluster & cluster);
-	void update();
+    MicroHighTemplar();
+    void executeMicro(const BWAPI::Unitset & targets, const UnitCluster & cluster);
+    void update();
 };
 }

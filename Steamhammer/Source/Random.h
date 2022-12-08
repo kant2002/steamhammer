@@ -8,16 +8,16 @@ namespace UAlbertaBot
 class Random
 {
 private:
-	std::minstd_rand _rng;
+    std::minstd_rand _rng;
 
 public:
-	Random();
+    Random();
 
-	double range(double r);
-	int index(int n);
-	bool flag(double probability);
+    double range(double r);
+    int index(int n);
+    bool flag(double probability);
 
-	static Random & Instance();
+    static Random & Instance();
 };
 
 }

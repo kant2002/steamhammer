@@ -38,7 +38,7 @@ int OpponentPlan::travelTime(BWAPI::UnitType unitType, const BWAPI::Position & p
 //      will return null. It can't find the closest base.
 Base * OpponentPlan::closestEnemyBase(const BWAPI::Position & pos) const
 {
-    int bestDist = INT_MAX;
+    int bestDist = MAX_DISTANCE;
     Base * bestBase = nullptr;
 
     for (Base * base : the.bases.getStarting())
@@ -62,9 +62,9 @@ Base * OpponentPlan::closestEnemyBase(const BWAPI::Position & pos) const
 bool OpponentPlan::rushBuilding(const UnitInfo & ui) const
 {
     return
-        ui.type == BWAPI::UnitTypes::Terran_Barracks && ui.completeBy < 2450 ||  // probably 7 rax or earlier
-        ui.type == BWAPI::UnitTypes::Protoss_Gateway && ui.completeBy < 2575 ||  // probably 7 gate or earlier
-        ui.type == BWAPI::UnitTypes::Zerg_Spawning_Pool && ui.completeBy < 2700; // probably 8 pool or earlier
+        ui.type == BWAPI::UnitTypes::Terran_Barracks && ui.completeBy < 2375 ||  // probably 7 rax or earlier
+        ui.type == BWAPI::UnitTypes::Protoss_Gateway && ui.completeBy < 2540 ||  // probably 7 gate or earlier
+        ui.type == BWAPI::UnitTypes::Zerg_Spawning_Pool && ui.completeBy < 2675; // probably 8 pool or earlier
 }
 
 // Return whether the enemy has a building in our main or natural base.
@@ -102,7 +102,7 @@ OpeningPlan OpponentPlan::recognizeProxy() const
                     ui.type == BWAPI::UnitTypes::Protoss_Forge ||
                     ui.type == BWAPI::UnitTypes::Zerg_Creep_Colony ||
                     ui.type == BWAPI::UnitTypes::Zerg_Sunken_Colony;
-                const int natDist = the.bases.myNatural() ? ui.lastPosition.getApproxDistance(the.bases.myNatural()->getCenter()) : INT_MAX;
+                const int natDist = the.bases.myNatural() ? ui.lastPosition.getApproxDistance(the.bases.myNatural()->getCenter()) : MAX_DISTANCE;
                 if (naturalTaken || !possibleContain)
                 {
                     if (zone == naturalZone && natDist <= 18 * 32 || natDist <= 12 * 32)
@@ -133,10 +133,10 @@ OpeningPlan OpponentPlan::recognizeRush() const
     int frame = the.now();
 
     Base * myBase = the.bases.myStart();
-	BWAPI::Position myOrigin = myBase->getPosition();
+    BWAPI::Position myOrigin = myBase->getPosition();
     Base * enemyBase = the.bases.enemyStart();
 
-	int enemyWorkerRushCount = 0;
+    int enemyWorkerRushCount = 0;
     int nBarracks = 0;              // barracks or gateway count
     int latestBarracks = 0;         // greatest completion time in frames
 
@@ -246,46 +246,46 @@ OpeningPlan OpponentPlan::recognizeRush() const
         return OpeningPlan::FastRush;
     }
 
-	return OpeningPlan::Unknown;
+    return OpeningPlan::Unknown;
 }
 
 // Factory, possibly with starport, and no sign of many marines intended.
 OpeningPlan OpponentPlan::recognizeTerranTech() const
 {
-	if (the.enemyRace() != BWAPI::Races::Terran)
-	{
-		return OpeningPlan::Unknown;
-	}
+    if (the.enemyRace() != BWAPI::Races::Terran)
+    {
+        return OpeningPlan::Unknown;
+    }
 
-	int nMarines = 0;
-	int nBarracks = 0;
+    int nMarines = 0;
+    int nBarracks = 0;
     int nStarports = 0;
-	int nTechProduction = 0;
-	bool tech = false;
+    int nTechProduction = 0;
+    bool tech = false;
 
-	for (const auto & kv : InformationManager::Instance().getUnitData(the.enemy()).getUnits())
-	{
-		const UnitInfo & ui(kv.second);
+    for (const auto & kv : InformationManager::Instance().getUnitData(the.enemy()).getUnits())
+    {
+        const UnitInfo & ui(kv.second);
 
-		if (ui.type == BWAPI::UnitTypes::Terran_Marine)
-		{
-			++nMarines;
-		}
+        if (ui.type == BWAPI::UnitTypes::Terran_Marine)
+        {
+            ++nMarines;
+        }
 
-		else if (ui.type.whatBuilds().first == BWAPI::UnitTypes::Terran_Barracks)
-		{
+        else if (ui.type.whatBuilds().first == BWAPI::UnitTypes::Terran_Barracks)
+        {
             return OpeningPlan::Unknown;			// academy implied, marines seem to be intended
-		}
+        }
 
-		else if (ui.type == BWAPI::UnitTypes::Terran_Barracks)
-		{
-			++nBarracks;
-		}
+        else if (ui.type == BWAPI::UnitTypes::Terran_Barracks)
+        {
+            ++nBarracks;
+        }
 
-		else if (ui.type == BWAPI::UnitTypes::Terran_Academy)
-		{
+        else if (ui.type == BWAPI::UnitTypes::Terran_Academy)
+        {
             return OpeningPlan::Unknown;			// marines seem to be intended
-		}
+        }
 
         else if (ui.type == BWAPI::UnitTypes::Terran_Wraith)
         {
@@ -293,14 +293,14 @@ OpeningPlan OpponentPlan::recognizeTerranTech() const
         }
 
         else if (ui.type == BWAPI::UnitTypes::Terran_Starport)
-		{
+        {
             if (ui.unit && ui.unit->isVisible() && ui.unit->isTraining() && !ui.unit->getAddon())
             {
                 // The starport is flashing. Without an addon, it can only build a wraith.
                 return OpeningPlan::Wraith;
             }
             ++nStarports;
-		}
+        }
 
         else if (ui.type == BWAPI::UnitTypes::Terran_Factory)
         {
@@ -308,12 +308,12 @@ OpeningPlan OpponentPlan::recognizeTerranTech() const
         }
 
         else if (ui.type.whatBuilds().first == BWAPI::UnitTypes::Terran_Factory ||
-			ui.type.whatBuilds().first == BWAPI::UnitTypes::Terran_Starport ||
-			ui.type == BWAPI::UnitTypes::Terran_Armory)
-		{
-			tech = true;			// indicates intention to rely on tech units
-		}
-	}
+            ui.type.whatBuilds().first == BWAPI::UnitTypes::Terran_Starport ||
+            ui.type == BWAPI::UnitTypes::Terran_Armory)
+        {
+            tech = true;			// indicates intention to rely on tech units
+        }
+    }
 
     if (nStarports > 1)
     {
@@ -331,60 +331,60 @@ OpeningPlan OpponentPlan::recognizeTerranTech() const
 
 void OpponentPlan::recognize()
 {
-	// Don't recognize island plans.
-	// The regular plans and reactions do not make sense for island maps.
-	if (the.bases.isIslandStart())
-	{
-		return;
-	}
+    // Don't recognize island plans.
+    // The regular plans and reactions do not make sense for island maps.
+    if (the.bases.isIslandStart())
+    {
+        return;
+    }
 
-	// Recognize fast plans first, slow plans below.
+    // Recognize fast plans first, slow plans below.
 
-	// Recognize in-base proxy buildings and slightly more distant Contain buildings.
+    // Recognize in-base proxy buildings and slightly more distant Contain buildings.
     // NOTE It's not required, but still safest to check proxies before rushes, to prevent misrecognition.
     OpeningPlan maybeProxyPlan = recognizeProxy();
     if (maybeProxyPlan != OpeningPlan::Unknown)
-	{
+    {
         _openingPlan = maybeProxyPlan;
-		_planIsFixed = true;
-		return;
-	}
+        _planIsFixed = true;
+        return;
+    }
 
-	// Recognize fast rush and worker rush.
+    // Recognize fast rush and worker rush.
     OpeningPlan maybeRushPlan = recognizeRush();
     if (maybeRushPlan != OpeningPlan::Unknown)
-	{
+    {
         _openingPlan = maybeRushPlan;
         _planIsFixed = true;
         return;
-	}
+    }
 
-	int frame = the.now();
+    int frame = the.now();
 
-	PlayerSnapshot snap;
-	snap.takeEnemy();
+    PlayerSnapshot snap;
+    snap.takeEnemy();
 
-	// Recognize slower rushes.
-	// TODO make sure we've seen the bare geyser in the enemy base!
-	// TODO seeing an enemy worker carrying gas also means the enemy has gas
-	if (snap.count(BWAPI::UnitTypes::Zerg_Hatchery) >= 2 &&
-		snap.count(BWAPI::UnitTypes::Zerg_Spawning_Pool) > 0 &&
-		snap.count(BWAPI::UnitTypes::Zerg_Extractor) == 0
-		||
-		snap.count(BWAPI::UnitTypes::Terran_Barracks) >= 2 &&
-		snap.count(BWAPI::UnitTypes::Terran_Refinery) == 0 &&
-		snap.count(BWAPI::UnitTypes::Terran_Command_Center) <= 1
-		||
-		snap.count(BWAPI::UnitTypes::Protoss_Gateway) >= 2 &&
-		snap.count(BWAPI::UnitTypes::Protoss_Assimilator) == 0 &&
-		snap.count(BWAPI::UnitTypes::Protoss_Nexus) <= 1)
-	{
-		_openingPlan = OpeningPlan::HeavyRush;
-		_planIsFixed = true;
-		return;
-	}
+    // Recognize slower rushes.
+    // TODO make sure we've seen the bare geyser in the enemy base!
+    // TODO seeing an enemy worker carrying gas also means the enemy has gas
+    if (snap.count(BWAPI::UnitTypes::Zerg_Hatchery) >= 2 &&
+        snap.count(BWAPI::UnitTypes::Zerg_Spawning_Pool) > 0 &&
+        snap.count(BWAPI::UnitTypes::Zerg_Extractor) == 0
+        ||
+        snap.count(BWAPI::UnitTypes::Terran_Barracks) >= 2 &&
+        snap.count(BWAPI::UnitTypes::Terran_Refinery) == 0 &&
+        snap.count(BWAPI::UnitTypes::Terran_Command_Center) <= 1
+        ||
+        snap.count(BWAPI::UnitTypes::Protoss_Gateway) >= 2 &&
+        snap.count(BWAPI::UnitTypes::Protoss_Assimilator) == 0 &&
+        snap.count(BWAPI::UnitTypes::Protoss_Nexus) <= 1)
+    {
+        _openingPlan = OpeningPlan::HeavyRush;
+        _planIsFixed = true;
+        return;
+    }
 
-	// Recognize terran factory or starport tech openings.
+    // Recognize terran factory or starport tech openings.
     OpeningPlan maybeTechPlan = recognizeTerranTech();
     if (maybeTechPlan != OpeningPlan::Unknown)
     {
@@ -397,48 +397,48 @@ void OpponentPlan::recognize()
         return;
     }
 
-	// Recognize expansions with pre-placed static defense.
-	// Zerg can't do this.
-	// NOTE Incomplete test! We don't check the location of the static defense
-	if (the.bases.baseCount(the.enemy()) >= 2)
-	{
-		if (snap.count(BWAPI::UnitTypes::Terran_Bunker) > 0 ||
-			snap.count(BWAPI::UnitTypes::Protoss_Photon_Cannon) > 0)
-		{
-			_openingPlan = OpeningPlan::SafeExpand;
-			return;
-		}
-	}
+    // Recognize expansions with pre-placed static defense.
+    // Zerg can't do this.
+    // NOTE Incomplete test! We don't check the location of the static defense
+    if (the.bases.baseCount(the.enemy()) >= 2)
+    {
+        if (snap.count(BWAPI::UnitTypes::Terran_Bunker) > 0 ||
+            snap.count(BWAPI::UnitTypes::Protoss_Photon_Cannon) > 0)
+        {
+            _openingPlan = OpeningPlan::SafeExpand;
+            return;
+        }
+    }
 
-	// Recognize a naked expansion.
-	// This has to run after the SafeExpand check, since it doesn't check for what's missing.
-	if (the.bases.baseCount(the.enemy()) >= 2)
-	{
-		_openingPlan = OpeningPlan::NakedExpand;
-		return;
-	}
+    // Recognize a naked expansion.
+    // This has to run after the SafeExpand check, since it doesn't check for what's missing.
+    if (the.bases.baseCount(the.enemy()) >= 2)
+    {
+        _openingPlan = OpeningPlan::NakedExpand;
+        return;
+    }
 
-	// Recognize a turtling enemy.
-	// NOTE Incomplete test! We don't check where the defenses are placed.
-	if (the.bases.baseCount(the.enemy()) < 2)
-	{
-		if (snap.count(BWAPI::UnitTypes::Terran_Bunker) >= 2 ||
-			snap.count(BWAPI::UnitTypes::Protoss_Photon_Cannon) >= 2 ||
-			snap.count(BWAPI::UnitTypes::Zerg_Sunken_Colony) >= 2)
-		{
-			_openingPlan = OpeningPlan::Turtle;
-			return;
-		}
-	}
+    // Recognize a turtling enemy.
+    // NOTE Incomplete test! We don't check where the defenses are placed.
+    if (the.bases.baseCount(the.enemy()) < 2)
+    {
+        if (snap.count(BWAPI::UnitTypes::Terran_Bunker) >= 2 ||
+            snap.count(BWAPI::UnitTypes::Protoss_Photon_Cannon) >= 2 ||
+            snap.count(BWAPI::UnitTypes::Zerg_Sunken_Colony) >= 2)
+        {
+            _openingPlan = OpeningPlan::Turtle;
+            return;
+        }
+    }
 
-	// Nothing recognized: Opening plan remains unchanged.
+    // Nothing recognized: Opening plan remains unchanged.
 }
 
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
 OpponentPlan::OpponentPlan()
-	: _openingPlan(OpeningPlan::Unknown)
-	, _planIsFixed(false)
+    : _openingPlan(OpeningPlan::Unknown)
+    , _planIsFixed(false)
 {
 }
 
@@ -446,22 +446,22 @@ OpponentPlan::OpponentPlan()
 // Call this every frame. It will take care of throttling itself down to avoid unnecessary work.
 void OpponentPlan::update()
 {
-	if (!Config::Strategy::UsePlanRecognizer)
-	{
-		return;
-	}
+    if (!Config::Strategy::UsePlanRecognizer)
+    {
+        return;
+    }
 
-	// The plan is decided. Don't change it any more.
-	if (_planIsFixed)
-	{
-		return;
-	}
+    // The plan is decided. Don't change it any more.
+    if (_planIsFixed)
+    {
+        return;
+    }
 
-	int frame = BWAPI::Broodwar->getFrameCount();
+    int frame = BWAPI::Broodwar->getFrameCount();
 
-	if (frame > 100 && frame < 7200 &&       // only try to recognize openings
-		frame % 12 == 7)                     // update interval
-	{
-		recognize();
-	}
+    if (frame > 100 && frame < 7200 &&       // only try to recognize openings
+        frame % 12 == 7)                     // update interval
+    {
+        recognize();
+    }
 }

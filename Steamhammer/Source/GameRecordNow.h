@@ -51,7 +51,7 @@ class GameRecordNow : public GameRecord
 private:
     std::map<GameTech, int> techHistory;
 
-	void takeSnapshot();
+    void takeSnapshot();
 
     bool enemyScoutedUs() const;
 
@@ -60,12 +60,12 @@ protected:
     void writeSkills(std::ostream & output) const override;
 
 public:
-	GameRecordNow();
+    GameRecordNow();
 
-	void setOpening(const std::string & opening) { openingName = opening; };
-	void setWin(bool isWinner);
+    void setOpening(const std::string & opening) { openingName = opening; };
+    void setWin(bool isWinner);
 
-	void update();
+    void update();
 };
 
 }

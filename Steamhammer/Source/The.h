@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BuildingPlacer.h"
+#include "CombatSimulation.h"
 #include "GridAttacks.h"
 #include "GridInset.h"
 #include "GridRoom.h"
@@ -21,7 +22,10 @@ namespace UAlbertaBot
     class Bases;
     class MapGrid;
     class InformationManager;
+    class ProductionManager;
+    class OpeningTiming;
     class Random;
+    class StaticDefense;
 
     struct My
     {
@@ -37,62 +41,70 @@ namespace UAlbertaBot
     };
 
     class The
-	{
+    {
     private:
         BWAPI::Race _selfRace;
 
     public:
-		The();
+        The();
         // Initialize The. Call this once per game in onStart().
-		void initialize();
+        void initialize();
 
-		// Map information.
+        // Map information.
 
-		GridRoom vWalkRoom;
+        GridRoom vWalkRoom;
         // How much room is there around this tile? A rough estimate of how much stuff fits there.
-		GridTileRoom tileRoom;
+        GridTileRoom tileRoom;
         // How far is this walk tile from the nearest wall?
-		GridInset inset;
+        GridInset inset;
         // What zone is this tile in?
-		GridZone zone;
+        GridZone zone;
         // What map partition is this walk tile in? You can walk between places in the same partition.
-		MapPartitions partitions;
+        MapPartitions partitions;
         // Map information and calculations.
         MapTools map;
 
-		// Managers.
+        // Managers.
 
         // Information about bases and resources.
         Bases & bases;
+        // Combat sim does keep some game-duration info of its own.
+        CombatSimulation combatSim;
         // Large cells laid over the map.
         MapGrid & grid;
         // Game state information, especially stored information about the enemy.
         InformationManager & info;
         // Perform unit control actions ("unit micro").
-		Micro micro;
+        Micro micro;
+        // Compare openings by the times of events in them.
+        OpeningTiming & openingTiming;
         // Place buildings. Find macro locations.
         BuildingPlacer placer;
-        // Operations boss. Unfinished.
-		OpsBoss ops;
+        // Make stuff.
+        ProductionManager & production;
+        // Operations.
+        OpsBoss ops;
         // Extensible set of skills using the opponent model.
         SkillKit skillkit;
+        // Defense buildings for all races.
+        StaticDefense & staticDefense;
 
-		// Varying during the game.
+        // Varying during the game.
 
         // My current unit counts.
         My my;
         // Your current unit counts.
         Your your;
-        // What tiles does enemy static defense hit on the ground?
-		GroundAttacks groundAttacks;
-        // What tiles does enemy static defense hit in the air?
+        // What tiles does enemy immobile defense hit on the ground?
+        GroundAttacks groundAttacks;
+        // What tiles does enemy immobile defense hit in the air?
         AirAttacks airAttacks;
-        // What tiles does enemy static defense hit for this unit?
+        // What tiles does enemy immobile defense hit for this unit?
         int attacks(BWAPI::Unit unit, const BWAPI::TilePosition & tile) const;
         int attacks(BWAPI::Unit unit) const;
 
-		// Update the varying values.
-		void update();
+        // Update the varying values.
+        void update();
 
         // Utility.
 
@@ -105,7 +117,8 @@ namespace UAlbertaBot
 
         // The bot's race, terran protoss zerg.
         BWAPI::Race selfRace()    const { return _selfRace; };
-        // The enemy's race, terran protoss zerg.
+        // The enemy's race, terran protoss zerg unknown.
+        // It changes from unknown to another value when a random player is first scouted.
         BWAPI::Race enemyRace()   const { return BWAPI::Broodwar->enemy()->getRace(); };
 
         // Current frame count, same as Broodwar->getFrameCount().

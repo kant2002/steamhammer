@@ -1,6 +1,7 @@
 #include "Base.h"
 
 #include "Bases.h"
+#include "BuildingManager.h"
 #include "InformationManager.h"
 #include "The.h"
 #include "UnitUtil.h"
@@ -65,7 +66,7 @@ loop:
                 {
                     int inD = TileBoxDistance(startTile, xy);
                     int outD = outsideDistances.at(xy);
-                    if (outD < outDist && inD >= inDist && inD <= 7)
+                    if (outD < outDist && inD >= inDist && inD <= 5)
                     {
                         tile = xy;
                         inDist = inD;
@@ -81,6 +82,19 @@ loop:
     return tile;
 }
 
+// The mean offset of the base's mineral patches from the center of the resource depot.
+// This is used to tell what direction the minerals are in.
+BWAPI::Position Base::findMineralOffset() const
+{
+    BWAPI::Position center = getCenter();
+    BWAPI::Position offset = BWAPI::Positions::Origin;
+    for (BWAPI::Unit mineral : getMinerals())
+    {
+        offset += mineral->getInitialPosition() - center;
+    }
+    return BWAPI::Position(offset / getMinerals().size());
+}
+
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
 // Create a base given its position and a set of resources that may belong to it.
@@ -94,6 +108,7 @@ Base::Base(BWAPI::TilePosition pos, const BWAPI::Unitset & availableResources)
     , mainBase(nullptr)
     , front(BWAPI::Positions::Unknown)      // filled in by initializeFront() when all info is known
     , reserved(false)
+    , overlordDanger(false)
     , workerDanger(false)
     , failedPlacements(0)
     , resourceDepot(nullptr)
@@ -116,6 +131,7 @@ Base::Base(BWAPI::TilePosition pos, const BWAPI::Unitset & availableResources)
         }
     }
     geysers = initialGeysers;
+    mineralOffset = findMineralOffset();
 
     // Fill in the set of blockers, destructible neutral units that are very close to the base
     // and may interfere with its operation.
@@ -157,7 +173,7 @@ void Base::setID(int baseID)
 //      No competitive map should be laid out that way.
 void Base::initializeNatural(const std::vector<Base *> & bases)
 {
-    int minDist = INT_MAX;
+    int minDist = MAX_DISTANCE;
     Base * bestNatural = nullptr;
     for (Base * base : bases)
     {
@@ -216,7 +232,7 @@ bool Base::isCompleted() const
         }
 
         // It's not visible. That implies that the base is enemy.
-        // This could give a wrong answer for a terran CC that burned down.
+        // This could give a wrong answer for a terran CC that burned down or lifted.
         UAB_ASSERT(owner == the.enemy(), "unexpected base owner");
         const UnitInfo * ui = the.info.getUnitInfo(resourceDepot);
         if (ui)
@@ -230,6 +246,28 @@ bool Base::isCompleted() const
     return false;
 }
 
+bool Base::isMyCompletedBase() const
+{
+    return getOwner() == the.self() && isCompleted();
+}
+
+// An "inner base" is one that is potentially protected from ground assault by defenses at
+// another base along the way.
+// Any base that is not an inner base is an outer base.
+// Criteria:
+// - The same player must own both bases.
+// - Both bases must be completed.
+// - For now, the inner base is a main base that has a natural.
+bool Base::isInnerBase() const
+{
+    return
+        getNatural() &&
+        getOwner() != the.neutral() &&
+        getOwner() == getNatural()->getOwner() &&
+        isCompleted() &&
+        getNatural()->isCompleted();
+}
+
 // Recalculate the base's set of geysers, including refineries (completed or not).
 // This only works for visible geysers, so it should be called only for bases we own.
 // Called to work around BWAPI behavior (maybe not strictly a bug).
@@ -237,47 +275,59 @@ void Base::updateGeysers()
 {
     geysers.clear();
 
-	for (BWAPI::Unit unit : BWAPI::Broodwar->getAllUnits())
-	{
-		if ((unit->getType() == BWAPI::UnitTypes::Resource_Vespene_Geyser || unit->getType().isRefinery()) &&
-			unit->getPosition().isValid() &&
-			unit->getDistance(getCenter()) < 320)
-		{
-			geysers.insert(unit);
-		}
-	}
+    for (BWAPI::Unit unit : BWAPI::Broodwar->getAllUnits())
+    {
+        if ((unit->getType() == BWAPI::UnitTypes::Resource_Vespene_Geyser || unit->getType().isRefinery()) &&
+            unit->getPosition().isValid() &&
+            unit->getDistance(getCenter()) < 320)
+        {
+            geysers.insert(unit);
+        }
+    }
 }
 
 // Return a tile near the center of the resource depot location. No tile is at the exact center.
-const BWAPI::TilePosition Base::getCenterTile() const
+BWAPI::TilePosition Base::getCenterTile() const
 {
     return tilePosition + BWAPI::TilePosition(1, 1);
 }
 
 // Return the center of the resource depot location.
-const BWAPI::Position Base::getCenter() const
+BWAPI::Position Base::getCenter() const
 {
     return BWAPI::Position(tilePosition) + BWAPI::Position(64, 48);
+}
+
+// Return a tile near the middle of the mineral line.
+// This assume the mineral line is either north, south, east, or west, not in between.
+BWAPI::TilePosition Base::getMineralLineTile() const
+{
+    if (abs(mineralOffset.x) > abs(mineralOffset.y))
+    {
+        return BWAPI::TilePosition(tilePosition.x + (mineralOffset.x > 0 ? 4 : -1), tilePosition.y);
+    }
+
+    return BWAPI::TilePosition(tilePosition.x + 1, tilePosition.y + (mineralOffset.y > 0 ? 3 : -1));
 }
 
 // The depot may be null. (That's why player is a separate argument, not depot->getPlayer().)
 // A null depot for an owned base means that the base is inferred and hasn't been seen.
 void Base::setOwner(BWAPI::Unit depot, BWAPI::Player player)
 {
-	resourceDepot = depot;
-	owner = player;
-	reserved = false;
+    resourceDepot = depot;
+    owner = player;
+    reserved = false;
 }
 
 // The resource depot of this base has not been seen, but we think it's enemy owned.
 void Base::setInferredEnemyBase()
 {
-	if (owner == BWAPI::Broodwar->neutral())
-	{
-		resourceDepot = nullptr;
-		owner = BWAPI::Broodwar->enemy();
-		reserved = false;
-	}
+    if (owner == BWAPI::Broodwar->neutral())
+    {
+        resourceDepot = nullptr;
+        owner = BWAPI::Broodwar->enemy();
+        reserved = false;
+    }
 }
 
 // The remaining minerals at the base, as of last report.
@@ -310,22 +360,22 @@ int Base::getLastKnownGas() const
 
 int Base::getInitialMinerals() const
 {
-	int total = 0;
-	for (const BWAPI::Unit min : minerals)
-	{
-		total += min->getInitialResources();
-	}
-	return total;
+    int total = 0;
+    for (const BWAPI::Unit min : minerals)
+    {
+        total += min->getInitialResources();
+    }
+    return total;
 }
 
 int Base::getInitialGas() const
 {
-	int total = 0;
-	for (const BWAPI::Unit gas : initialGeysers)
-	{
-		total += gas->getInitialResources();
-	}
-	return total;
+    int total = 0;
+    for (const BWAPI::Unit gas : initialGeysers)
+    {
+        total += gas->getInitialResources();
+    }
+    return total;
 }
 
 // How many workers to saturate the base?
@@ -333,35 +383,38 @@ int Base::getInitialGas() const
 // NOTE This doesn't account for mineral patches mining out, decreasing the maximum.
 int Base::getMaxWorkers() const
 {
-	return 2 * minerals.size() + Config::Macro::WorkersPerRefinery * geysers.size();
+    return 2 * minerals.size() + Config::Macro::WorkersPerRefinery * geysers.size();
 }
 
-// How many workers are acually assigned?
+// How many workers are assigned to minerals or gas?
+// NOTE Some may be in transit and still far away.
 int Base::getNumWorkers() const
 {
-	// The number of assigned mineral workers.
-	int nWorkers = WorkerManager::Instance().getNumWorkers(resourceDepot);
+    // The number of assigned mineral workers.
+    int nWorkers = WorkerManager::Instance().getNumWorkers(resourceDepot);
 
-	// Add the assigned gas workers.
-	for (BWAPI::Unit geyser : geysers)
-	{
-		nWorkers += WorkerManager::Instance().getNumWorkers(geyser);
-	}
+    // Add the assigned gas workers.
+    for (BWAPI::Unit geyser : geysers)
+    {
+        nWorkers += WorkerManager::Instance().getNumWorkers(geyser);
+    }
 
-	return nWorkers;
+    return nWorkers;
 }
 
-// The mean offset of the base's mineral patches from the center of the resource depot.
-// This is used to tell what direction the minerals are in.
-BWAPI::Position Base::getMineralOffset() const
+// For one of our bases, return the number of our units of the given type there.
+// Specifically, the number within a fixed (short) distance of the base center.
+// Include buildings that are in the building queue, not yet started, regardless where they are.
+// It's used for counting static defense buildings.
+int Base::getNumUnits(BWAPI::UnitType type) const
 {
-	BWAPI::Position center = getCenter();
-	BWAPI::Position offset = BWAPI::Positions::Origin;
-	for (BWAPI::Unit mineral : getMinerals())
-	{
-		offset += mineral->getInitialPosition() - center;
-	}
-	return BWAPI::Position(offset / getMinerals().size());
+    BWAPI::Unitset units = BWAPI::Broodwar->getUnitsInRadius(
+        getCenter(),
+        8 * 32,
+        BWAPI::Filter::GetType == type && BWAPI::Filter::IsOwned
+    );
+
+    return int(units.size() + BuildingManager::Instance().getNumUnstarted(type));
 }
 
 // Return a pylon near the nexus, if any. Let's call 256 pixels "near".
@@ -369,10 +422,10 @@ BWAPI::Position Base::getMineralOffset() const
 // NOTE The pylon may not be complete!
 BWAPI::Unit Base::getPylon() const
 {
-	return BWAPI::Broodwar->getClosestUnit(
-		getCenter(),
-		BWAPI::Filter::IsOwned && BWAPI::Filter::GetType == BWAPI::UnitTypes::Protoss_Pylon,
-		256);
+    return BWAPI::Broodwar->getClosestUnit(
+        getCenter(),
+        BWAPI::Filter::IsOwned && BWAPI::Filter::GetType == BWAPI::UnitTypes::Protoss_Pylon,
+        256);
 }
 
 // We're scouting in the early game. Have we seen whether the enemy base is here?
@@ -380,11 +433,11 @@ BWAPI::Unit Base::getPylon() const
 // each corner of the resource depot spot.
 bool Base::isExplored() const
 {
-	return
-		BWAPI::Broodwar->isExplored(tilePosition) ||
-		BWAPI::Broodwar->isExplored(tilePosition + BWAPI::TilePosition(3, 2)) ||
-		BWAPI::Broodwar->isExplored(tilePosition + BWAPI::TilePosition(0, 2)) ||
-		BWAPI::Broodwar->isExplored(tilePosition + BWAPI::TilePosition(3, 0));
+    return
+        BWAPI::Broodwar->isExplored(tilePosition) ||
+        BWAPI::Broodwar->isExplored(tilePosition + BWAPI::TilePosition(3, 2)) ||
+        BWAPI::Broodwar->isExplored(tilePosition + BWAPI::TilePosition(0, 2)) ||
+        BWAPI::Broodwar->isExplored(tilePosition + BWAPI::TilePosition(3, 0));
 }
 
 // Should we be able to see the resource depot at this base?
@@ -392,16 +445,16 @@ bool Base::isExplored() const
 // This is for checking whether an expected enemy base is missing.
 bool Base::isVisible() const
 {
-	return
-		BWAPI::Broodwar->isVisible(tilePosition) ||
-		BWAPI::Broodwar->isVisible(tilePosition + BWAPI::TilePosition(3, 2)) ||
-		BWAPI::Broodwar->isVisible(tilePosition + BWAPI::TilePosition(0, 2)) ||
-		BWAPI::Broodwar->isVisible(tilePosition + BWAPI::TilePosition(3, 0));
+    return
+        BWAPI::Broodwar->isVisible(tilePosition) ||
+        BWAPI::Broodwar->isVisible(tilePosition + BWAPI::TilePosition(3, 2)) ||
+        BWAPI::Broodwar->isVisible(tilePosition + BWAPI::TilePosition(0, 2)) ||
+        BWAPI::Broodwar->isVisible(tilePosition + BWAPI::TilePosition(3, 0));
 }
 
 void Base::clearBlocker(BWAPI::Unit blocker)
 {
-	blockers.erase(blocker);
+    blockers.erase(blocker);
 }
 
 void Base::drawBaseInfo() const
@@ -418,55 +471,55 @@ void Base::drawBaseInfo() const
     BWAPI::Broodwar->drawLineMap(center, getFront(), color);
     
     BWAPI::Position offset(-16, -6);
-	for (BWAPI::Unit min : minerals)
-	{
-		BWAPI::Broodwar->drawTextMap(min->getInitialPosition() + offset, "%c%d", cyan, id);
-		// BWAPI::Broodwar->drawTextMap(min->getInitialPosition() + BWAPI::Position(-18, 4), "%c%d", yellow, d.getStaticUnitDistance(min));
-	}
-	for (BWAPI::Unit gas : geysers)
-	{
-		BWAPI::Broodwar->drawTextMap(gas->getInitialPosition() + offset, "%cgas %d", cyan, id);
-		// BWAPI::Broodwar->drawTextMap(gas->getInitialPosition() + BWAPI::Position(-18, 4), "%cgas %d", yellow, d.getStaticUnitDistance(gas));
-	}
-	for (BWAPI::Unit blocker : blockers)
-	{
-		BWAPI::Position pos = blocker->getInitialPosition();
-		BWAPI::UnitType type = blocker->getInitialType();
-		BWAPI::Broodwar->drawBoxMap(
-			pos - BWAPI::Position(type.dimensionLeft(), type.dimensionUp()),
-			pos + BWAPI::Position(type.dimensionRight(), type.dimensionDown()),
-			BWAPI::Colors::Red);
-	}
+    for (BWAPI::Unit min : minerals)
+    {
+        BWAPI::Broodwar->drawTextMap(min->getInitialPosition() + offset, "%c%d", cyan, id);
+        // BWAPI::Broodwar->drawTextMap(min->getInitialPosition() + BWAPI::Position(-18, 4), "%c%d", yellow, d.getStaticUnitDistance(min));
+    }
+    for (BWAPI::Unit gas : geysers)
+    {
+        BWAPI::Broodwar->drawTextMap(gas->getInitialPosition() + offset, "%cgas %d", cyan, id);
+        // BWAPI::Broodwar->drawTextMap(gas->getInitialPosition() + BWAPI::Position(-18, 4), "%cgas %d", yellow, d.getStaticUnitDistance(gas));
+    }
+    for (BWAPI::Unit blocker : blockers)
+    {
+        BWAPI::Position pos = blocker->getInitialPosition();
+        BWAPI::UnitType type = blocker->getInitialType();
+        BWAPI::Broodwar->drawBoxMap(
+            pos - BWAPI::Position(type.dimensionLeft(), type.dimensionUp()),
+            pos + BWAPI::Position(type.dimensionRight(), type.dimensionDown()),
+            BWAPI::Colors::Red);
+    }
 
-	BWAPI::Broodwar->drawBoxMap(
-		BWAPI::Position(tilePosition),
-		BWAPI::Position(tilePosition + BWAPI::TilePosition(4, 3)),
-		BWAPI::Colors::Cyan, false);
+    BWAPI::Broodwar->drawBoxMap(
+        BWAPI::Position(tilePosition),
+        BWAPI::Position(tilePosition + BWAPI::TilePosition(4, 3)),
+        BWAPI::Colors::Cyan, false);
 
-	int dy = 40;
-	BWAPI::Broodwar->drawTextMap(BWAPI::Position(tilePosition) + BWAPI::Position(40, dy),
-		"%c%d @ (%d,%d)",
-		cyan, id, tilePosition.x, tilePosition.y);
+    int dy = 40;
+    BWAPI::Broodwar->drawTextMap(BWAPI::Position(tilePosition) + BWAPI::Position(40, dy),
+        "%c%d @ (%d,%d)",
+        cyan, id, tilePosition.x, tilePosition.y);
 
-	if (owner != BWAPI::Broodwar->neutral())
-	{
-		dy += 12;
-		char color = green;
-		std::string ownerString = "mine";
-		if (owner != BWAPI::Broodwar->self())
-		{
-			color = orange;
-			ownerString = "yours";
-		}
-		BWAPI::Broodwar->drawTextMap(BWAPI::Position(tilePosition) + BWAPI::Position(40, dy),
-			"%c%s", color, ownerString.c_str());
-	}
+    if (owner != BWAPI::Broodwar->neutral())
+    {
+        dy += 12;
+        char color = green;
+        std::string ownerString = "mine";
+        if (owner != BWAPI::Broodwar->self())
+        {
+            color = orange;
+            ownerString = "yours";
+        }
+        BWAPI::Broodwar->drawTextMap(BWAPI::Position(tilePosition) + BWAPI::Position(40, dy),
+            "%c%s", color, ownerString.c_str());
+    }
 
-	if (blockers.size() > 0)
-	{
-		dy += 12;
-		BWAPI::Broodwar->drawTextMap(BWAPI::Position(tilePosition) + BWAPI::Position(40, dy),
-			"%cblockers: %c%d",
-			red, cyan, blockers.size());
-	}
+    if (blockers.size() > 0)
+    {
+        dy += 12;
+        BWAPI::Broodwar->drawTextMap(BWAPI::Position(tilePosition) + BWAPI::Position(40, dy),
+            "%cblockers: %c%d",
+            red, cyan, blockers.size());
+    }
 }

@@ -6,52 +6,54 @@ using namespace UAlbertaBot;
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
 UnitInfo::UnitInfo()
-	: unitID(0)
-	, updateFrame(0)
-	, lastHP(0)
-	, lastShields(0)
-	, player(nullptr)
-	, unit(nullptr)
-	, lastPosition(BWAPI::Positions::None)
-	, goneFromLastPosition(false)
-	, burrowed(false)
+    : unitID(0)
+    , updateFrame(0)
+    , lastHP(0)
+    , lastShields(0)
+    , player(nullptr)
+    , unit(nullptr)
+    , lastPosition(BWAPI::Positions::None)
+    , goneFromLastPosition(false)
+    , burrowed(false)
     , lifted(false)
-	, type(BWAPI::UnitTypes::None)
-	, completeBy(INT_MAX)
-	, completed(false)
+    , powered(true)
+    , type(BWAPI::UnitTypes::None)
+    , completeBy(MAX_FRAME)
+    , completed(false)
 {
 }
 
 UnitInfo::UnitInfo(BWAPI::Unit u)
     : unitID(u->getID())
-	, updateFrame(BWAPI::Broodwar->getFrameCount())
+    , updateFrame(BWAPI::Broodwar->getFrameCount())
     , lastHP(u->getHitPoints())
     , lastShields(u->getShields())
     , player(u->getPlayer())
-	, unit(u)
+    , unit(u)
     , lastPosition(u->getPosition())
-	, goneFromLastPosition(false)
+    , goneFromLastPosition(false)
     , burrowed(u->isBurrowed() || u->getOrder() == BWAPI::Orders::Burrowing)
     , lifted(u->isLifted() || u->getOrder() == BWAPI::Orders::LiftingOff)
+    , powered(u->isPowered())
     , type(u->getType())
-	, completeBy(predictCompletion())
-	, completed(u->isCompleted())
+    , completeBy(predictCompletion())
+    , completed(u->isCompleted())
 {
 }
 
 bool UnitInfo::operator == (BWAPI::Unit unit) const
 {
-	return unitID == unit->getID();
+    return unitID == unit->getID();
 }
 
 bool UnitInfo::operator == (const UnitInfo & rhs) const
 {
-	return unitID == rhs.unitID;
+    return unitID == rhs.unitID;
 }
 
 bool UnitInfo::operator < (const UnitInfo & rhs) const
 {
-	return unitID < rhs.unitID;
+    return unitID < rhs.unitID;
 }
 
 // These routines estimate HP and/or shields of the unit, which may not have been seen for some time.
@@ -62,49 +64,49 @@ bool UnitInfo::operator < (const UnitInfo & rhs) const
 
 int UnitInfo::estimateHP() const
 {
-	if (unit && unit->isVisible())
-	{
-		if (!unit->isDetected())
-		{
-			return type.maxHitPoints();
-		}
-		return lastHP;		// the most common case
-	}
+    if (unit && unit->isVisible())
+    {
+        if (!unit->isDetected())
+        {
+            return type.maxHitPoints();
+        }
+        return lastHP;		// the most common case
+    }
 
-	if (type.getRace() == BWAPI::Races::Zerg)
-	{
-		const int interval = BWAPI::Broodwar->getFrameCount() - updateFrame;
-		return std::min(type.maxHitPoints(), lastHP + int(0.0156 * interval));
-	}
+    if (type.getRace() == BWAPI::Races::Zerg)
+    {
+        const int interval = BWAPI::Broodwar->getFrameCount() - updateFrame;
+        return std::min(type.maxHitPoints(), lastHP + int(0.0156 * interval));
+    }
 
-	// Terran, protoss, neutral.
-	return lastHP;
+    // Terran, protoss, neutral.
+    return lastHP;
 }
 
 int UnitInfo::estimateShields() const
 {
-	if (unit && unit->isVisible())
-	{
-		if (!unit->isDetected())
-		{
-			return type.maxShields();
-		}
-		return lastShields;		// the most common case
-	}
+    if (unit && unit->isVisible())
+    {
+        if (!unit->isDetected())
+        {
+            return type.maxShields();
+        }
+        return lastShields;		// the most common case
+    }
 
-	if (type.getRace() == BWAPI::Races::Protoss)
-	{
-		const int interval = BWAPI::Broodwar->getFrameCount() - updateFrame;
-		return std::min(type.maxShields(), int(lastShields + 0.0273 * interval));
-	}
+    if (type.getRace() == BWAPI::Races::Protoss)
+    {
+        const int interval = BWAPI::Broodwar->getFrameCount() - updateFrame;
+        return std::min(type.maxShields(), int(lastShields + 0.0273 * interval));
+    }
 
-	// Terran, zerg, neutral.
-	return lastShields;
+    // Terran, zerg, neutral.
+    return lastShields;
 }
 
 int UnitInfo::estimateHealth() const
 {
-	return estimateHP() + estimateShields();
+    return estimateHP() + estimateShields();
 }
 
 // Predict when an unfinished enemy unit will be completed.
@@ -126,7 +128,7 @@ int UnitInfo::predictCompletion() const
         if (type.isBuilding())
         {
             // The terran building has no SCV building it. At this rate, it will never finish.
-            return INT_MAX;
+            return MAX_FRAME;
         }
         // Otherwise fall through.
     }
@@ -157,17 +159,17 @@ int UnitInfo::predictCompletion() const
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
 UnitData::UnitData() 
-	: mineralsLost(0)
-	, gasLost(0)
+    : mineralsLost(0)
+    , gasLost(0)
 {
-	int maxTypeID(0);
-	for (BWAPI::UnitType t : BWAPI::UnitTypes::allUnitTypes())
-	{
-		maxTypeID = maxTypeID > t.getID() ? maxTypeID : t.getID();
-	}
+    int maxTypeID(0);
+    for (BWAPI::UnitType t : BWAPI::UnitTypes::allUnitTypes())
+    {
+        maxTypeID = maxTypeID > t.getID() ? maxTypeID : t.getID();
+    }
 
-	numUnits		= std::vector<int>(maxTypeID + 1, 0);
-	numDeadUnits	= std::vector<int>(maxTypeID + 1, 0);
+    numUnits		= std::vector<int>(maxTypeID + 1, 0);
+    numDeadUnits	= std::vector<int>(maxTypeID + 1, 0);
 }
 
 // An enemy unit which is not visible, but whose lastPosition can be seen, is known
@@ -176,64 +178,65 @@ UnitData::UnitData()
 // Called from InformationManager with the enemy UnitData.
 void UnitData::updateGoneFromLastPosition()
 {
-	for (auto & kv : unitMap)
-	{
-		UnitInfo & ui(kv.second);
+    for (auto & kv : unitMap)
+    {
+        UnitInfo & ui(kv.second);
 
-		if (!ui.goneFromLastPosition &&
-			ui.lastPosition.isValid() &&   // should be always true
-			ui.unit)                       // should be always true
-		{
-			if (ui.unit->isVisible())
-			{
-				// It may be burrowed and detected. Or it may be still burrowing.
-				ui.burrowed = ui.unit->isBurrowed() || ui.unit->getOrder() == BWAPI::Orders::Burrowing;
-			}
-			else
-			{
-				// The unit is not visible.
-				if (ui.type == BWAPI::UnitTypes::Terran_Vulture_Spider_Mine)
-				{
-					// Burrowed spider mines are tricky. If the mine is detected, isBurrowed() is true.
-					// But we can't tell when the spider mine is burrowing or unburrowing; its order
-					// is always BWAPI::Orders::VultureMine. So we assume that a mine which goes out
-					// of vision has burrowed and is undetected. It can be wrong.
-					ui.burrowed = true;
-					ui.goneFromLastPosition = false;
-				}
-				else if (BWAPI::Broodwar->isVisible(BWAPI::TilePosition(ui.lastPosition)) && !ui.burrowed)
-				{
-					ui.goneFromLastPosition = true;
-				}
-			}
-		}
-	}
+        if (!ui.goneFromLastPosition &&
+            ui.lastPosition.isValid() &&   // should be always true
+            ui.unit)                       // should be always true
+        {
+            if (ui.unit->isVisible())
+            {
+                // It may be burrowed and detected. Or it may be still burrowing.
+                ui.burrowed = ui.unit->isBurrowed() || ui.unit->getOrder() == BWAPI::Orders::Burrowing;
+            }
+            else
+            {
+                // The unit is not visible.
+                if (ui.type == BWAPI::UnitTypes::Terran_Vulture_Spider_Mine)
+                {
+                    // Burrowed spider mines are tricky. If the mine is detected, isBurrowed() is true.
+                    // But we can't tell when the spider mine is burrowing or unburrowing; its order
+                    // is always BWAPI::Orders::VultureMine. So we assume that a mine which goes out
+                    // of vision has burrowed and is undetected. It can be wrong.
+                    ui.burrowed = true;
+                    ui.goneFromLastPosition = false;
+                }
+                else if (BWAPI::Broodwar->isVisible(BWAPI::TilePosition(ui.lastPosition)) && !ui.burrowed)
+                {
+                    ui.goneFromLastPosition = true;
+                }
+            }
+        }
+    }
 }
 
 void UnitData::updateUnit(BWAPI::Unit unit)
 {
-	if (!unit->isVisible()) { return; }
+    if (!unit->isVisible()) { return; }
 
-	if (unitMap.find(unit) == unitMap.end())
+    if (unitMap.find(unit) == unitMap.end())
     {
-		++numUnits[unit->getType().getID()];
-		unitMap[unit] = UnitInfo(unit);
+        ++numUnits[unit->getType().getID()];
+        unitMap[unit] = UnitInfo(unit);
     }
-	else
-	{
+    else
+    {
         UnitInfo & ui = unitMap[unit];
 
-		ui.unitID				= unit->getID();
-		ui.updateFrame			= BWAPI::Broodwar->getFrameCount();
-		ui.lastHP				= unit->getHitPoints();
-		ui.lastShields			= unit->getShields();
-		ui.player				= unit->getPlayer();
-		ui.unit					= unit;
-		ui.lastPosition			= unit->getPosition();
-		ui.goneFromLastPosition	= false;
-		ui.burrowed				= unit->isBurrowed() || unit->getOrder() == BWAPI::Orders::Burrowing;
+        ui.unitID				= unit->getID();
+        ui.updateFrame			= BWAPI::Broodwar->getFrameCount();
+        ui.lastHP				= unit->getHitPoints();
+        ui.lastShields			= unit->getShields();
+        ui.player				= unit->getPlayer();
+        ui.unit					= unit;
+        ui.lastPosition			= unit->getPosition();
+        ui.goneFromLastPosition	= false;
+        ui.burrowed				= unit->isBurrowed() || unit->getOrder() == BWAPI::Orders::Burrowing;
         ui.lifted               = unit->isLifted() || unit->getOrder() == BWAPI::Orders::LiftingOff;
-		ui.completed            = unit->isCompleted();
+        ui.powered				= unit->isPowered();
+        ui.completed            = unit->isCompleted();
 
         if (ui.type != unit->getType())
         {
@@ -251,7 +254,7 @@ void UnitData::updateUnit(BWAPI::Unit unit)
         }
         // Handle a terran building gaining or losing its constructing SCV.
         // In other cases, do not update the prediction. It is already as good as it can be.
-        else if (ui.completeBy == INT_MAX)
+        else if (ui.completeBy >= MAX_FRAME)
         {
             if (ui.unit->isBeingConstructed())
             {
@@ -262,42 +265,42 @@ void UnitData::updateUnit(BWAPI::Unit unit)
         else if (!ui.unit->isBeingConstructed())
         {
             // The constructing SCV has left to play pinochle. Predict no completion ever.
-            ui.completeBy = INT_MAX;
+            ui.completeBy = MAX_FRAME;
         }
-	}
+    }
 }
 
 void UnitData::removeUnit(BWAPI::Unit unit)
 {
-	if (!unit) { return; }
+    if (!unit) { return; }
 
     // NOTE Doesn't take into account full cost of all units, e.g. morphed zerg units.
-	mineralsLost += unit->getType().mineralPrice();
-	gasLost += unit->getType().gasPrice();
+    mineralsLost += unit->getType().mineralPrice();
+    gasLost += unit->getType().gasPrice();
 
-	--numUnits[unit->getType().getID()];
-	++numDeadUnits[unit->getType().getID()];
-	
-	unitMap.erase(unit);
+    --numUnits[unit->getType().getID()];
+    ++numDeadUnits[unit->getType().getID()];
+    
+    unitMap.erase(unit);
 
-	// NOTE This assert fails, so the unit counts cannot be trusted. :-(
-	// UAB_ASSERT(numUnits[unit->getType().getID()] >= 0, "negative units");
+    // NOTE This assert fails, so the unit counts cannot be trusted. :-(
+    // UAB_ASSERT(numUnits[unit->getType().getID()] >= 0, "negative units");
 }
 
 void UnitData::removeBadUnits()
 {
-	for (auto iter(unitMap.begin()); iter != unitMap.end(); )
-	{
-		if (badUnitInfo(iter->second))
-		{
-			numUnits[iter->second.type.getID()]--;
-			iter = unitMap.erase(iter);
-		}
-		else
-		{
-			++iter;
-		}
-	}
+    for (auto iter(unitMap.begin()); iter != unitMap.end(); )
+    {
+        if (badUnitInfo(iter->second))
+        {
+            numUnits[iter->second.type.getID()]--;
+            iter = unitMap.erase(iter);
+        }
+        else
+        {
+            ++iter;
+        }
+    }
 }
 
 // Should we remove this unitInfo record?

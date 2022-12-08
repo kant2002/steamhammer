@@ -6,33 +6,33 @@ namespace UAlbertaBot
 {
 
 enum class MacroCommandType
-	{ None
-	, Scout
-	, ScoutIfNeeded
-	, ScoutLocation
-	, ScoutOnceOnly
-	, ScoutWhileSafe   // TODO unimplemented
-	, StealGas
-	, StartGas
-	, StopGas
-	, GasUntil
-	, ExtractorTrickDrone
-	, ExtractorTrickZergling
-	, Aggressive
-	, Defensive
-	, PullWorkers
-	, PullWorkersLeaving
-	, ReleaseWorkers
+    { None
+    , Scout
+    , ScoutIfNeeded
+    , ScoutLocation
+    , ScoutOnceOnly
+    , ScoutWhileSafe   // TODO unimplemented
+    , StealGas
+    , StartGas
+    , StopGas
+    , GasUntil
+    , ExtractorTrickDrone
+    , ExtractorTrickZergling
+    , Aggressive
+    , Defensive
+    , PullWorkers
+    , PullWorkersLeaving
+    , ReleaseWorkers
     , PostWorker
     , UnpostWorkers
     , Nonadaptive
     , Lift
-	, QueueBarrier
-	};
+    , QueueBarrier
+    };
 
 class MacroCommand
 {
-	MacroCommandType	_type;
+    MacroCommandType	_type;
     int                 _amount;
     BWAPI::UnitType     _unitType;
 

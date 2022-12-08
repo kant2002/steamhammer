@@ -5,6 +5,10 @@
 
 using namespace UAlbertaBot;
 
+// Record the first time each enemy unit type is sighted, in frames.
+// For unfinished building types, record the building's predicted completion time instead,
+// marking it by negating the frame count.
+
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
 SkillUnitTimings::SkillUnitTimings()
@@ -42,6 +46,8 @@ void SkillUnitTimings::getData(const std::string & line)
     pastTimings.push_back(timingRecord);
 }
 
+// Positive frame values are scouting times.
+// Negative frame values are building completion times, negated. Negation is just a flag.
 void SkillUnitTimings::update()
 {
     for (const auto & kv : the.info.getUnitData(the.enemy()).getUnits())
@@ -51,7 +57,12 @@ void SkillUnitTimings::update()
         auto it = timings.find(ui.type);
         if (it == timings.end())
         {
-            timings.insert(std::pair<BWAPI::UnitType, int>(ui.type, ui.updateFrame));
+            int frame = ui.updateFrame;
+            if (ui.type.isBuilding() && !ui.completed)
+            {
+                frame = -ui.completeBy;
+            }
+            timings.insert(std::pair<BWAPI::UnitType, int>(ui.type, frame));
         }
     }
 

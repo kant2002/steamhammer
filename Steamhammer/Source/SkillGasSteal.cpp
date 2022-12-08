@@ -137,7 +137,7 @@ void SkillGasSteal::update()
     {
         //BWAPI::Broodwar->printf("gas steal useless @ %d", the.now());
         _failed = true;
-        _nextUpdateFrame = INT_MAX;
+        _nextUpdateFrame = MAX_FRAME;
         return;
     }
 
@@ -156,7 +156,7 @@ void SkillGasSteal::update()
         {
             //BWAPI::Broodwar->printf("gas steal lifetime = %d", the.now());
             record.lifetime = the.now();
-            _nextUpdateFrame = INT_MAX;
+            _nextUpdateFrame = MAX_FRAME;
             return;
         }
 
@@ -166,7 +166,7 @@ void SkillGasSteal::update()
         {
             //BWAPI::Broodwar->printf("gas steal failed to make refinery @ %d", the.now());
             _failed = true;
-            _nextUpdateFrame = INT_MAX;
+            _nextUpdateFrame = MAX_FRAME;
             return;
         }
     }
@@ -176,7 +176,7 @@ void SkillGasSteal::update()
     {
         //BWAPI::Broodwar->printf("no gas steal, enemy used gas");
         _failed = true;
-        _nextUpdateFrame = INT_MAX;
+        _nextUpdateFrame = MAX_FRAME;
         return;
     }
 
@@ -185,7 +185,7 @@ void SkillGasSteal::update()
     {
         //BWAPI::Broodwar->printf("no gas steal, enemy got it first @ %d", the.now());
         _failed = true;
-        _nextUpdateFrame = INT_MAX;
+        _nextUpdateFrame = MAX_FRAME;
         return;
     }
 

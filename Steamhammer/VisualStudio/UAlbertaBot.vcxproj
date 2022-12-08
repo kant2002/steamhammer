@@ -15,7 +15,7 @@
     <ProjectGuid>{2E63AE74-758A-4607-9DE4-D28E814A6E13}</ProjectGuid>
     <RootNamespace>ExampleAIModule</RootNamespace>
     <Keyword>Win32Proj</Keyword>
-    <WindowsTargetPlatformVersion>10.0.17763.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
@@ -23,12 +23,12 @@
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>Unicode</CharacterSet>
     <WholeProgramOptimization>true</WholeProgramOptimization>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <WholeProgramOptimization>false</WholeProgramOptimization>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
@@ -84,7 +84,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
-      <Optimization>Full</Optimization>
+      <Optimization>MaxSpeed</Optimization>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <AdditionalIncludeDirectories>../BOSS/source;../source;$(BWAPI440_DIR)/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;EXAMPLEAIMODULE_EXPORTS;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -157,6 +157,7 @@
     <ClCompile Include="..\Source\MicroDefilers.cpp" />
     <ClCompile Include="..\Source\MicroDetectors.cpp" />
     <ClCompile Include="..\Source\MicroHighTemplar.cpp" />
+    <ClCompile Include="..\Source\MicroIrradiated.cpp" />
     <ClCompile Include="..\Source\MicroLurkers.cpp" />
     <ClCompile Include="..\source\MicroManager.cpp" />
     <ClCompile Include="..\Source\Config.cpp" />
@@ -170,6 +171,8 @@
     <ClCompile Include="..\Source\MicroScourge.cpp" />
     <ClCompile Include="..\Source\MicroTanks.cpp" />
     <ClCompile Include="..\Source\MicroTransports.cpp" />
+    <ClCompile Include="..\Source\OpeningTiming.cpp" />
+    <ClCompile Include="..\Source\OpeningTimingRecord.cpp" />
     <ClCompile Include="..\Source\OpponentModel.cpp" />
     <ClCompile Include="..\Source\OpponentPlan.cpp" />
     <ClCompile Include="..\Source\OpsBoss.cpp" />
@@ -181,13 +184,19 @@
     <ClCompile Include="..\Source\ResourceInfo.cpp" />
     <ClCompile Include="..\source\ScoutManager.cpp" />
     <ClCompile Include="..\Source\Skill.cpp" />
+    <ClCompile Include="..\Source\SkillBattles.cpp" />
     <ClCompile Include="..\Source\SkillGasSteal.cpp" />
     <ClCompile Include="..\Source\SkillKit.cpp" />
+    <ClCompile Include="..\Source\SkillLurkers.cpp" />
+    <ClCompile Include="..\Source\SkillOpeningTiming.cpp" />
     <ClCompile Include="..\Source\SkillUnitTimings.cpp" />
     <ClCompile Include="..\Source\Squad.cpp" />
     <ClCompile Include="..\Source\SquadData.cpp" />
+    <ClCompile Include="..\Source\SquadOrder.cpp" />
+    <ClCompile Include="..\Source\StaticDefense.cpp" />
     <ClCompile Include="..\Source\StrategyBossZerg.cpp" />
     <ClCompile Include="..\Source\StrategyManager.cpp" />
+    <ClCompile Include="..\Source\TacticsOrders.cpp" />
     <ClCompile Include="..\Source\The.cpp" />
     <ClCompile Include="..\source\TimerManager.cpp" />
     <ClCompile Include="..\Source\UABAssert.cpp" />
@@ -237,6 +246,7 @@
     <ClInclude Include="..\Source\MicroDefilers.h" />
     <ClInclude Include="..\Source\MicroDetectors.h" />
     <ClInclude Include="..\Source\MicroHighTemplar.h" />
+    <ClInclude Include="..\Source\MicroIrradiated.h" />
     <ClInclude Include="..\Source\MicroLurkers.h" />
     <ClInclude Include="..\source\MicroManager.h" />
     <ClInclude Include="..\Source\Config.h" />
@@ -250,6 +260,8 @@
     <ClInclude Include="..\Source\MicroScourge.h" />
     <ClInclude Include="..\Source\MicroTanks.h" />
     <ClInclude Include="..\Source\MicroTransports.h" />
+    <ClInclude Include="..\Source\OpeningTiming.h" />
+    <ClInclude Include="..\Source\OpeningTimingRecord.h" />
     <ClInclude Include="..\Source\OpponentModel.h" />
     <ClInclude Include="..\Source\OpponentPlan.h" />
     <ClInclude Include="..\Source\OpsBoss.h" />
@@ -261,14 +273,19 @@
     <ClInclude Include="..\Source\ResourceInfo.h" />
     <ClInclude Include="..\source\ScoutManager.h" />
     <ClInclude Include="..\Source\Skill.h" />
+    <ClInclude Include="..\Source\SkillBattles.h" />
     <ClInclude Include="..\Source\SkillGasSteal.h" />
     <ClInclude Include="..\Source\SkillKit.h" />
+    <ClInclude Include="..\Source\SkillLurkers.h" />
+    <ClInclude Include="..\Source\SkillOpeningTiming.h" />
     <ClInclude Include="..\Source\SkillUnitTimings.h" />
     <ClInclude Include="..\Source\Squad.h" />
     <ClInclude Include="..\Source\SquadData.h" />
     <ClInclude Include="..\Source\SquadOrder.h" />
+    <ClInclude Include="..\Source\StaticDefense.h" />
     <ClInclude Include="..\Source\StrategyBossZerg.h" />
     <ClInclude Include="..\Source\StrategyManager.h" />
+    <ClInclude Include="..\Source\TacticsOrders.h" />
     <ClInclude Include="..\Source\The.h" />
     <ClInclude Include="..\source\TimerManager.h" />
     <ClInclude Include="..\Source\UABAssert.h" />
@@ -277,9 +294,6 @@
     <ClInclude Include="..\Source\UnitUtil.h" />
     <ClInclude Include="..\source\WorkerData.h" />
     <ClInclude Include="..\source\WorkerManager.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <Text Include="..\..\to-do.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

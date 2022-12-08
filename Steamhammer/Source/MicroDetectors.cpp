@@ -8,8 +8,8 @@
 using namespace UAlbertaBot;
 
 MicroDetectors::MicroDetectors()
-	: squadSize(0)
-	, unitClosestToEnemy(nullptr)
+    : squadSize(0)
+    , unitClosestToTarget(nullptr)
 {
 }
 
@@ -21,41 +21,41 @@ void MicroDetectors::go(const BWAPI::Unitset & squadUnits)
 {
     const BWAPI::Unitset & detectorUnits = getUnits();
 
-	if (detectorUnits.empty())
-	{
-		return;
-	}
+    if (detectorUnits.empty())
+    {
+        return;
+    }
 
-	// Look through enemy units to find those which we want to seek or to avoid.
-	BWAPI::Unitset cloakedTargets;
-	BWAPI::Unitset enemies;
+    // Look through enemy units to find those which we want to seek or to avoid.
+    BWAPI::Unitset cloakedTargets;
+    BWAPI::Unitset enemies;
     
-	for (const BWAPI::Unit target : BWAPI::Broodwar->enemy()->getUnits())
-	{
+    for (const BWAPI::Unit target : BWAPI::Broodwar->enemy()->getUnits())
+    {
         if (!target->getPosition().isValid() || !target->isCompleted())
         {
             continue;
         }
 
-		// 1. Find cloaked units. We want to keep them in detection range.
-		if (target->getType().hasPermanentCloak() ||     // dark templar, observer
-			target->getType().isCloakable() ||           // wraith, ghost
-			target->getType() == BWAPI::UnitTypes::Terran_Vulture_Spider_Mine ||
-			target->getType() == BWAPI::UnitTypes::Zerg_Lurker ||
-			target->isBurrowed() ||
+        // 1. Find cloaked units. We want to keep them in detection range.
+        if (target->getType().hasPermanentCloak() ||     // dark templar, observer
+            target->getType().isCloakable() ||           // wraith, ghost
+            target->getType() == BWAPI::UnitTypes::Terran_Vulture_Spider_Mine ||
+            target->getType() == BWAPI::UnitTypes::Zerg_Lurker ||
+            target->isBurrowed() ||
             target->getOrder() == BWAPI::Orders::Burrowing)
-		{
+        {
             cloakedTargets.insert(target);
         }
 
-		if (UnitUtil::CanAttackAir(target))
-		{
-			// 2. Find threats. Keep away from them.
-			enemies.insert(target);
-		}
-	}
+        if (UnitUtil::CanAttackAir(target))
+        {
+            // 2. Find threats. Keep away from them.
+            enemies.insert(target);
+        }
+    }
 
-	// Units that may be able to fire on attackers, defending the detector.
+    // Units that may be able to fire on attackers, defending the detector.
     BWAPI::Unitset groundDefenders;
     BWAPI::Unitset airDefenders;
     for (BWAPI::Unit unit : squadUnits)
@@ -73,27 +73,27 @@ void MicroDetectors::go(const BWAPI::Unitset & squadUnits)
         }
     }
 
-	// For each detector.
-	// In Steamhammer, detectors in the squad are normally zero or one.
+    // For each detector.
+    // In Steamhammer, detectors in the squad are normally zero or one.
     // (If zero, we never got this far.)
-	for (const BWAPI::Unit detectorUnit : detectorUnits)
-	{
-		if (squadSize == 1)
-		{
-			// The detector is alone in the squad. Move to the order position.
-			// This allows the Recon squad to scout with a detector on island maps.
-            if (order.getPosition().isValid())
+    for (const BWAPI::Unit detectorUnit : detectorUnits)
+    {
+        if (squadSize == 1)
+        {
+            // The detector is alone in the squad. Move to the order position.
+            // This allows the Recon squad to scout with a detector on island maps.
+            if (order->getPosition().isValid())
             {
-                the.micro.MoveSafely(detectorUnit, order.getPosition());
+                the.micro.MoveSafely(detectorUnit, order->getPosition());
             }
             else
             {
                 the.micro.MoveSafely(detectorUnit, BWAPI::Positions::Origin);
             }
-			return;
-		}
+            return;
+        }
 
-		BWAPI::Position destination;
+        BWAPI::Position destination;
         BWAPI::Unit nearestEnemy = NearestOf(detectorUnit->getPosition(), enemies);
         BWAPI::Unit nearestGroundDefender = NearestOf(detectorUnit->getPosition(), groundDefenders);
         BWAPI::Unit nearestAirDefender = NearestOf(detectorUnit->getPosition(), airDefenders);
@@ -127,20 +127,20 @@ void MicroDetectors::go(const BWAPI::Unitset & squadUnits)
         {
             destination = nearestCloaked->getPosition();
         }
-		else if (unitClosestToEnemy &&
-            unitClosestToEnemy->getPosition().isValid() &&
-            !the.airAttacks.at(unitClosestToEnemy->getTilePosition()))
-		{
-			destination = unitClosestToEnemy->getPosition();
-		}
+        else if (unitClosestToTarget &&
+            unitClosestToTarget->getPosition().isValid() &&
+            !the.airAttacks.at(unitClosestToTarget->getTilePosition()))
+        {
+            destination = unitClosestToTarget->getPosition();
+        }
         else if (the.bases.myMain()->getPosition().isValid())
-		{
-			destination = the.bases.myMain()->getPosition();
-		}
+        {
+            destination = the.bases.myMain()->getPosition();
+        }
         else
         {
             destination = BWAPI::Positions::Origin;
         }
-		the.micro.MoveNear(detectorUnit, destination);
-	}
+        the.micro.MoveNear(detectorUnit, destination);
+    }
 }

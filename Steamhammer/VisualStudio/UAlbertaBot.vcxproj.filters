@@ -176,6 +176,15 @@
     <ClCompile Include="..\Source\SkillUnitTimings.cpp" />
     <ClCompile Include="..\Source\GridBuildable.cpp" />
     <ClCompile Include="..\Source\MacroCommand.cpp" />
+    <ClCompile Include="..\Source\SkillBattles.cpp" />
+    <ClCompile Include="..\Source\OpeningTiming.cpp" />
+    <ClCompile Include="..\Source\SkillOpeningTiming.cpp" />
+    <ClCompile Include="..\Source\OpeningTimingRecord.cpp" />
+    <ClCompile Include="..\Source\SkillLurkers.cpp" />
+    <ClCompile Include="..\Source\MicroIrradiated.cpp" />
+    <ClCompile Include="..\Source\TacticsOrders.cpp" />
+    <ClCompile Include="..\Source\SquadOrder.cpp" />
+    <ClCompile Include="..\Source\StaticDefense.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Source\CombatCommander.h">
@@ -319,8 +328,13 @@
     <ClInclude Include="..\Source\SkillKit.h" />
     <ClInclude Include="..\Source\SkillUnitTimings.h" />
     <ClInclude Include="..\Source\GridBuildable.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <Text Include="..\..\to-do.txt" />
+    <ClInclude Include="..\Source\SkillBattles.h" />
+    <ClInclude Include="..\Source\OpeningTiming.h" />
+    <ClInclude Include="..\Source\SkillOpeningTiming.h" />
+    <ClInclude Include="..\Source\OpeningTimingRecord.h" />
+    <ClInclude Include="..\Source\SkillLurkers.h" />
+    <ClInclude Include="..\Source\TacticsOrders.h" />
+    <ClInclude Include="..\Source\MicroIrradiated.h" />
+    <ClInclude Include="..\Source\StaticDefense.h" />
   </ItemGroup>
 </Project>

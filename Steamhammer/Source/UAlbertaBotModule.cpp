@@ -8,6 +8,7 @@
 
 #include "../../BOSS/source/BOSS.h"
 #include "GameCommander.h"
+#include "OpeningTiming.h"
 #include "ParseUtils.h"
 
 using namespace UAlbertaBot;
@@ -19,21 +20,14 @@ UAlbertaBotModule::UAlbertaBotModule()
 // BWAPI calls this when the bot starts.
 void UAlbertaBotModule::onStart()
 {
-    the.initialize();
-
     // Initialize BOSS, the Build Order Search System
     BOSS::init();
 
-	// Parse the bot's configuration file.
-	// Change this file path (in config.cpp) to point to your config file.
-    // Any relative path name will be relative to Starcraft installation folder
-	// The config depends on the map and must be read after the map is analyzed.
-    // This also reads the opponent model data and decides on the opening.
-    ParseUtils::ParseConfigFile(Config::ConfigFile::ConfigFileLocation);
+    the.initialize();
 
     // Set our BWAPI options according to the configuration. 
-	BWAPI::Broodwar->setLocalSpeed(Config::BWAPIOptions::SetLocalSpeed);
-	BWAPI::Broodwar->setFrameSkip(Config::BWAPIOptions::SetFrameSkip);
+    BWAPI::Broodwar->setLocalSpeed(Config::BWAPIOptions::SetLocalSpeed);
+    BWAPI::Broodwar->setFrameSkip(Config::BWAPIOptions::SetFrameSkip);
     
     if (Config::BWAPIOptions::EnableCompleteMapInformation)
     {
@@ -45,7 +39,7 @@ void UAlbertaBotModule::onStart()
         BWAPI::Broodwar->enableFlag(BWAPI::Flag::UserInput);
     }
 
-	StrategyManager::Instance().setOpeningGroup();    // may depend on config and/or opponent model
+    StrategyManager::Instance().setOpeningGroup();    // may depend on config and/or opponent model
 
     if (Config::BotInfo::PrintInfoOnStart)
     {
@@ -56,16 +50,16 @@ void UAlbertaBotModule::onStart()
         }
     }
 
-	// Turn off latency compensation, which is on by default.
-	// BWAPI::Broodwar->setLatCom(false);
+    // Turn off latency compensation, which is on by default.
+    // BWAPI::Broodwar->setLatCom(false);
 
-	// Turn on latency compensation, in case somebody sets it off by default.
-	BWAPI::Broodwar->setLatCom(true);
+    // Turn on latency compensation, in case somebody sets it off by default.
+    BWAPI::Broodwar->setLatCom(true);
 }
 
 void UAlbertaBotModule::onEnd(bool isWinner)
 {
-	GameCommander::Instance().onEnd(isWinner);
+    GameCommander::Instance().onEnd(isWinner);
 }
 
 void UAlbertaBotModule::onFrame()
@@ -95,45 +89,45 @@ void UAlbertaBotModule::onFrame()
         return;
     }
 
-	GameCommander::Instance().update();
+    GameCommander::Instance().update();
 }
 
 void UAlbertaBotModule::onUnitDestroy(BWAPI::Unit unit)
 {
-	GameCommander::Instance().onUnitDestroy(unit);
+    GameCommander::Instance().onUnitDestroy(unit);
 }
 
 void UAlbertaBotModule::onUnitMorph(BWAPI::Unit unit)
 {
-	GameCommander::Instance().onUnitMorph(unit);
+    GameCommander::Instance().onUnitMorph(unit);
 }
 
 void UAlbertaBotModule::onSendText(std::string text) 
 { 
-	ParseUtils::ParseTextCommand(text);
+    ParseUtils::ParseTextCommand(text);
 }
 
 void UAlbertaBotModule::onUnitCreate(BWAPI::Unit unit)
 { 
-	GameCommander::Instance().onUnitCreate(unit);
+    GameCommander::Instance().onUnitCreate(unit);
 }
 
 void UAlbertaBotModule::onUnitComplete(BWAPI::Unit unit)
 {
-	GameCommander::Instance().onUnitComplete(unit);
+    GameCommander::Instance().onUnitComplete(unit);
 }
 
 void UAlbertaBotModule::onUnitShow(BWAPI::Unit unit)
 { 
-	GameCommander::Instance().onUnitShow(unit);
+    GameCommander::Instance().onUnitShow(unit);
 }
 
 void UAlbertaBotModule::onUnitHide(BWAPI::Unit unit)
 { 
-	GameCommander::Instance().onUnitHide(unit);
+    GameCommander::Instance().onUnitHide(unit);
 }
 
 void UAlbertaBotModule::onUnitRenegade(BWAPI::Unit unit)
 { 
-	GameCommander::Instance().onUnitRenegade(unit);
+    GameCommander::Instance().onUnitRenegade(unit);
 }

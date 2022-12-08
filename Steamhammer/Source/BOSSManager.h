@@ -27,26 +27,26 @@ class BOSSManager
     BOSS::DFBB_BuildOrderSearchResults      _savedSearchResults;
     BOSS::BuildOrder                        _previousBuildOrder;
 
-	BOSS::GameState				            getCurrentState();
-	BOSS::GameState				            getStartState();
-	
+    BOSS::GameState				            getCurrentState();
+    BOSS::GameState				            getStartState();
+    
     // functions
-	BOSS::DFBB_BuildOrderSearchResults		search(const std::vector<MetaPair> & goalUnits);
+    BOSS::DFBB_BuildOrderSearchResults		search(const std::vector<MetaPair> & goalUnits);
 
-	void						            loadOpeningBook();
+    void						            loadOpeningBook();
 
-	std::vector<std::vector<MacroAct>>      openingBook;
+    std::vector<std::vector<MacroAct>>      openingBook;
     const BOSS::RaceID                      getRace() const;
 
     void                                    logBadSearch();
 
-	BOSSManager();
+    BOSSManager();
 
 public:
 
-	static BOSSManager &	    Instance();
+    static BOSSManager &	    Instance();
 
-	void						update(double timeLimit);
+    void						update(double timeLimit);
     void                        reset();
 
     BuildOrder                  getBuildOrder();
@@ -54,14 +54,14 @@ public:
 
     void                        startNewSearch(const std::vector<MetaPair> & goalUnits);
     
-	void						drawSearchInformation(int x, int y);
+    void						drawSearchInformation(int x, int y);
     void						drawStateInformation(int x, int y);
 
     
-	static BOSS::BuildOrderSearchGoal       GetGoal(const std::vector<MetaPair> & goalUnits);	
+    static BOSS::BuildOrderSearchGoal       GetGoal(const std::vector<MetaPair> & goalUnits);	
     static std::vector<MacroAct>			GetMetaVector(const BOSS::BuildOrder & buildOrder);
-	static BOSS::ActionType					GetActionType(const MacroAct & t);
-	static MacroAct					        GetMacroAct(const BOSS::ActionType & a);
+    static BOSS::ActionType					GetActionType(const MacroAct & t);
+    static MacroAct					        GetMacroAct(const BOSS::ActionType & a);
 };
 
 }

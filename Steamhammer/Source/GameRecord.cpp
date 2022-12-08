@@ -9,172 +9,172 @@ using namespace UAlbertaBot;
 
 BWAPI::Race GameRecord::charRace(char ch)
 {
-	if (ch == 'Z')
-	{
-		return BWAPI::Races::Zerg;
-	}
-	if (ch == 'P')
-	{
-		return BWAPI::Races::Protoss;
-	}
-	if (ch == 'T')
-	{
-		return BWAPI::Races::Terran;
-	}
-	return BWAPI::Races::Unknown;
+    if (ch == 'Z')
+    {
+        return BWAPI::Races::Zerg;
+    }
+    if (ch == 'P')
+    {
+        return BWAPI::Races::Protoss;
+    }
+    if (ch == 'T')
+    {
+        return BWAPI::Races::Terran;
+    }
+    return BWAPI::Races::Unknown;
 }
 
 // Read a number that is on a line by itself.
 // The number must be an integer >= 0.
 int GameRecord::readNumber(std::istream & input)
 {
-	std::string line;
-	int n = -1;
+    std::string line;
+    int n = -1;
 
-	if (std::getline(input, line))
-	{
-		n = readNumber(line);
-	}
+    if (std::getline(input, line))
+    {
+        n = readNumber(line);
+    }
 
-	if (n >= 0)
-	{
-		return n;
-	}
+    if (n >= 0)
+    {
+        return n;
+    }
 
-	throw game_record_read_error();
+    throw game_record_read_error();
 }
 
 // Read a number from a string.
 int GameRecord::readNumber(std::string & s)
 {
-	std::istringstream lineStream(s);
-	int n;
-	if (lineStream >> n)
-	{
-		return n;
-	}
+    std::istringstream lineStream(s);
+    int n;
+    if (lineStream >> n)
+    {
+        return n;
+    }
 
-	// BWAPI::Broodwar->printf("read bad number");
-	throw game_record_read_error();
+    // BWAPI::Broodwar->printf("read bad number");
+    throw game_record_read_error();
 }
 
 void GameRecord::parseMatchup(const std::string & s)
 {
-	if (s.length() == 3)        // "ZvT"
-	{
-		if (s[1] != 'v')
-		{
-			throw game_record_read_error();
-		}
-		ourRace = charRace(s[0]);
-		enemyRace = charRace(s[2]);
-		enemyIsRandom = false;
-	}
-	else if (s.length() == 4)   // "ZvRT"
-	{
-		if (s[1] != 'v' || s[2] != 'R')
-		{
-			throw game_record_read_error();
-		}
-		ourRace = charRace(s[0]);
-		enemyRace = charRace(s[3]);
-		enemyIsRandom = true;
-	}
-	else
-	{
-		throw game_record_read_error();
-	}
+    if (s.length() == 3)        // "ZvT"
+    {
+        if (s[1] != 'v')
+        {
+            throw game_record_read_error();
+        }
+        ourRace = charRace(s[0]);
+        enemyRace = charRace(s[2]);
+        enemyIsRandom = false;
+    }
+    else if (s.length() == 4)   // "ZvRT"
+    {
+        if (s[1] != 'v' || s[2] != 'R')
+        {
+            throw game_record_read_error();
+        }
+        ourRace = charRace(s[0]);
+        enemyRace = charRace(s[3]);
+        enemyIsRandom = true;
+    }
+    else
+    {
+        throw game_record_read_error();
+    }
 
-	// Validity check. We should know our own race.
-	if (ourRace == BWAPI::Races::Unknown)
-	{
-		throw game_record_read_error();
-	}
+    // Validity check. We should know our own race.
+    if (ourRace == BWAPI::Races::Unknown)
+    {
+        throw game_record_read_error();
+    }
 }
 
 OpeningPlan GameRecord::readOpeningPlan(std::istream & input)
 {
-	std::string line;
+    std::string line;
 
-	if (std::getline(input, line))
-	{
-		return OpeningPlanFromString(line);
-	}
+    if (std::getline(input, line))
+    {
+        return OpeningPlanFromString(line);
+    }
 
-	// BWAPI::Broodwar->printf("read bad opening plan");
-	throw game_record_read_error();
+    // BWAPI::Broodwar->printf("read bad opening plan");
+    throw game_record_read_error();
 }
 
 // Return true if the snapshot is valid and we should continue reading, otherwise false or throw.
 bool GameRecord::readPlayerSnapshot(std::istream & input, PlayerSnapshot & snap)
 {
-	std::string line;
+    std::string line;
 
-	if (std::getline(input, line))
-	{
-		if (line == gameEndMark)
-		{
-			return false;
-		}
+    if (std::getline(input, line))
+    {
+        if (line == gameEndMark)
+        {
+            return false;
+        }
 
-		std::istringstream lineStream(line);
-		int bases, id, n;
-		
-		if (lineStream >> bases)
-		{
-			snap.numBases = bases;
-		}
-		else
-		{
-			throw game_record_read_error();
-		}
-		while (lineStream >> id >> n)
-		{
-			snap.unitCounts[BWAPI::UnitType(id)] = n;
-		}
-		return true;
-	}
-	throw game_record_read_error();
+        std::istringstream lineStream(line);
+        int bases, id, n;
+        
+        if (lineStream >> bases)
+        {
+            snap.numBases = bases;
+        }
+        else
+        {
+            throw game_record_read_error();
+        }
+        while (lineStream >> id >> n)
+        {
+            snap.unitCounts[BWAPI::UnitType(id)] = n;
+        }
+        return true;
+    }
+    throw game_record_read_error();
 }
 
 // Allocate and return the next snapshot, or null if none.
 GameSnapshot * GameRecord::readGameSnapshot(std::istream & input)
 {
-	int t;
-	PlayerSnapshot me;
-	PlayerSnapshot you;
+    int t;
+    PlayerSnapshot me;
+    PlayerSnapshot you;
 
-	std::string line;
+    std::string line;
 
-	if (std::getline(input, line))
-	{
-		if (line == gameEndMark)
-		{
-			return nullptr;
-		}
-		t = readNumber(line);
-	}
+    if (std::getline(input, line))
+    {
+        if (line == gameEndMark)
+        {
+            return nullptr;
+        }
+        t = readNumber(line);
+    }
 
-	if (valid && readPlayerSnapshot(input, me) && valid && readPlayerSnapshot(input, you) && valid)
-	{
-		return new GameSnapshot(t, me, you);
-	}
+    if (valid && readPlayerSnapshot(input, me) && valid && readPlayerSnapshot(input, you) && valid)
+    {
+        return new GameSnapshot(t, me, you);
+    }
 
-	return nullptr;
+    return nullptr;
 }
 
 // Reading a game record, we hit an error before the end of the record.
 // Mark it invalid and skip to the end of game mark so we don't break the rest of the records.
 void GameRecord::skipToEnd(std::istream & input)
 {
-	std::string line;
-	while (std::getline(input, line))
-	{
-		if (line == gameEndMark)
-		{
-			break;
-		}
-	}
+    std::string line;
+    while (std::getline(input, line))
+    {
+        if (line == gameEndMark)
+        {
+            break;
+        }
+    }
 }
 
 // Read a 3.0 game record.
@@ -372,32 +372,32 @@ void GameRecord::writeSkills(std::ostream & output) const
 // Part of distance().
 int GameRecord::snapDistance(const PlayerSnapshot & a, const PlayerSnapshot & b) const
 {
-	int distance = 0;
+    int distance = 0;
 
-	// From a to b, count all differences.
-	for (std::pair<BWAPI::UnitType, int> unitCountA : a.unitCounts)
-	{
-		auto unitCountBIt = b.unitCounts.find(unitCountA.first);
-		if (unitCountBIt == b.unitCounts.end())
-		{
-			distance += unitCountA.second;
-		}
-		else
-		{
-			distance += abs(unitCountA.second - (*unitCountBIt).second);
-		}
-	}
+    // From a to b, count all differences.
+    for (std::pair<BWAPI::UnitType, int> unitCountA : a.unitCounts)
+    {
+        auto unitCountBIt = b.unitCounts.find(unitCountA.first);
+        if (unitCountBIt == b.unitCounts.end())
+        {
+            distance += unitCountA.second;
+        }
+        else
+        {
+            distance += abs(unitCountA.second - (*unitCountBIt).second);
+        }
+    }
 
-	// From b to a, count differences where a is missing the type.
-	for (std::pair<BWAPI::UnitType, int> unitCountB : b.unitCounts)
-	{
-		if (a.unitCounts.find(unitCountB.first) == a.unitCounts.end())
-		{
-			distance += unitCountB.second;
-		}
-	}
+    // From b to a, count differences where a is missing the type.
+    for (std::pair<BWAPI::UnitType, int> unitCountB : b.unitCounts)
+    {
+        if (a.unitCounts.find(unitCountB.first) == a.unitCounts.end())
+        {
+            distance += unitCountB.second;
+        }
+    }
 
-	return distance;
+    return distance;
 }
 
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
@@ -435,32 +435,32 @@ GameRecord::GameRecord()
 
 // Constructor for the record of a past game.
 GameRecord::GameRecord(std::istream & input)
-	: valid(true)                  // until proven otherwise
-	, savedRecord(true)
-	, ourRace(BWAPI::Races::Unknown)
-	, enemyRace(BWAPI::Races::Unknown)
-	, enemyIsRandom(false)
+    : valid(true)                  // until proven otherwise
+    , savedRecord(true)
+    , ourRace(BWAPI::Races::Unknown)
+    , enemyRace(BWAPI::Races::Unknown)
+    , enemyIsRandom(false)
     , myStartingBaseID(0)
     , enemyStartingBaseID(0)
     , expectedEnemyPlan(OpeningPlan::Unknown)
-	, enemyPlan(OpeningPlan::Unknown)
-	, win(false)                   // until proven otherwise
-	, frameScoutSentForGasSteal(0)
-	, gasStealHappened(false)
+    , enemyPlan(OpeningPlan::Unknown)
+    , win(false)                   // until proven otherwise
+    , frameScoutSentForGasSteal(0)
+    , gasStealHappened(false)
     , frameWeMadeFirstCombatUnit(0)
     , frameWeGatheredGas(0)
     , frameEnemyScoutsOurBase(0)
-	, frameEnemyGetsCombatUnits(0)
+    , frameEnemyGetsCombatUnits(0)
     , frameEnemyUsesGas(0)
     , frameEnemyGetsAirUnits(0)
-	, frameEnemyGetsStaticAntiAir(0)
-	, frameEnemyGetsMobileAntiAir(0)
-	, frameEnemyGetsCloakedUnits(0)
-	, frameEnemyGetsStaticDetection(0)
-	, frameEnemyGetsMobileDetection(0)
-	, frameGameEnds(0)
+    , frameEnemyGetsStaticAntiAir(0)
+    , frameEnemyGetsMobileAntiAir(0)
+    , frameEnemyGetsCloakedUnits(0)
+    , frameEnemyGetsStaticDetection(0)
+    , frameEnemyGetsMobileDetection(0)
+    , frameGameEnds(0)
 {
-	read(input);
+    read(input);
 }
 
 // Write the game record to the given stream. File format:
@@ -515,68 +515,68 @@ void GameRecord::write(std::ostream & output)
 // The more similar they are, the less the distance.
 int GameRecord::distance(const GameRecord & record) const
 {
-	// Return -1 if the records are for different matchups.
-	if (ourRace != record.ourRace || enemyRace != record.enemyRace)
-	{
-		return -1;
-	}
+    // Return -1 if the records are for different matchups.
+    if (ourRace != record.ourRace || enemyRace != record.enemyRace)
+    {
+        return -1;
+    }
 
-	// Also return -1 for any record which has no snapshots. It conveys no info.
-	if (record.snapshots.size() == 0)
-	{
-		return -1;
-	}
+    // Also return -1 for any record which has no snapshots. It conveys no info.
+    if (record.snapshots.size() == 0)
+    {
+        return -1;
+    }
 
-	int distance = 0;
+    int distance = 0;
 
-	if (mapName != record.mapName)
-	{
-		distance += 20;
-	}
+    if (mapName != record.mapName)
+    {
+        distance += 20;
+    }
 
-	if (openingName != record.openingName)
-	{
-		distance += 200;
-	}
+    if (openingName != record.openingName)
+    {
+        distance += 200;
+    }
 
-	// Differences in enemy play count 5 times more than differences in our play.
-	auto here = snapshots.begin();
-	auto there = record.snapshots.begin();
-	int latest = 0;
-	while (here != snapshots.end() && there != record.snapshots.end())     // until one record runs out
-	{
-		distance +=     snapDistance((*here)->us,   (*there)->us);
-		distance += 5 * snapDistance((*here)->them, (*there)->them);
-		latest = (*there)->frame;
+    // Differences in enemy play count 5 times more than differences in our play.
+    auto here = snapshots.begin();
+    auto there = record.snapshots.begin();
+    int latest = 0;
+    while (here != snapshots.end() && there != record.snapshots.end())     // until one record runs out
+    {
+        distance +=     snapDistance((*here)->us,   (*there)->us);
+        distance += 5 * snapDistance((*here)->them, (*there)->them);
+        latest = (*there)->frame;
 
-		++here;
-		++there;
-	}
+        ++here;
+        ++there;
+    }
 
-	// If the 'there' record ends too early, the comparison is no good after all.
-	// The game we're trying to compare to ended before this game and has no information for us.
-	if (BWAPI::Broodwar->getFrameCount() - latest > snapshotInterval)
-	{
-		return -1;
-	}
+    // If the 'there' record ends too early, the comparison is no good after all.
+    // The game we're trying to compare to ended before this game and has no information for us.
+    if (BWAPI::Broodwar->getFrameCount() - latest > snapshotInterval)
+    {
+        return -1;
+    }
 
-	return distance;
+    return distance;
 }
 
 // Find the enemy snapshot closest in time to time t.
 // The caller promises that there is one, but we check anyway.
 bool GameRecord::findClosestSnapshot(int t, PlayerSnapshot & snap) const
 {
-	for (const auto & ourSnap : snapshots)
-	{
-		if (abs(ourSnap->frame - t) < snapshotInterval)
-		{
-			snap = ourSnap->them;
-			return true;
-		}
-	}
-	UAB_ASSERT(false, "opponent model - no snapshot @ t");
-	return false;
+    for (const auto & ourSnap : snapshots)
+    {
+        if (abs(ourSnap->frame - t) < snapshotInterval)
+        {
+            snap = ourSnap->them;
+            return true;
+        }
+    }
+    UAB_ASSERT(false, "opponent model - no snapshot @ t");
+    return false;
 }
 
 // The game records have the same matchup, as best we can tell so far.
@@ -613,29 +613,29 @@ void GameRecord::setSkillInfo(Skill * skill, int i, const std::vector<int> & inf
 
 void GameRecord::debugLog()
 {
-	BWAPI::Broodwar->printf("best %s %s", mapName, openingName);
+    BWAPI::Broodwar->printf("best %s %s", mapName, openingName);
 
-	std::stringstream msg;
+    std::stringstream msg;
 
-	msg << "best match, t = " << BWAPI::Broodwar->getFrameCount() << '\n'
-		<< mapName << ' ' << openingName << ' ' << (win ? "win" : "loss") << '\n'
-		<< "scout " << frameEnemyScoutsOurBase << '\n'
-		<< "combat " << frameEnemyGetsCombatUnits << '\n'
-		<< "air " << frameEnemyGetsAirUnits << '\n'
-		<< "turrets " << frameEnemyGetsStaticAntiAir << '\n'
-		<< "marines " << frameEnemyGetsMobileAntiAir << '\n'
-		<< "wraiths " << frameEnemyGetsCloakedUnits << '\n'
-		<< "turrets " << frameEnemyGetsStaticDetection << '\n'
-		<< "vessels " << frameEnemyGetsMobileDetection << '\n'
-		<< "end of game " << frameGameEnds << '\n';
+    msg << "best match, t = " << BWAPI::Broodwar->getFrameCount() << '\n'
+        << mapName << ' ' << openingName << ' ' << (win ? "win" : "loss") << '\n'
+        << "scout " << frameEnemyScoutsOurBase << '\n'
+        << "combat " << frameEnemyGetsCombatUnits << '\n'
+        << "air " << frameEnemyGetsAirUnits << '\n'
+        << "turrets " << frameEnemyGetsStaticAntiAir << '\n'
+        << "marines " << frameEnemyGetsMobileAntiAir << '\n'
+        << "wraiths " << frameEnemyGetsCloakedUnits << '\n'
+        << "turrets " << frameEnemyGetsStaticDetection << '\n'
+        << "vessels " << frameEnemyGetsMobileDetection << '\n'
+        << "end of game " << frameGameEnds << '\n';
 
-	for (auto snap : snapshots)
-	{
-		msg << snap->frame << '\n'
-			<< snap->us.debugString()
-			<< snap->them.debugString();
-	}
-	msg  << '\n';
+    for (auto snap : snapshots)
+    {
+        msg << snap->frame << '\n'
+            << snap->us.debugString()
+            << snap->them.debugString();
+    }
+    msg  << '\n';
 
-	Logger::LogAppendToFile(Config::IO::ErrorLogFilename, msg.str());
+    Logger::LogAppendToFile(Config::IO::ErrorLogFilename, msg.str());
 }

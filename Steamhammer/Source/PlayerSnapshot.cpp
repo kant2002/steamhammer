@@ -15,10 +15,10 @@ using namespace UAlbertaBot;
 // Neutral boring unit types don't need to be listed here.
 bool PlayerSnapshot::excludeType(BWAPI::UnitType type) const
 {
-	return
-		type == BWAPI::UnitTypes::Zerg_Egg ||
-		type == BWAPI::UnitTypes::Protoss_Interceptor ||
-		type == BWAPI::UnitTypes::Protoss_Scarab;
+    return
+        type == BWAPI::UnitTypes::Zerg_Egg ||
+        type == BWAPI::UnitTypes::Protoss_Interceptor ||
+        type == BWAPI::UnitTypes::Protoss_Scarab;
 }
 
 void PlayerSnapshot::reset(BWAPI::Player side)
@@ -100,6 +100,21 @@ PlayerSnapshot::PlayerSnapshot(BWAPI::Player side)
     }
 }
 
+// Create a snapshot from a set of units, excluding none.
+PlayerSnapshot::PlayerSnapshot(const BWAPI::Unitset & units)
+{
+    if (units.empty())
+    {
+        return;
+    }
+
+    reset((*units.begin())->getPlayer());
+    for (BWAPI::Unit unit : units)
+    {
+        ++unitCounts[unit->getType()];
+    }
+}
+
 // Include my valid, completed units.
 void PlayerSnapshot::takeSelf()
 {
@@ -162,6 +177,7 @@ void PlayerSnapshot::takeEnemy()
 
 // Count 1 for an enemy type that has ever been seen. Don't erase old values.
 // This must be complete for takeEnemyInferred() below to work correctly.
+// Must coordinate with initialEverTypeCount below.
 void PlayerSnapshot::takeEnemyEver(const PlayerSnapshot & seen)
 {
     if (the.enemyRace() == BWAPI::Races::Terran)
@@ -187,6 +203,28 @@ void PlayerSnapshot::takeEnemyEver(const PlayerSnapshot & seen)
     }
 }
 
+// The number of unit types at game start in the.your.ever; that is, the initial value of
+// the.your.ever.unitCounts.size(). Used for telling when we've seen something new.
+// Must coordinate with takeEnemyEver() above.
+int PlayerSnapshot::initialEverTypeCount() const
+{
+    if (the.enemyRace() == BWAPI::Races::Terran)
+    {
+        return 2;
+    }
+    else if (the.enemyRace() == BWAPI::Races::Protoss)
+    {
+        return 2;
+    }
+    else if (the.enemyRace() == BWAPI::Races::Zerg)
+    {
+        return 4;
+    }
+
+    // Random.
+    return 0;
+}
+
 // Only enemy units whose existence can be inferred.
 // For example, if we have ever seen a marine, then we know that there is (or was) a barracks.
 // We pass in the marine; this only counts the barracks.
@@ -207,12 +245,20 @@ void PlayerSnapshot::takeEnemyInferred(const PlayerSnapshot & ever)
 
 int PlayerSnapshot::count(BWAPI::UnitType type) const
 {
-	auto it = unitCounts.find(type);
-	if (it == unitCounts.end())
-	{
-		return 0;
-	}
-	return it->second;
+    auto it = unitCounts.find(type);
+    if (it == unitCounts.end())
+    {
+        return 0;
+    }
+    return it->second;
+}
+
+int PlayerSnapshot::countWorkers() const
+{
+    return
+        count(BWAPI::UnitTypes::Terran_SCV) +
+        count(BWAPI::UnitTypes::Protoss_Probe) +
+        count(BWAPI::UnitTypes::Zerg_Drone);
 }
 
 // Count supply "by hand"--useful for finding the lower limit of the enemy supply.
@@ -233,16 +279,16 @@ int PlayerSnapshot::getSupply() const
 
 std::string PlayerSnapshot::debugString() const
 {
-	std::stringstream ss;
+    std::stringstream ss;
 
-	ss << numBases;
+    ss << numBases;
 
-	for (const std::pair<BWAPI::UnitType, int> & unitCount : unitCounts)
-	{
-		ss << ' ' << unitCount.first.getName() << ':' << unitCount.second;
-	}
+    for (const std::pair<BWAPI::UnitType, int> & unitCount : unitCounts)
+    {
+        ss << ' ' << unitCount.first.getName() << ':' << unitCount.second;
+    }
 
-	ss << '\n';
+    ss << '\n';
 
-	return ss.str();
+    return ss.str();
 }

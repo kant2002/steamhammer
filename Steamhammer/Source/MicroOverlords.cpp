@@ -4,8 +4,28 @@
 #include "InformationManager.h"
 #include "MapGrid.h"
 #include "The.h"
+#include "UnitUtil.h"
 
 using namespace UAlbertaBot;
+
+bool MicroOverlords::enemyHasMobileAntiAirUnits() const
+{
+    for (const std::pair<BWAPI::UnitType, int> & counts : the.your.seen.getCounts())
+    {
+        BWAPI::UnitType type = counts.first;
+        if (!type.isBuilding() && UnitUtil::TypeCanAttackAir(type))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Is this overlord one of ours?
+bool MicroOverlords::ourOverlord(BWAPI::Unit overlord) const
+{
+    return getUnits().find(overlord) != getUnits().end();
+}
 
 // The nearest overlord to the given tile.
 BWAPI::Unit MicroOverlords::nearestOverlord(const BWAPI::Unitset & overlords, const BWAPI::TilePosition & tile) const
@@ -16,23 +36,29 @@ BWAPI::Unit MicroOverlords::nearestOverlord(const BWAPI::Unitset & overlords, co
 // The nearest spore colony, if any.
 BWAPI::Unit MicroOverlords::nearestSpore(BWAPI::Unit overlord) const
 {
-	BWAPI::Unit best = nullptr;
-    int bestDistance = INT_MAX;
+    BWAPI::Unit best = nullptr;
+    int bestDistance = MAX_DISTANCE;
 
-	for (BWAPI::Unit defense : the.info.getStaticDefense())
-	{
-		if (defense->exists() && defense->getType() == BWAPI::UnitTypes::Zerg_Spore_Colony)
-		{
-			int dist = overlord->getDistance(defense);
-			if (dist < bestDistance)
-			{
-				best = defense;
-				bestDistance = dist;
-			}
-		}
-	}
+    // NOTE This includes both completed and uncompleted static defense buildings.
+    for (BWAPI::Unit defense : the.info.getStaticDefense())
+    {
+        if (defense->exists() && defense->getType() == BWAPI::UnitTypes::Zerg_Spore_Colony)
+        {
+            int dist = overlord->getDistance(defense);
+            if (!defense->isCompleted())
+            {
+                // Pretend that uncompleted spores are farther away.
+                dist += 8 * 32;
+            }
+            if (dist < bestDistance)
+            {
+                best = defense;
+                bestDistance = dist;
+            }
+        }
+    }
 
-	return best;
+    return best;
 }
 
 // Assign all overlords in the set to spore colonies.
@@ -56,17 +82,17 @@ void MicroOverlords::assignOverlords()
 {
     std::vector<BWAPI::TilePosition> destinations;
 
-    // Add destinations in priority order.
+    // Add destinations in priority order->
 
     if (the.now() < 7 * 24 * 60)
     {
-        // Early in the game, explore for proxies in our starting base.
-        destinations.push_back(BWAPI::TilePosition(the.grid.getLeastExploredNear(the.bases.myStart()->getPosition(), false)));
+        // Early in the game, explore for proxies in our starting base and its natural.
+        destinations.push_back(BWAPI::TilePosition(the.grid.getLeastExploredNearBase(the.bases.myStart(), false)));
     }
     Base * enemyNatural = the.bases.enemyStart()
         ? the.bases.enemyStart()->getNatural()      // may be null
         : nullptr;
-    if (enemyNatural && !mobileAntiAir)
+    if (enemyNatural && !mobileAntiAirTech)
     {
         // The enemy natural base, if safe, no matter whether the enemy has taken it or not.
         destinations.push_back(enemyNatural->getTilePosition());
@@ -92,14 +118,14 @@ void MicroOverlords::assignOverlords()
             destinations.push_back(base->getTilePosition());
         }
     }
-    if (!overlordHunters && the.info.enemyHasTransport())
+    if (!overlordHunterTech && the.info.enemyHasTransport())
     {
         // Keep an eye out for drops.
         Base * base = the.bases.myStart()->getOwner() == the.self() ? the.bases.myStart() : the.bases.myMain();
         destinations.push_back(BWAPI::TilePosition(the.grid.getLeastExploredNear(base->getPosition(), false)));
     }
     // If there are no dangers, near other bases as possible.
-    if (!mobileAntiAir)
+    if (!mobileAntiAirUnits)
     {
         for (Base * base : the.bases.getAll())
         {
@@ -110,7 +136,7 @@ void MicroOverlords::assignOverlords()
         }
     }
     // Or if there are no overlord hunters:
-    else if (!overlordHunters)
+    else if (!overlordHunterTech)
     {
         // Try to see the base we may want to take next.
         BWAPI::TilePosition nextBasePos = the.map.getNextExpansion(false, true, true);
@@ -156,7 +182,7 @@ void MicroOverlords::assignOverlords()
     }
 
     // Assign any remaining overlords to default destinations.
-    if (overlordHunters && weHaveSpores)
+    if (overlordHunterTech && weHaveSpores)
     {
         assignOverlordsToSpores(unassigned);
     }
@@ -171,8 +197,8 @@ void MicroOverlords::assignOverlords()
 }
 
 MicroOverlords::MicroOverlords()
-    : overlordHunters(false)
-    , mobileAntiAir(false)
+    : overlordHunterTech(false)
+    , mobileAntiAirTech(false)
     , weHaveSpores(false)
 {
 }
@@ -194,13 +220,14 @@ void MicroOverlords::update()
         assignments.clear();
 
         // NOTE Could also use the opponent model to predict these values.
-        overlordHunters = the.info.enemyHasOverlordHunters();
-        mobileAntiAir = overlordHunters || the.info.enemyHasAntiAir();
+        overlordHunterTech = the.info.enemyHasOverlordHunters();
+        mobileAntiAirTech = overlordHunterTech || the.info.enemyHasAntiAir();
+        mobileAntiAirUnits = enemyHasMobileAntiAirUnits();
         weHaveSpores = nearestSpore(*getUnits().begin()) != nullptr;
         const bool cloakedEnemies = the.info.enemyHasMobileCloakTech();
         const bool overlordSpeed = the.self()->getUpgradeLevel(BWAPI::UpgradeTypes::Pneumatized_Carapace) > 0;
 
-        if (overlordHunters && weHaveSpores && (!cloakedEnemies || !overlordSpeed))
+        if (overlordHunterTech && weHaveSpores && (!cloakedEnemies || !overlordSpeed))
         {
             // Send all overlords to safety, if possible.
             assignOverlordsToSpores(getUnits());
@@ -213,16 +240,16 @@ void MicroOverlords::update()
         // Every overlord we were given should have an assignment.
         UAB_ASSERT(assignments.size() == getUnits().size(), "bad assignments");
     }
-        
+
     // 2. Move overlords often, so that they can avoid dangers in time.
     if (BWAPI::Broodwar->getFrameCount() % 4 == 0)
-	{
+    {
         for (auto it = assignments.begin(); it != assignments.end(); )
         {
             BWAPI::Unit overlord = it->first;
             BWAPI::Position destination = BWAPI::Position(it->second);
-            // The overlord may have died or been mind controlled.
-            if (overlord->exists() && overlord->getPlayer() == the.self())
+            // The overlord may have died or been mind controlled, etc.
+            if (overlord->canMove() && ourOverlord(overlord))
             {
                 if (!destination.isValid())
                 {

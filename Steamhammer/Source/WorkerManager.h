@@ -10,7 +10,7 @@ class WorkerManager
 {
     WorkerData  workerData;
     BWAPI::Unit previousClosestWorker;
-	bool		_collectGas;
+    bool		_collectGas;
     BWAPI::Unitset busy;    // units with special orders this frame
     std::map<BWAPI::Unit, int> burrowedForSafety;
 
@@ -22,18 +22,18 @@ class WorkerManager
     void        makeBusy(BWAPI::Unit worker);
     void        burrowForSafety(BWAPI::Unit worker);
 
-	void        setMineralWorker(BWAPI::Unit unit);
-	void        setReturnCargoWorker(BWAPI::Unit unit);
-	bool		refineryHasDepot(BWAPI::Unit refinery);
-	bool        isGasStealRefinery(BWAPI::Unit unit);
+    void        setMineralWorker(BWAPI::Unit unit);
+    void        setReturnCargoWorker(BWAPI::Unit unit);
+    bool		refineryHasDepot(BWAPI::Unit refinery);
+    bool        isGasStealRefinery(BWAPI::Unit unit);
 
     void        clearBlockingMinerals();
 
-	void        handleGasWorkers();
-	void        handleIdleWorkers();
-	void		handleReturnCargoWorkers();
-	void        handleRepairWorkers();
-	void		handleMineralWorkers();
+    void        handleGasWorkers();
+    void        handleIdleWorkers();
+    void		handleReturnCargoWorkers();
+    void        handleRepairWorkers();
+    void		handleMineralWorkers();
     void        handleUnblockWorkers();
     void		handlePostedWorkers();
 
@@ -47,12 +47,12 @@ class WorkerManager
 
     bool        inIrradiateDanger(BWAPI::Unit worker) const;
 
-	BWAPI::Unit findEnemyTargetForWorker(BWAPI::Unit worker) const;
-	BWAPI::Unit findEscapeMinerals(BWAPI::Unit worker) const;
-	bool		defendSelf(BWAPI::Unit worker, BWAPI::Unit resource);
+    BWAPI::Unit findEnemyTargetForWorker(BWAPI::Unit worker) const;
+    BWAPI::Unit findEscapeMinerals(BWAPI::Unit worker) const;
+    bool		defendSelf(BWAPI::Unit worker, BWAPI::Unit resource);
 
-	BWAPI::Unit getAnyClosestDepot(BWAPI::Unit worker);      // don't care whether it's full
-	BWAPI::Unit getClosestNonFullDepot(BWAPI::Unit worker);  // only if it can accept more mineral workers
+    BWAPI::Unit getAnyClosestDepot(BWAPI::Unit worker);      // don't care whether it's full
+    BWAPI::Unit getClosestNonFullDepot(BWAPI::Unit worker);  // only if it can accept more mineral workers
 
     BWAPI::Unit	getAnyWorker(const BWAPI::Position & pos, int range);
     BWAPI::Unit	getUnencumberedWorker(const BWAPI::Position & pos, int range);
@@ -77,27 +77,27 @@ public:
 
     int         getNumMineralWorkers() const;
     int         getNumGasWorkers() const;
-	int         getNumReturnCargoWorkers() const;
-	int			getNumCombatWorkers() const;
-	int         getNumIdleWorkers() const;
+    int         getNumReturnCargoWorkers() const;
+    int			getNumCombatWorkers() const;
+    int         getNumIdleWorkers() const;
     int         getNumPostedWorkers() const;
-	int			getMaxWorkers() const;
+    int			getMaxWorkers() const;
 
-	int			getNumWorkers(BWAPI::Unit jobUnit) const;
+    int			getNumWorkers(BWAPI::Unit jobUnit) const;
 
     void        setScoutWorker(BWAPI::Unit worker);
 
-	// NOTE _collectGas == false allows that a little more gas may still be collected.
-	bool		isCollectingGas()              { return _collectGas; };
-	void		setCollectGas(bool collectGas) { _collectGas = collectGas; };
+    // NOTE _collectGas == false allows that a little more gas may still be collected.
+    bool		isCollectingGas()              { return _collectGas; };
+    void		setCollectGas(bool collectGas) { _collectGas = collectGas; };
 
     bool        isWorkerScout(BWAPI::Unit worker);
-	bool		isCombatWorker(BWAPI::Unit worker);
+    bool		isCombatWorker(BWAPI::Unit worker);
     bool        isFree(BWAPI::Unit worker);
     bool        isBuilder(BWAPI::Unit worker);
 
     BWAPI::Unit getBuilder(const Building & b);
-	void        setBuildWorker(BWAPI::Unit worker);
+    void        setBuildWorker(BWAPI::Unit worker);
     BWAPI::Unit getGasWorker(BWAPI::Unit refinery);
     BWAPI::Unit getClosestMineralWorkerTo(BWAPI::Unit enemyUnit);
     BWAPI::Unit getWorkerScout();

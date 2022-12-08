@@ -20,38 +20,38 @@
 
 namespace UAlbertaBot
 {
-	class MapPartitions
-	{
-		int width;		// in walk tiles
-		int height;		// in walk tiles
-		int numPartitions;
+    class MapPartitions
+    {
+        int width;		// in walk tiles
+        int height;		// in walk tiles
+        int numPartitions;
 
-		std::vector< std::vector<unsigned short> > unwalkability;	// 0 if walkable, otherwise count of blockages
-		std::vector< std::vector<unsigned short> > partition;		// 0 if unwalkable, otherwise partition ID
+        std::vector< std::vector<unsigned short> > unwalkability;	// 0 if walkable, otherwise count of blockages
+        std::vector< std::vector<unsigned short> > partition;		// 0 if unwalkable, otherwise partition ID
 
-		void findUnwalkability();
-		void markOnePartition(const BWAPI::WalkPosition & start);
+        void findUnwalkability();
+        void markOnePartition(const BWAPI::WalkPosition & start);
 
-	public:
-		MapPartitions();
-		void initialize();
+    public:
+        MapPartitions();
+        void initialize();
 
-		bool walkable(int walkX, int walkY) const;
-		bool walkable(const BWAPI::WalkPosition & pos) const;
-		
-		// Return the partition ID of a given spot.
-		int id(int walkX, int walkY) const;
-		int id(const BWAPI::WalkPosition & pos) const;
-		int id(const BWAPI::TilePosition & pos) const;
-		int id(const BWAPI::Position & pos) const;
+        bool walkable(int walkX, int walkY) const;
+        bool walkable(const BWAPI::WalkPosition & pos) const;
+        
+        // Return the partition ID of a given spot.
+        int id(int walkX, int walkY) const;
+        int id(const BWAPI::WalkPosition & pos) const;
+        int id(const BWAPI::TilePosition & pos) const;
+        int id(const BWAPI::Position & pos) const;
 
-		// Are the two points connected by ground?
-		bool connected(const BWAPI::TilePosition & a, const BWAPI::TilePosition & b) const;
-		bool connected(const BWAPI::Position & a, const BWAPI::Position & b) const;
+        // Are the two points connected by ground?
+        bool connected(const BWAPI::TilePosition & a, const BWAPI::TilePosition & b) const;
+        bool connected(const BWAPI::Position & a, const BWAPI::Position & b) const;
 
-		int getNumPartitions() const { return numPartitions; };
+        int getNumPartitions() const { return numPartitions; };
 
-		void drawWalkable() const;
-		void drawPartition(int i, BWAPI::Color color) const;
-	};
+        void drawWalkable() const;
+        void drawPartition(int i, BWAPI::Color color) const;
+    };
 }

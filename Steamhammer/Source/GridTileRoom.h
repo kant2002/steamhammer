@@ -10,10 +10,10 @@ namespace UAlbertaBot
 class GridTileRoom : public Grid
 {
 public:
-	GridTileRoom();
+    GridTileRoom();
 
-	void initialize();
-	
-	void draw() const;
+    void initialize();
+    
+    void draw() const;
 };
 }

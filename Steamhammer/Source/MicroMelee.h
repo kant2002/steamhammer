@@ -1,4 +1,4 @@
-#pragma once;
+#pragma once
 
 namespace UAlbertaBot
 {
@@ -9,13 +9,13 @@ class MicroMelee : public MicroManager
 
 public:
 
-	MicroMelee();
+    MicroMelee();
 
-	void executeMicro(const BWAPI::Unitset & targets, const UnitCluster & cluster);
-	void assignTargets(const BWAPI::Unitset & meleeUnits, const BWAPI::Unitset & targets);
+    void executeMicro(const BWAPI::Unitset & targets, const UnitCluster & cluster);
+    void assignTargets(const BWAPI::Unitset & meleeUnits, const BWAPI::Unitset & targets);
 
-	int getAttackPriority(BWAPI::Unit attacker, BWAPI::Unit unit) const;
-	BWAPI::Unit getTarget(BWAPI::Unit meleeUnit, const BWAPI::Unitset & targets, bool underThreat);
-	bool meleeUnitShouldRetreat(BWAPI::Unit meleeUnit, const BWAPI::Unitset & targets);
+    int getAttackPriority(BWAPI::Unit attacker, BWAPI::Unit unit) const;
+    BWAPI::Unit getTarget(BWAPI::Unit meleeUnit, const BWAPI::Unitset & targets, bool underThreat);
+    bool meleeUnitShouldRetreat(BWAPI::Unit meleeUnit, const BWAPI::Unitset & targets);
 };
 }

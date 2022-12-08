@@ -25,33 +25,33 @@ BWAPI::AIModule * __NewAIModule();
 // 2D vectors with basic vector arithmetic.
 struct v2
 {
-	double x, y;
+    double x, y;
 
-	v2() {}
-	v2(double x, double y) : x(x), y(y) {}
-	v2(const BWAPI::Position & p) : x(p.x), y(p.y) {}
+    v2() {}
+    v2(double x, double y) : x(x), y(y) {}
+    v2(const BWAPI::Position & p) : x(p.x), y(p.y) {}
 
-	operator BWAPI::Position()		const { return BWAPI::Position(static_cast<int>(x),static_cast<int>(y)); }
+    operator BWAPI::Position()		const { return BWAPI::Position(static_cast<int>(x),static_cast<int>(y)); }
 
-	v2 operator + (const v2 & v)	const { return v2(x+v.x,y+v.y); }
-	v2 operator - (const v2 & v)	const { return v2(x-v.x,y-v.y); }
-	v2 operator * (double s)		const { return v2(x*s,y*s); }
-	v2 operator / (double s)		const { return v2(x/s,y/s); }
+    v2 operator + (const v2 & v)	const { return v2(x+v.x,y+v.y); }
+    v2 operator - (const v2 & v)	const { return v2(x-v.x,y-v.y); }
+    v2 operator * (double s)		const { return v2(x*s,y*s); }
+    v2 operator / (double s)		const { return v2(x/s,y/s); }
 
-	double dot(const v2 & v)		const { return x*v.x + y*v.y; }
-	double lengthSq()				const { return x*x + y*y; }
-	double length()					const { return sqrt(lengthSq()); }
+    double dot(const v2 & v)		const { return x*v.x + y*v.y; }
+    double lengthSq()				const { return x*x + y*y; }
+    double length()					const { return sqrt(lengthSq()); }
 
-	// Find the direction: The vector of length 1 in the same direction.
-	// The length of the original vector had better not be zero!
-	v2 normalize()					const { return *this / length(); }
+    // Find the direction: The vector of length 1 in the same direction.
+    // The length of the original vector had better not be zero!
+    v2 normalize()					const { return *this / length(); }
 
-	// This uses trig, so it is probably slower.
-	void rotate(double angle) 
-	{ 	
-		angle = angle*M_PI/180.0;		// convert degrees to radians
-		*this = v2(x * cos(angle) - y * sin(angle), y * cos(angle) + x * sin(angle));
-	}
+    // This uses trig, so it is probably slower.
+    void rotate(double angle) 
+    { 	
+        angle = angle*M_PI/180.0;		// convert degrees to radians
+        *this = v2(x * cos(angle) - y * sin(angle), y * cos(angle) + x * sin(angle));
+    }
 };
 
 double UCB1_bound(int tries, int total);
@@ -81,6 +81,12 @@ const char purple  = '\x10';   // dim
 const char orange  = '\x11';
 const char gray    = '\x1E';   // dim
 const char cyan    = '\x1F';
+
+// Time and distance beyond maximum realistic values,
+// so that we can represent "never" and "not anywhere" and do arithmetic on the values
+// without risk of integer overflow.
+const int MAX_FRAME = 24 * 60 * 24;     // 24 hours
+const int MAX_DISTANCE = 2 * 32 * 256;  // twice the width of the largest maps in pixels
 
 void GameMessage(const char * message);
 

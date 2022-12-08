@@ -5,90 +5,100 @@
 #include "SquadData.h"
 #include "InformationManager.h"
 #include "StrategyManager.h"
+#include "TacticsOrders.h"
 #include "The.h"
 
 namespace UAlbertaBot
 {
 class CombatCommander
 {
-	SquadData       _squadData;
+    SquadData       _squadData;
     BWAPI::Unitset  _combatUnits;
     bool            _initialized;
 
-	bool			_goAggressive;
+    bool			_goAggressive;                  // set by opening book and/or code
 
-	BWAPI::Position	_scourgeTarget;
+    LurkerOrders    _lurkerOrders;
+
+    BWAPI::Position	_scourgeTarget;
 
     bool            _isWatching;                    // watch squad activated
-	BWAPI::Position	_reconTarget;
-	int				_lastReconTargetChange;         // frame number
 
-	int				_carrierCount;					// how many carriers?
+    bool            _reconSquadAlive;               // recon squad activated
+    Base *          _reconTarget;
+    int				_lastReconTargetChange;         // frame number
 
-	void            updateIdleSquad();
-	void            updateOverlordSquad();
-	void			updateScourgeSquad();
-	void            updateAttackSquads();
-	void			updateReconSquad();
-	void			updateWatchSquads();
-	void            updateBaseDefenseSquads();
-	void            updateScoutDefenseSquad();
-	void            updateDropSquads();
+    int				_carrierCount;					// how many carriers?
 
-	bool            wantSquadDetectors() const;
-	void			maybeAssignDetector(Squad & squad, bool wantDetector);
+    void            updateIdleSquad();
+    void            updateIrradiatedSquad();
+    void            updateOverlordSquad();
+    void			updateScourgeSquad();
+    void            updateAttackSquads();
+    void			updateReconSquad();
+    void			updateWatchSquads();
+    void            updateBaseDefenseSquads();
+    void            updateScoutDefenseSquad();
+    void            updateDropSquads();
 
-	void			loadOrUnloadBunkers();
-	void			doComsatScan();
-	void			doLarvaTrick();
+    bool            wantSquadDetectors() const;
+    void			maybeAssignDetector(Squad & squad, bool wantDetector);
 
-	int				weighReconUnit(const BWAPI::Unit unit) const;
-	int				weighReconUnit(const BWAPI::UnitType type) const;
+    void			loadOrUnloadBunkers();
+    void			doComsatScan();
+    void			doLarvaTrick();
 
-	bool			isFlyingSquadUnit(const BWAPI::UnitType type) const;
-	bool			isOptionalFlyingSquadUnit(const BWAPI::UnitType type) const;
-	bool			isGroundSquadUnit(const BWAPI::UnitType type) const;
+    int				weighReconUnit(const BWAPI::Unit unit) const;
+    int				weighReconUnit(const BWAPI::UnitType type) const;
 
-	bool			unitIsGoodToDrop(const BWAPI::Unit unit) const;
+    bool			isFlyingSquadUnit(const BWAPI::UnitType type) const;
+    bool			isOptionalFlyingSquadUnit(const BWAPI::UnitType type) const;
+    bool			isGroundSquadUnit(const BWAPI::UnitType type) const;
 
-	void			cancelDyingItems();
+    bool			unitIsGoodToDrop(const BWAPI::Unit unit) const;
 
-	BWAPI::Unit     findClosestDefender(const Squad & defenseSquad, BWAPI::Position pos, bool flyingDefender, bool pullWoekers, bool enemyHasAntiAir);
+    void			cancelDyingItems();
+
+    BWAPI::Unit     findClosestDefender(const Squad & defenseSquad, BWAPI::Position pos, bool flyingDefender, bool pullWoekers, bool enemyHasAntiAir);
     BWAPI::Unit     findClosestWorkerToTarget(BWAPI::Unitset & unitsToAssign, BWAPI::Unit target);
 
-	void			chooseScourgeTarget(const Squad & squad);
-	void			chooseReconTarget();
-	BWAPI::Position getReconLocation() const;
-	SquadOrder		getAttackOrder(const Squad * squad);
-	BWAPI::Position getAttackLocation(const Squad * squad);
-	BWAPI::Position getDropLocation(const Squad & squad);
-	BWAPI::Position	getDefenseLocation();
+    void			chooseScourgeTarget(const Squad & squad);
+    void			chooseReconTarget(const Squad & squad);
+    Base *          getReconLocation() const;
+    SquadOrder		getAttackOrder(Squad * squad);
+    void            getAttackLocation(Squad * squad, Base * & base, BWAPI::Position & pos, std::string & returnKey);
+    bool            defendedTarget(const BWAPI::Position & pos, bool vsGround, bool vsAir) const;
+    BWAPI::Position getDropLocation(const Squad & squad);
+    Base *          getDefensiveBase();
 
     void            initializeSquads();
 
-	void            updateDefenseSquadUnits(Squad & defenseSquad, const size_t & flyingDefendersNeeded, const size_t & groundDefendersNeeded, bool pullWorkers, bool enemyHasAntiAir);
+    void            updateDefenseSquadUnits(Squad & defenseSquad, const size_t & flyingDefendersNeeded, const size_t & groundDefendersNeeded, bool pullWorkers, bool enemyHasAntiAir);
 
     int             numZerglingsInOurBase() const;
     bool            buildingRush() const;
 
-	static int		workerPullScore(BWAPI::Unit worker);
+    static int		workerPullScore(BWAPI::Unit worker);
 
 public:
 
-	CombatCommander();
+    CombatCommander();
 
-	void update(const BWAPI::Unitset & combatUnits);
-	void onEnd();
+    void update(const BWAPI::Unitset & combatUnits);
+    void onEnd();
 
-	void setAggression(bool aggressive) { _goAggressive = aggressive;  }
-	bool getAggression() const { return _goAggressive; };
-	
-	void pullWorkers(int n);
-	void releaseWorkers();
-	
-	void drawSquadInformation(int x, int y);
-	void drawCombatSimInformation();
+    void setAggression(bool aggressive) { _goAggressive = aggressive;  }
+    bool getAggression() const { return _goAggressive; };
 
-	static CombatCommander & Instance();
+    void setGeneralLurkerTactic(LurkerTactic tactic);
+    void addLurkerOrder(LurkerOrder & order);
+    void clearLurkerOrder(LurkerTactic tactic);
+    
+    void pullWorkers(int n);
+    void releaseWorkers();
+    
+    void drawSquadInformation(int x, int y);
+
+    static CombatCommander & Instance();
 };
 }

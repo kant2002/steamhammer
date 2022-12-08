@@ -7,16 +7,14 @@ using namespace UAlbertaBot;
 
 // A tech building: It allows technology rather than production or defense.
 // Every tech building can either upgrade or research something.
-// Exclude zerg hatchery/lair/hive because they are primarily production buildings.
+// Exclude zerg hatchery because it is primarily a production building (though it can research burrow).
 // Some terran addons are tech buildings.
 bool UnitUtil::IsTechBuildingType(BWAPI::UnitType type)
 {
     return
         type.isBuilding() &&
         (!type.upgradesWhat().empty() || !type.researchesWhat().empty()) &&
-        type != BWAPI::UnitTypes::Zerg_Hatchery &&
-        type != BWAPI::UnitTypes::Zerg_Lair &&
-        type != BWAPI::UnitTypes::Zerg_Hive;
+        type != BWAPI::UnitTypes::Zerg_Hatchery;
 }
 
 // A production building: It can produce units. E.g., terran nuclear silo.
@@ -31,12 +29,12 @@ bool UnitUtil::IsProductionBuildingType(BWAPI::UnitType type)
 // Building morphed from another, not constructed.
 bool UnitUtil::IsMorphedBuildingType(BWAPI::UnitType type)
 {
-	return
-		type == BWAPI::UnitTypes::Zerg_Sunken_Colony ||
-		type == BWAPI::UnitTypes::Zerg_Spore_Colony ||
-		type == BWAPI::UnitTypes::Zerg_Lair ||
-		type == BWAPI::UnitTypes::Zerg_Hive ||
-		type == BWAPI::UnitTypes::Zerg_Greater_Spire;
+    return
+        type == BWAPI::UnitTypes::Zerg_Sunken_Colony ||
+        type == BWAPI::UnitTypes::Zerg_Spore_Colony ||
+        type == BWAPI::UnitTypes::Zerg_Lair ||
+        type == BWAPI::UnitTypes::Zerg_Hive ||
+        type == BWAPI::UnitTypes::Zerg_Greater_Spire;
 }
 
 // We need to assign a worker to construct these buildings types. Only call for buildings.
@@ -54,10 +52,10 @@ bool UnitUtil::NeedsWorkerBuildingType(BWAPI::UnitType type)
 // Zerg unit morphed from another, not spawned from a larva.
 bool UnitUtil::IsMorphedUnitType(BWAPI::UnitType type)
 {
-	return
-		type == BWAPI::UnitTypes::Zerg_Lurker ||
-		type == BWAPI::UnitTypes::Zerg_Guardian ||
-		type == BWAPI::UnitTypes::Zerg_Devourer;
+    return
+        type == BWAPI::UnitTypes::Zerg_Lurker ||
+        type == BWAPI::UnitTypes::Zerg_Guardian ||
+        type == BWAPI::UnitTypes::Zerg_Devourer;
 }
 
 // A partial substitute for t2.isSuccessorOf(t1) from BWAPI 4.2.0.
@@ -74,10 +72,10 @@ bool UnitUtil::BuildingIsMorphedFrom(BWAPI::UnitType t2, BWAPI::UnitType t1)
 // A lair or hive is a completed resource depot even if not a completed unit.
 bool UnitUtil::IsCompletedResourceDepot(BWAPI::Unit unit)
 {
-	return
-		unit &&
-		unit->getType().isResourceDepot() &&
-		(unit->isCompleted() || unit->getType() == BWAPI::UnitTypes::Zerg_Lair || unit->getType() == BWAPI::UnitTypes::Zerg_Hive);
+    return
+        unit &&
+        unit->getType().isResourceDepot() &&
+        (unit->isCompleted() || unit->getType() == BWAPI::UnitTypes::Zerg_Lair || unit->getType() == BWAPI::UnitTypes::Zerg_Hive);
 }
 
 // Is the resource depot almost finished? We may want to start transferring workers now.
@@ -95,24 +93,33 @@ bool UnitUtil::IsNearlyCompletedResourceDepot(BWAPI::Unit unit, int framesLeft)
 
 bool UnitUtil::IsStaticDefense(BWAPI::UnitType type)
 {
-	return
-		type == BWAPI::UnitTypes::Zerg_Sunken_Colony ||
-		type == BWAPI::UnitTypes::Zerg_Spore_Colony ||
-		type == BWAPI::UnitTypes::Terran_Bunker ||
-		type == BWAPI::UnitTypes::Terran_Missile_Turret ||
-		type == BWAPI::UnitTypes::Protoss_Photon_Cannon ||
-		type == BWAPI::UnitTypes::Protoss_Shield_Battery;
+    return
+        type == BWAPI::UnitTypes::Zerg_Sunken_Colony ||
+        type == BWAPI::UnitTypes::Zerg_Spore_Colony ||
+        type == BWAPI::UnitTypes::Terran_Bunker ||
+        type == BWAPI::UnitTypes::Terran_Missile_Turret ||
+        type == BWAPI::UnitTypes::Protoss_Photon_Cannon ||
+        type == BWAPI::UnitTypes::Protoss_Shield_Battery;
+}
+
+// A static defense building that can attack ground units.
+bool UnitUtil::IsGroundStaticDefense(BWAPI::UnitType type)
+{
+    return
+        type == BWAPI::UnitTypes::Zerg_Sunken_Colony ||
+        type == BWAPI::UnitTypes::Terran_Bunker ||
+        type == BWAPI::UnitTypes::Protoss_Photon_Cannon;
 }
 
 // To stop static defense from being built, stop these things.
 bool UnitUtil::IsComingStaticDefense(BWAPI::UnitType type)
 {
-	return
-		type == BWAPI::UnitTypes::Zerg_Creep_Colony ||
-		type == BWAPI::UnitTypes::Terran_Bunker ||
-		type == BWAPI::UnitTypes::Terran_Missile_Turret ||
-		type == BWAPI::UnitTypes::Protoss_Photon_Cannon ||
-		type == BWAPI::UnitTypes::Protoss_Shield_Battery;
+    return
+        type == BWAPI::UnitTypes::Zerg_Creep_Colony ||
+        type == BWAPI::UnitTypes::Terran_Bunker ||
+        type == BWAPI::UnitTypes::Terran_Missile_Turret ||
+        type == BWAPI::UnitTypes::Protoss_Photon_Cannon ||
+        type == BWAPI::UnitTypes::Protoss_Shield_Battery;
 }
 
 // Buildings have this much extra latency after reaching 100% HP before becoming complete.
@@ -135,39 +142,39 @@ int UnitUtil::ExtraBuildingLatency(BWAPI::Race race)
 // If it's our unit, it's better to call IsCombatSimUnit() directly with the BWAPI::Unit.
 bool UnitUtil::IsCombatSimUnit(const UnitInfo & ui)
 {
-	UAB_ASSERT(ui.unit, "no unit");
-	return ui.unit->exists()
-		? UnitUtil::IsCombatSimUnit(ui.unit)
-		: UnitUtil::IsCombatSimUnit(ui.type);
+    UAB_ASSERT(ui.unit, "no unit");
+    return ui.unit->exists()
+        ? UnitUtil::IsCombatSimUnit(ui.unit)
+        : UnitUtil::IsCombatSimUnit(ui.type);
 }
 
 // This is a combat unit for purposes of combat simulation.
 // The combat simulation does not support spells other than medic healing and stim,
-// with some understanding of dark swarm, and it does not understand detectors.
+// with some understanding of dark swarm and ensnare, and it does not understand detectors.
 // The combat sim treats carriers as the attack unit, not their interceptors (bftjoe).
 bool UnitUtil::IsCombatSimUnit(BWAPI::Unit unit)
 {
-	if (!unit->isCompleted() ||
-		!unit->isPowered() ||
-        unit->isLockedDown() |
+    if (!unit->isCompleted() ||
+        !unit->isPowered() ||
+        unit->isLockedDown() ||
         unit->isMaelstrommed() ||
-		unit->isUnderDisruptionWeb() ||
+        unit->isUnderDisruptionWeb() ||
         unit->isStasised())
-	{
-		return false;
-	}
+    {
+        return false;
+    }
 
-	// A worker counts as a combat unit if it has been given an order to attack.
-	if (unit->getType().isWorker())
-	{
-		return
-			unit->getOrder() == BWAPI::Orders::AttackMove ||
-			unit->getOrder() == BWAPI::Orders::AttackTile ||
-			unit->getOrder() == BWAPI::Orders::AttackUnit ||
+    // A worker counts as a combat unit if it has been given an order to attack.
+    if (unit->getType().isWorker())
+    {
+        return
+            unit->getOrder() == BWAPI::Orders::AttackMove ||
+            unit->getOrder() == BWAPI::Orders::AttackTile ||
+            unit->getOrder() == BWAPI::Orders::AttackUnit ||
             unit->getOrder() == BWAPI::Orders::Patrol;
-	}
+    }
 
-	return IsCombatSimUnit(unit->getType());
+    return IsCombatSimUnit(unit->getType());
 }
 
 // This type is a combat unit type for purposes of combat simulation.
@@ -175,48 +182,48 @@ bool UnitUtil::IsCombatSimUnit(BWAPI::Unit unit)
 // Treat workers as non-combat units (overridden above for some workers).
 bool UnitUtil::IsCombatSimUnit(BWAPI::UnitType type)
 {
-	if (type.isWorker())
-	{
-		return false;
-	}
+    if (type.isWorker())
+    {
+        return false;
+    }
 
-	if (type == BWAPI::UnitTypes::Protoss_Interceptor)
-	{
-		return false;
-	}
+    if (type == BWAPI::UnitTypes::Protoss_Interceptor)
+    {
+        return false;
+    }
 
-	return
-		TypeCanAttack(type) || type == BWAPI::UnitTypes::Terran_Medic;
+    return
+        TypeCanAttack(type) || type == BWAPI::UnitTypes::Terran_Medic;
 }
 
 // Used for our units in deciding whether the include them in a squad.
 bool UnitUtil::IsCombatUnit(BWAPI::UnitType type)
 {
     // No workers, buildings, or carrier interceptors (which are not controllable).
-	// Buildings include static defense buildings; they are not put into squads.
-	if (type.isWorker() ||
-		type.isBuilding() ||
-		type == BWAPI::UnitTypes::Protoss_Interceptor)  // apparently, they canAttack()
+    // Buildings include static defense buildings; they are not put into squads.
+    if (type.isWorker() ||
+        type.isBuilding() ||
+        type == BWAPI::UnitTypes::Protoss_Interceptor)  // apparently, they canAttack()
     {
         return false;
     }
 
-	return
-		type.canAttack() ||                             // includes carriers and reavers
-		type.isDetector() ||
-		type == BWAPI::UnitTypes::Zerg_Queen ||
-		type == BWAPI::UnitTypes::Zerg_Defiler ||
-		type == BWAPI::UnitTypes::Terran_Medic ||
-		type == BWAPI::UnitTypes::Protoss_High_Templar ||
-		type == BWAPI::UnitTypes::Protoss_Dark_Archon ||
-		type.isFlyer() && type.spaceProvided() > 0;     // transports
+    return
+        type.canAttack() ||                             // includes carriers and reavers
+        type.isDetector() ||
+        type == BWAPI::UnitTypes::Zerg_Queen ||
+        type == BWAPI::UnitTypes::Zerg_Defiler ||
+        type == BWAPI::UnitTypes::Terran_Medic ||
+        type == BWAPI::UnitTypes::Protoss_High_Templar ||
+        type == BWAPI::UnitTypes::Protoss_Dark_Archon ||
+        type.isFlyer() && type.spaceProvided() > 0;     // transports
 }
 
 bool UnitUtil::IsCombatUnit(BWAPI::Unit unit)
 {
-	UAB_ASSERT(unit != nullptr, "Unit was null");
+    UAB_ASSERT(unit != nullptr, "Unit was null");
 
-	return unit && unit->isCompleted() && IsCombatUnit(unit->getType());
+    return unit && unit->isCompleted() && IsCombatUnit(unit->getType());
 }
 
 bool UnitUtil::IsSuicideUnit(BWAPI::UnitType type)
@@ -237,25 +244,25 @@ bool UnitUtil::IsSuicideUnit(BWAPI::Unit unit)
 // This is called only on units that we believe are ours (we may be wrong if it was mind controlled).
 bool UnitUtil::IsValidUnit(BWAPI::Unit unit)
 {
-	return
-		unit &&
-		unit->exists() &&
-		(unit->isCompleted() || IsMorphedBuildingType(unit->getType())) &&
-		(unit->getPosition().isValid() || unit->isLoaded()) &&	// position is invalid if loaded in transport or bunker
-		unit->getHitPoints() > 0 &&
-		unit->getType() != BWAPI::UnitTypes::Unknown &&
+    return
+        unit &&
+        unit->exists() &&
+        (unit->isCompleted() || IsMorphedBuildingType(unit->getType())) &&
+        (unit->getPosition().isValid() || unit->isLoaded()) &&	// position is invalid if loaded in transport or bunker
+        unit->getHitPoints() > 0 &&
+        unit->getType() != BWAPI::UnitTypes::Unknown &&
         !unit->getType().isSpell() &&
-		unit->getPlayer() == BWAPI::Broodwar->self();			// catches mind controlled units
+        unit->getPlayer() == BWAPI::Broodwar->self();			// catches mind controlled units
 }
 
 bool UnitUtil::CanAttack(BWAPI::Unit attacker, BWAPI::Unit target)
 {
-	return target->isFlying() ? TypeCanAttackAir(attacker->getType()) : TypeCanAttackGround(attacker->getType());
+    return target->isFlying() ? TypeCanAttackAir(attacker->getType()) : TypeCanAttackGround(attacker->getType());
 }
 
 bool UnitUtil::CanAttack(BWAPI::UnitType attacker, BWAPI::Unit target)
 {
-	return target->isFlying() ? TypeCanAttackAir(attacker) : TypeCanAttackGround(attacker);
+    return target->isFlying() ? TypeCanAttackAir(attacker) : TypeCanAttackGround(attacker);
 }
 
 // Accounts for cases where units can attack without a weapon of their own.
@@ -263,21 +270,21 @@ bool UnitUtil::CanAttack(BWAPI::UnitType attacker, BWAPI::Unit target)
 // For example, high templar can attack air or ground mobile units, but can't attack buildings.
 bool UnitUtil::CanAttack(BWAPI::UnitType attacker, BWAPI::UnitType target)
 {
-	return target.isFlyer() ? TypeCanAttackAir(attacker) : TypeCanAttackGround(attacker);
+    return target.isFlyer() ? TypeCanAttackAir(attacker) : TypeCanAttackGround(attacker);
 }
 
 bool UnitUtil::CanAttackAir(BWAPI::Unit attacker)
 {
-	return TypeCanAttackAir(attacker->getType());
+    return TypeCanAttackAir(attacker->getType());
 }
 
 // Assume that a bunker is loaded and can shoot at air.
 bool UnitUtil::TypeCanAttackAir(BWAPI::UnitType attacker)
 {
-	return
+    return
         attacker.airWeapon() != BWAPI::WeaponTypes::None ||
-		attacker == BWAPI::UnitTypes::Terran_Bunker ||
-		attacker == BWAPI::UnitTypes::Protoss_Carrier;
+        attacker == BWAPI::UnitTypes::Terran_Bunker ||
+        attacker == BWAPI::UnitTypes::Protoss_Carrier;
 }
 
 // NOTE surrenderMonkey() checks CanAttackGround() to see whether the enemy can destroy buildings.
@@ -285,125 +292,132 @@ bool UnitUtil::TypeCanAttackAir(BWAPI::UnitType attacker)
 //      If you do that, make CanAttackBuildings() and have surrenderMonkey() call that.
 bool UnitUtil::CanAttackGround(BWAPI::Unit attacker)
 {
-	return TypeCanAttackGround(attacker->getType());
+    return TypeCanAttackGround(attacker->getType());
 }
 
 // Assume that a bunker is loaded and can shoot at ground.
 bool UnitUtil::TypeCanAttackGround(BWAPI::UnitType attacker)
 {
-	return
+    return
         attacker.groundWeapon() != BWAPI::WeaponTypes::None ||
-		attacker == BWAPI::UnitTypes::Terran_Bunker ||
-		attacker == BWAPI::UnitTypes::Protoss_Carrier ||
-		attacker == BWAPI::UnitTypes::Protoss_Reaver;
+        attacker == BWAPI::UnitTypes::Terran_Bunker ||
+        attacker == BWAPI::UnitTypes::Protoss_Carrier ||
+        attacker == BWAPI::UnitTypes::Protoss_Reaver;
 }
 
 // Does the unit type have any attack?
 // This test has a different meaning than CanAttack(unit, target) above.
 bool UnitUtil::TypeCanAttack(BWAPI::UnitType type)
 {
-	return TypeCanAttackGround(type) || TypeCanAttackAir(type);
+    return TypeCanAttackGround(type) || TypeCanAttackAir(type);
 }
 
 // Damage per frame.
 // NOTE This does not account for unit sizes, it's a generic "how hard does it hit?" value.
 double UnitUtil::DPF(BWAPI::Unit attacker, BWAPI::Unit target)
 {
-	BWAPI::WeaponType weapon = GetWeapon(attacker, target);
-	const int cooldown = attacker->getPlayer()->weaponDamageCooldown(attacker->getType());
+    BWAPI::WeaponType weapon = GetWeapon(attacker, target);
 
-	if (weapon == BWAPI::WeaponTypes::None || cooldown <= 0)
-	{
-		return 0.0;
-	}
+    // Zerglings are the only unit with a cooldown upgrade.
+    // NOTE Assume we can't tell whether the opponent has the upgrade.
+    const int cooldown = (attacker->getType() == BWAPI::UnitTypes::Zerg_Zergling && attacker->getPlayer() == the.self())
+        ? the.self()->weaponDamageCooldown(BWAPI::UnitTypes::Zerg_Zergling)
+        : weapon.damageCooldown();
 
-	return double(attacker->getPlayer()->damage(weapon)) / cooldown;
+    if (weapon == BWAPI::WeaponTypes::None || cooldown <= 0)
+    {
+        return 0.0;
+    }
+
+    return double(weapon.damageAmount()) / cooldown;
+    // TODO better to take upgrades into account when possible:
+    // return double(attacker->getPlayer()->damage(weapon)) / cooldown;
 }
 
 double UnitUtil::GroundDPF(BWAPI::Player player, BWAPI::UnitType type)
 {
-	BWAPI::WeaponType weapon = GetGroundWeapon(type);
-	const int cooldown = player->weaponDamageCooldown(type);
+    BWAPI::WeaponType weapon = GetGroundWeapon(type);
+    const int cooldown = player->weaponDamageCooldown(type);
 
-	if (weapon == BWAPI::WeaponTypes::None || cooldown <= 0)
-	{
-		return 0.0;
-	}
+    if (weapon == BWAPI::WeaponTypes::None || cooldown <= 0)
+    {
+        return 0.0;
+    }
 
-	return double(player->damage(weapon)) / cooldown;
+    return double(player->damage(weapon)) / cooldown;
 }
 
 double UnitUtil::AirDPF(BWAPI::Player player, BWAPI::UnitType type)
 {
-	BWAPI::WeaponType weapon = GetAirWeapon(type);
-	const int cooldown = player->weaponDamageCooldown(type);
+    BWAPI::WeaponType weapon = GetAirWeapon(type);
+    const int cooldown = player->weaponDamageCooldown(type);
 
-	if (weapon == BWAPI::WeaponTypes::None || cooldown <= 0)
-	{
-		return 0.0;
-	}
+    if (weapon == BWAPI::WeaponTypes::None || cooldown <= 0)
+    {
+        return 0.0;
+    }
 
-	return double(player->damage(weapon)) / cooldown;
+    return double(player->damage(weapon)) / cooldown;
 }
 
 BWAPI::WeaponType UnitUtil::GetGroundWeapon(BWAPI::Unit attacker)
 {
-	return GetGroundWeapon(attacker->getType());
+    return GetGroundWeapon(attacker->getType());
 }
 
 BWAPI::WeaponType UnitUtil::GetGroundWeapon(BWAPI::UnitType attacker)
 {
-	// We pretend that a bunker has marines in it. It's only a guess.
-	if (attacker == BWAPI::UnitTypes::Terran_Bunker)
-	{
-		return (BWAPI::UnitTypes::Terran_Marine).groundWeapon();
-	}
-	if (attacker == BWAPI::UnitTypes::Protoss_Carrier)
-	{
-		return (BWAPI::UnitTypes::Protoss_Interceptor).groundWeapon();
-	}
-	if (attacker == BWAPI::UnitTypes::Protoss_Reaver)
-	{
-		return (BWAPI::UnitTypes::Protoss_Scarab).groundWeapon();
-	}
+    // We pretend that a bunker has marines in it. It's only a guess.
+    if (attacker == BWAPI::UnitTypes::Terran_Bunker)
+    {
+        return (BWAPI::UnitTypes::Terran_Marine).groundWeapon();
+    }
+    if (attacker == BWAPI::UnitTypes::Protoss_Carrier)
+    {
+        return (BWAPI::UnitTypes::Protoss_Interceptor).groundWeapon();
+    }
+    if (attacker == BWAPI::UnitTypes::Protoss_Reaver)
+    {
+        return (BWAPI::UnitTypes::Protoss_Scarab).groundWeapon();
+    }
 
-	return attacker.groundWeapon();
+    return attacker.groundWeapon();
 }
 
 BWAPI::WeaponType UnitUtil::GetAirWeapon(BWAPI::Unit attacker)
 {
-	return GetAirWeapon(attacker->getType());
+    return GetAirWeapon(attacker->getType());
 }
 
 BWAPI::WeaponType UnitUtil::GetAirWeapon(BWAPI::UnitType attacker)
 {
-	if (attacker == BWAPI::UnitTypes::Terran_Bunker)
-	{
-		return (BWAPI::UnitTypes::Terran_Marine).airWeapon();
-	}
-	if (attacker == BWAPI::UnitTypes::Protoss_Carrier)
-	{
-		return (BWAPI::UnitTypes::Protoss_Interceptor).airWeapon();
-	}
+    if (attacker == BWAPI::UnitTypes::Terran_Bunker)
+    {
+        return (BWAPI::UnitTypes::Terran_Marine).airWeapon();
+    }
+    if (attacker == BWAPI::UnitTypes::Protoss_Carrier)
+    {
+        return (BWAPI::UnitTypes::Protoss_Interceptor).airWeapon();
+    }
 
-	return attacker.airWeapon();
+    return attacker.airWeapon();
 }
 
 BWAPI::WeaponType UnitUtil::GetWeapon(BWAPI::Unit attacker, BWAPI::Unit target)
 {
-	return GetWeapon(attacker->getType(), target);
+    return GetWeapon(attacker->getType(), target);
 }
 
 // We have to check unit->isFlying() because unitType->isFlyer() is not useful
 // for a lifted terran building.
 BWAPI::WeaponType UnitUtil::GetWeapon(BWAPI::UnitType attacker, BWAPI::Unit target)
 {
-	return target->isFlying() ? GetAirWeapon(attacker) : GetGroundWeapon(attacker);
+    return target->isFlying() ? GetAirWeapon(attacker) : GetGroundWeapon(attacker);
 }
 
 BWAPI::WeaponType UnitUtil::GetWeapon(BWAPI::UnitType attacker, BWAPI::UnitType target)
 {
-	return target.isFlyer() ? GetAirWeapon(attacker) : GetGroundWeapon(attacker);
+    return target.isFlyer() ? GetAirWeapon(attacker) : GetGroundWeapon(attacker);
 }
 
 // Weapon range in pixels.
@@ -411,60 +425,60 @@ BWAPI::WeaponType UnitUtil::GetWeapon(BWAPI::UnitType attacker, BWAPI::UnitType 
 // NOTE Does not check whether our reaver, carrier, or bunker has units inside that can attack.
 int UnitUtil::GetAttackRange(BWAPI::Unit attacker, BWAPI::Unit target)
 {
-	// Reavers, carriers, and bunkers have "no weapon" but still have an attack range.
-	if (attacker->getType() == BWAPI::UnitTypes::Protoss_Reaver && !target->isFlying())
-	{
-		return 8 * 32;
-	}
-	if (attacker->getType() == BWAPI::UnitTypes::Protoss_Carrier)
-	{
-		return 8 * 32;
-	}
-	if (attacker->getType() == BWAPI::UnitTypes::Terran_Bunker)
-	{
-		if (attacker->getPlayer() == BWAPI::Broodwar->enemy() ||
-			BWAPI::Broodwar->self()->getUpgradeLevel(BWAPI::UpgradeTypes::U_238_Shells))
-		{
-			return 6 * 32;
-		}
-		return 5 * 32;
-	}
+    // Reavers, carriers, and bunkers have "no weapon" but still have an attack range.
+    if (attacker->getType() == BWAPI::UnitTypes::Protoss_Reaver && !target->isFlying())
+    {
+        return 8 * 32;
+    }
+    if (attacker->getType() == BWAPI::UnitTypes::Protoss_Carrier)
+    {
+        return 8 * 32;
+    }
+    if (attacker->getType() == BWAPI::UnitTypes::Terran_Bunker)
+    {
+        if (attacker->getPlayer() == BWAPI::Broodwar->enemy() ||
+            BWAPI::Broodwar->self()->getUpgradeLevel(BWAPI::UpgradeTypes::U_238_Shells))
+        {
+            return 6 * 32;
+        }
+        return 5 * 32;
+    }
 
-	const BWAPI::WeaponType weapon = GetWeapon(attacker, target);
+    const BWAPI::WeaponType weapon = GetWeapon(attacker, target);
 
-	if (weapon == BWAPI::WeaponTypes::None)
-	{
-		return 0;
-	}
+    if (weapon == BWAPI::WeaponTypes::None)
+    {
+        return 0;
+    }
 
-	return attacker->getPlayer()->weaponMaxRange(weapon);
+    return attacker->getPlayer()->weaponMaxRange(weapon);
 }
 
 // Weapon range in pixels.
 // Range is zero if the attacker cannot attack the target at all.
 int UnitUtil::GetAttackRangeAssumingUpgrades(BWAPI::UnitType attacker, BWAPI::UnitType target)
 {
-	// Reavers, carriers, and bunkers have "no weapon" but still have an attack range.
-	if (attacker == BWAPI::UnitTypes::Terran_Bunker)
-	{
-		return 6 * 32;
-	}
-	if (attacker == BWAPI::UnitTypes::Protoss_Reaver && !target.isFlyer())
-	{
-		return 8 * 32;
-	}
-	if (attacker == BWAPI::UnitTypes::Protoss_Carrier)
-	{
-		return 8 * 32;
-	}
+    // Reavers, carriers, and bunkers have "no weapon" but still have an attack range.
+    if (attacker == BWAPI::UnitTypes::Terran_Bunker)
+    {
+        return 6 * 32;
+    }
+    if (attacker == BWAPI::UnitTypes::Protoss_Reaver && !target.isFlyer())
+    {
+        return 8 * 32;
+    }
+    if (attacker == BWAPI::UnitTypes::Protoss_Carrier)
+    {
+        return 8 * 32;
+    }
 
-	BWAPI::WeaponType weapon = GetWeapon(attacker, target);
-	if (weapon == BWAPI::WeaponTypes::None)
+    BWAPI::WeaponType weapon = GetWeapon(attacker, target);
+    if (weapon == BWAPI::WeaponTypes::None)
     {
         return 0;
     }
 
-	// Assume that any upgrades are researched.
+    // Assume that any upgrades are researched.
     if (attacker == BWAPI::UnitTypes::Terran_Marine)
     {
         return 5 * 32;
@@ -474,13 +488,13 @@ int UnitUtil::GetAttackRangeAssumingUpgrades(BWAPI::UnitType attacker, BWAPI::Un
         return 8 * 32;
     }
     if (attacker == BWAPI::UnitTypes::Protoss_Dragoon)
-	{
-		return 6 * 32;
-	}
-	if (attacker == BWAPI::UnitTypes::Zerg_Hydralisk)
-	{
+    {
+        return 6 * 32;
+    }
+    if (attacker == BWAPI::UnitTypes::Zerg_Hydralisk)
+    {
         return 5 * 32;
-	}
+    }
 
     return weapon.maxRange();
 }
@@ -491,37 +505,37 @@ int UnitUtil::GetAttackRangeAssumingUpgrades(BWAPI::UnitType attacker, BWAPI::Un
 // Used in selecting enemy units for the combat sim.
 int UnitUtil::GetMaxAttackRange(BWAPI::UnitType type)
 {
-	return std::max(
-		GetAttackRangeAssumingUpgrades(type, BWAPI::UnitTypes::Terran_Marine),   // range vs. ground
-		GetAttackRangeAssumingUpgrades(type, BWAPI::UnitTypes::Terran_Wraith)    // range vs. air
-	);
+    return std::max(
+        GetAttackRangeAssumingUpgrades(type, BWAPI::UnitTypes::Terran_Marine),   // range vs. ground
+        GetAttackRangeAssumingUpgrades(type, BWAPI::UnitTypes::Terran_Wraith)    // range vs. air
+    );
 }
 
 // TODO Is this correct for reavers?
 int UnitUtil::GroundCooldownLeft(BWAPI::Unit attacker)
 {
-	return attacker->getGroundWeaponCooldown();
+    return attacker->getGroundWeaponCooldown();
 }
 
 int UnitUtil::AirCooldownLeft(BWAPI::Unit attacker)
 {
-	return attacker->getAirWeaponCooldown();
+    return attacker->getAirWeaponCooldown();
 }
 
 int UnitUtil::CooldownLeft(BWAPI::Unit attacker, BWAPI::Unit target)
 {
-	return target->isFlying() ? AirCooldownLeft(attacker) : GroundCooldownLeft(attacker);
+    return target->isFlying() ? AirCooldownLeft(attacker) : GroundCooldownLeft(attacker);
 }
 
 // Assuming the target is stationary, how many frames will it take us to get close enough to attack?
 int UnitUtil::FramesToReachAttackRange(BWAPI::Unit attacker, BWAPI::Unit target)
 {
-	double speed = attacker->getPlayer()->topSpeed(attacker->getType());
-	UAB_ASSERT(speed > 0, "can't move");
+    double speed = attacker->getPlayer()->topSpeed(attacker->getType());
+    UAB_ASSERT(speed > 0, "can't move");
 
-	int distanceToFiringRange = std::max(attacker->getDistance(target) - UnitUtil::GetAttackRange(attacker, target), 0);
+    int distanceToFiringRange = std::max(attacker->getDistance(target) - UnitUtil::GetAttackRange(attacker, target), 0);
 
-	return int(std::round(double(distanceToFiringRange) / speed));
+    return int(std::round(double(distanceToFiringRange) / speed));
 }
 
 // The damage the attacker's weapon will do to a worker. It's good for any small unit.
@@ -532,25 +546,52 @@ int UnitUtil::FramesToReachAttackRange(BWAPI::Unit attacker, BWAPI::Unit target)
 // NOTE That worker self-defense feature is currently turned off.
 int UnitUtil::GetWeaponDamageToWorker(BWAPI::Unit attacker)
 {
-	// Workers will be the same, so use an SCV as a representative worker.
-	const BWAPI::UnitType workerType = BWAPI::UnitTypes::Terran_SCV;
+    // Workers will be the same, so use an SCV as a representative worker.
+    const BWAPI::UnitType workerType = BWAPI::UnitTypes::Terran_SCV;
 
-	BWAPI::WeaponType weapon = UnitUtil::GetWeapon(attacker->getType(), workerType);
+    BWAPI::WeaponType weapon = UnitUtil::GetWeapon(attacker->getType(), workerType);
 
-	if (weapon == BWAPI::WeaponTypes::None)
-	{
-		return 0;
-	}
+    if (weapon == BWAPI::WeaponTypes::None)
+    {
+        return 0;
+    }
 
-	int damage = weapon.damageAmount();
+    int damage = weapon.damageAmount();
 
-	if (weapon.damageType() == BWAPI::DamageTypes::Explosive)
-	{
-		return damage / 2;
-	}
+    if (weapon.damageType() == BWAPI::DamageTypes::Explosive)
+    {
+        return damage / 2;
+    }
 
-	// Assume it is Normal or Concussive damage, though there are other possibilities.
-	return damage;
+    // Assume it is Normal or Concussive damage, though there are other possibilities.
+    return damage;
+}
+
+// Assuming that all attackers fire on the target, how many frames will the target live?
+// It's a crude estimate ignoring armor, unit size, and other factors.
+// Only works for visible targets. Only used for our own units.
+int UnitUtil::ExpectedSurvivalTime(const BWAPI::Unitset & attackers, BWAPI::Unit target)
+{
+    double dpf = 0.0;           // damage per frame
+
+    for (BWAPI::Unit attacker : attackers)
+    {
+        dpf += DPF(attacker, target);
+    }
+
+    if (dpf < 0.01)
+    {
+        return MAX_FRAME;       // representing "forever"
+    }
+
+    return int((target->getHitPoints() + target->getShields()) / dpf);
+}
+
+// The enemy is shooting at us. How long might we live?
+int UnitUtil::ExpectedSurvivalTime(BWAPI::Unit friendlyTarget)
+{
+    BWAPI::Unitset enemies = the.info.getEnemyFireteam(friendlyTarget);
+    return UnitUtil::ExpectedSurvivalTime(enemies, friendlyTarget);
 }
 
 // Check whether the unit type can hit targets that are covered by dark swarm.
@@ -597,14 +638,14 @@ bool UnitUtil::HitsUnderSwarm(BWAPI::Unit unit)
 // NOTE A spider mine has order VultureMine no matter what it is doing.
 bool UnitUtil::AttackOrder(BWAPI::Unit unit)
 {
-	BWAPI::Order order = unit->getOrder();
-	return
-		order == BWAPI::Orders::AttackMove ||
-		order == BWAPI::Orders::AttackTile ||
-		order == BWAPI::Orders::AttackUnit ||
-		order == BWAPI::Orders::Patrol ||
-		order == BWAPI::Orders::InterceptorAttack ||
-		order == BWAPI::Orders::ScarabAttack;
+    BWAPI::Order order = unit->getOrder();
+    return
+        order == BWAPI::Orders::AttackMove ||
+        order == BWAPI::Orders::AttackTile ||
+        order == BWAPI::Orders::AttackUnit ||
+        order == BWAPI::Orders::Patrol ||
+        order == BWAPI::Orders::InterceptorAttack ||
+        order == BWAPI::Orders::ScarabAttack;
 }
 
 // The unit has an order associated with mining minerals
@@ -639,15 +680,15 @@ bool UnitUtil::GasOrder(BWAPI::Unit unit)
 // Sight also depends on high/low ground.
 int UnitUtil::GetDetectionRange(BWAPI::UnitType type)
 {
-	if (type.isDetector())
-	{
-		if (type.isBuilding())
-		{
-			return 7;
-		}
-		return 11;
-	}
-	return 0;
+    if (type.isDetector())
+    {
+        if (type.isBuilding())
+        {
+            return 7;
+        }
+        return 11;
+    }
+    return 0;
 }
 
 // Can the enemy detect a unit at this position?
@@ -684,33 +725,29 @@ int UnitUtil::GetUncompletedUnitCount(BWAPI::UnitType type)
 // Return whether any action was taken.
 bool UnitUtil::MobilizeUnit(BWAPI::Unit unit)
 {
-	if (unit->getType() == BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode && unit->canUnsiege())
-	{
-		return unit->unsiege();
-	}
-	if (unit->canUnburrow() &&
-		!unit->isIrradiated() &&
-		(double(unit->getHitPoints()) / double(unit->getType().maxHitPoints()) > 0.25))  // very weak units stay burrowed
-	{
-        //BWAPI::Broodwar->printf("mobilize %s %d", UnitTypeName(unit).c_str(), unit->getID());
-		return the.micro.Unburrow(unit);
-	}
-	return false;
+    if (unit->getType() == BWAPI::UnitTypes::Terran_Siege_Tank_Siege_Mode && unit->canUnsiege())
+    {
+        return unit->unsiege();
+    }
+    if (unit->canUnburrow() &&
+        (double(unit->getHitPoints()) / double(unit->getType().maxHitPoints()) > 0.25))  // very weak units stay burrowed
+    {
+        return the.micro.Unburrow(unit);
+    }
+    return false;
 }
 
 // Immobilize the unit: Siege a tank, burrow a lurker. Otherwise do nothing.
 // Return whether any action was taken.
-// NOTE This used to be used, but turned out to be a bad idea in that use.
 bool UnitUtil::ImmobilizeUnit(BWAPI::Unit unit)
 {
-	if (unit->getType() == BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode && unit->canSiege())
-	{
-		return unit->siege();
-	}
-	if (unit->canBurrow() &&
-		(unit->getType() == BWAPI::UnitTypes::Zerg_Lurker || unit->isIrradiated()))
-	{
-		return the.micro.Burrow(unit);
-	}
-	return false;
+    if (unit->getType() == BWAPI::UnitTypes::Terran_Siege_Tank_Tank_Mode && unit->canSiege())
+    {
+        return unit->siege();
+    }
+    if (unit->getType() == BWAPI::UnitTypes::Zerg_Lurker && unit->canBurrow())
+    {
+        return the.micro.Burrow(unit);
+    }
+    return false;
 }

@@ -10,14 +10,14 @@ namespace UAlbertaBot
 class GridWalk : public Grid
 {
 protected:
-	GridWalk();
-	GridWalk(int w, int h, int value);
+    GridWalk();
+    GridWalk(int w, int h, int value);
 
 public:
-	int at(int x, int y) const;
-	int at(const BWAPI::TilePosition & pos) const;
-	int at(const BWAPI::WalkPosition & pos) const;
-	int at(const BWAPI::Position & pos) const;
+    int at(int x, int y) const;
+    int at(const BWAPI::TilePosition & pos) const;
+    int at(const BWAPI::WalkPosition & pos) const;
+    int at(const BWAPI::Position & pos) const;
     int at(BWAPI::Unit unit) const;
 };
 }

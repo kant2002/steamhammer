@@ -15,19 +15,19 @@ void Logger::LogAppendToFile(const std::string & logFile, const std::string & ms
 
 void Logger::LogAppendToFile(const std::string & logFile, const char *fmt, ...)
 {
-	va_list arg;
-		
-	va_start(arg, fmt);
-	//vfprintf(log_file, fmt, arg);
-	char buff[256];
-	vsnprintf_s(buff, 256, fmt, arg);
-	va_end(arg);
-		
-	std::ofstream logStream;
-	logStream.open(logFile.c_str(), std::ofstream::app);
-	logStream << buff;
-	logStream.flush();
-	logStream.close();
+    va_list arg;
+        
+    va_start(arg, fmt);
+    //vfprintf(log_file, fmt, arg);
+    char buff[256];
+    vsnprintf_s(buff, 256, fmt, arg);
+    va_end(arg);
+        
+    std::ofstream logStream;
+    logStream.open(logFile.c_str(), std::ofstream::app);
+    logStream << buff;
+    logStream.flush();
+    logStream.close();
 }
 
 void Logger::LogOverwriteToFile(const std::string & logFile, const std::string & msg)
